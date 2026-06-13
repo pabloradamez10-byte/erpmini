@@ -30,7 +30,7 @@ function useIsMobile() {
 const LICENSE_CONFIG = {
   CLIENTE_ID: "pablo_teste",
   SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/1h97Y_PCsx5CyERekbrknj_Fcx6ddubxfUL1DvfMIFw0/export?format=csv&gid=0", // Planilha Google de licenças online
-  WHATSAPP_RENOVACAO: "5599999999999",
+  WHATSAPP_RENOVACAO: "5551989004629",
 };
 
 function parseCsvLine(line) {
@@ -83,6 +83,13 @@ async function checkMonthlyLicense() {
     const dataVenc = new Date(`${vencimento}T23:59:59`);
     const ativo = status === "ativo" && dataVenc >= hoje;
 
+    const mensagemBloqueio =
+      status === "ativo" && dataVenc < hoje
+        ? `Licença vencida em ${vencimento}. Entre em contato para renovar.`
+        : status !== "ativo"
+          ? `Sua licença está ${status || "desativada"}. Entre em contato para renovar.`
+          : (license.mensagem || `Licença vencida em ${vencimento}. Entre em contato para renovar.`);
+
     return {
       active: ativo,
       loading: false,
@@ -90,7 +97,7 @@ async function checkMonthlyLicense() {
       clientId: CLIENTE_ID,
       status,
       vencimento,
-      message: ativo ? `Licença ativa até ${vencimento}` : (license.mensagem || `Licença vencida em ${vencimento}`),
+      message: ativo ? `Licença ativa até ${vencimento}` : mensagemBloqueio,
     };
   } catch (err) {
     return { active: false, loading: false, configured: true, message: "Não foi possível validar a licença. Verifique a internet ou fale com o suporte." };
@@ -99,7 +106,7 @@ async function checkMonthlyLicense() {
 
 function LicenseBlockedScreen({ license }) {
   const whats = LICENSE_CONFIG.WHATSAPP_RENOVACAO;
-  const msg = encodeURIComponent(`Olá, preciso renovar minha licença do ERPmini. Cliente: ${LICENSE_CONFIG.CLIENTE_ID}`);
+  const msg = encodeURIComponent(`Olá, Pablo. Preciso renovar minha licença do ERP Mini. Cliente: ${LICENSE_CONFIG.CLIENTE_ID}`);
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a1a2e,#16213e)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"'Segoe UI',sans-serif" }}>
       <div style={{ background:"#fff", borderRadius:"20px", padding:"28px", maxWidth:"420px", width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
@@ -971,4 +978,3 @@ export default function ERP() {
     </div>
   );
 }
-
