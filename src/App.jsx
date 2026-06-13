@@ -28,8 +28,8 @@ function useIsMobile() {
 // 3) Preencha SHEET_CSV_URL com o link CSV publicado.
 // 4) Defina CLIENTE_ID para o cliente instalado.
 const LICENSE_CONFIG = {
-  CLIENTE_ID: "cliente_teste",
-  SHEET_CSV_URL: "", // Cole aqui o link CSV da planilha Google publicada
+  CLIENTE_ID: "pablo_teste",
+  SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/1h97Y_PCsx5CyERekbrknj_Fcx6ddubxfUL1DvfMIFw0/export?format=csv&gid=0", // Planilha Google de licenças online
   WHATSAPP_RENOVACAO: "5599999999999",
 };
 
@@ -971,3 +971,4 @@ export default function ERP() {
     </div>
   );
 }
+
