@@ -19,6 +19,102 @@ function useIsMobile() {
   return mobile;
 }
 
+
+
+// ─── Controle de licença mensal ─────────────────────────────────────────────
+// Como usar:
+// 1) Publique uma planilha Google como CSV.
+// 2) A planilha precisa ter as colunas: cliente,status,vencimento,mensagem
+// 3) Preencha SHEET_CSV_URL com o link CSV publicado.
+// 4) Defina CLIENTE_ID para o cliente instalado.
+const LICENSE_CONFIG = {
+  CLIENTE_ID: "cliente_teste",
+  SHEET_CSV_URL: "", // Cole aqui o link CSV da planilha Google publicada
+  WHATSAPP_RENOVACAO: "5599999999999",
+};
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let inside = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+    else if (ch === '"') inside = !inside;
+    else if (ch === "," && !inside) { out.push(cur.trim()); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseLicenseCsv(csvText) {
+  const lines = csvText.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().trim());
+  return lines.slice(1).map(line => {
+    const values = parseCsvLine(line);
+    return headers.reduce((obj, h, i) => ({ ...obj, [h]: values[i] || "" }), {});
+  });
+}
+
+async function checkMonthlyLicense() {
+  const { CLIENTE_ID, SHEET_CSV_URL } = LICENSE_CONFIG;
+
+  // Enquanto a URL não for configurada, deixa o ERP funcionar para não bloquear seus testes.
+  if (!SHEET_CSV_URL) {
+    return { active: true, loading: false, configured: false, message: "Controle de licença ainda não configurado." };
+  }
+
+  try {
+    const res = await fetch(`${SHEET_CSV_URL}${SHEET_CSV_URL.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error("Falha ao consultar licença");
+    const rows = parseLicenseCsv(await res.text());
+    const license = rows.find(r => String(r.cliente || "").toLowerCase().trim() === CLIENTE_ID.toLowerCase().trim());
+
+    if (!license) {
+      return { active: false, loading: false, configured: true, message: "Cliente não encontrado na base de licença." };
+    }
+
+    const status = String(license.status || "").toLowerCase().trim();
+    const vencimento = String(license.vencimento || "").trim();
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataVenc = new Date(`${vencimento}T23:59:59`);
+    const ativo = status === "ativo" && dataVenc >= hoje;
+
+    return {
+      active: ativo,
+      loading: false,
+      configured: true,
+      clientId: CLIENTE_ID,
+      status,
+      vencimento,
+      message: ativo ? `Licença ativa até ${vencimento}` : (license.mensagem || `Licença vencida em ${vencimento}`),
+    };
+  } catch (err) {
+    return { active: false, loading: false, configured: true, message: "Não foi possível validar a licença. Verifique a internet ou fale com o suporte." };
+  }
+}
+
+function LicenseBlockedScreen({ license }) {
+  const whats = LICENSE_CONFIG.WHATSAPP_RENOVACAO;
+  const msg = encodeURIComponent(`Olá, preciso renovar minha licença do ERPmini. Cliente: ${LICENSE_CONFIG.CLIENTE_ID}`);
+  return (
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a1a2e,#16213e)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"'Segoe UI',sans-serif" }}>
+      <div style={{ background:"#fff", borderRadius:"20px", padding:"28px", maxWidth:"420px", width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ fontSize:"54px", marginBottom:"10px" }}>🔒</div>
+        <h2 style={{ margin:"0 0 8px", color:"#1a1a2e" }}>Sistema bloqueado</h2>
+        <p style={{ color:"#64748b", fontSize:"15px", lineHeight:1.5, margin:"0 0 18px" }}>{license?.message || "Sua licença está vencida."}</p>
+        <a href={`https://wa.me/${whats}?text=${msg}`} style={{ display:"block", background:"#16a34a", color:"#fff", textDecoration:"none", borderRadius:"12px", padding:"14px", fontWeight:"800", marginBottom:"10px" }}>
+          Renovar pelo WhatsApp
+        </a>
+        <button onClick={()=>window.location.reload()} style={{ width:"100%", background:"#f1f5f9", border:"none", borderRadius:"12px", padding:"12px", fontWeight:"700", color:"#475569" }}>Tentar novamente</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Barcode renderer ────────────────────────────────────────────────────────
 function BarcodeImage({ value }) {
   const ref = useRef();
@@ -334,6 +430,13 @@ export default function ERP() {
   const [showSettings, setShowSettings] = useState(false);
   const barcodeRef  = useRef();
   const saleCounter = useRef(loadLS("erpmini_salecounter", 1000));
+  const [license, setLicense] = useState({ loading:true, active:true, message:"Verificando licença..." });
+
+  useEffect(()=>{
+    let alive = true;
+    checkMonthlyLicense().then(result => { if (alive) setLicense(result); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(()=>{ saveLS("erpmini_products", products); }, [products]);
   useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
@@ -426,6 +529,78 @@ export default function ERP() {
   const mIcon  = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.icon  ||"💳";
   const mLabel = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.label ||k;
   const mColor = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.color ||"#64748b";
+
+  const safeText = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
+  const printProductLabels = (product) => {
+    if (!product?.barcode) {
+      notify("Produto sem código de barras!", "error");
+      return;
+    }
+
+    const qtyText = window.prompt("Quantas etiquetas deseja imprimir?", "1");
+    if (qtyText === null) return;
+
+    const qty = Math.max(1, Math.min(100, parseInt(qtyText, 10) || 1));
+    const labels = Array.from({ length: qty }, (_, i) => `
+      <div class="label">
+        <div class="name">${safeText(product.name)}</div>
+        <div class="price">${safeText(fmtCur(product.price))}</div>
+        <svg class="barcode" data-code="${safeText(product.barcode)}"></svg>
+        <div class="code">${safeText(product.barcode)}</div>
+      </div>
+    `).join("");
+
+    const win = window.open("", "_blank", "width=420,height=700");
+    if (!win) {
+      notify("Permita pop-ups para imprimir etiquetas.", "error");
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html>
+      <html>
+      <head>
+        <title>Etiquetas - ${safeText(product.name)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { margin: 0; padding: 8px; background: #fff; font-family: Arial, sans-serif; }
+          .sheet { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+          .label {
+            width: 58mm;
+            min-height: 35mm;
+            border: 1px dashed #999;
+            padding: 5px 6px;
+            text-align: center;
+            page-break-inside: avoid;
+            overflow: hidden;
+          }
+          .name { font-size: 12px; font-weight: 700; line-height: 1.15; height: 28px; overflow: hidden; text-transform: uppercase; }
+          .price { font-size: 18px; font-weight: 800; margin: 2px 0 1px; }
+          .barcode { width: 100%; max-width: 190px; height: 42px; }
+          .code { font-family: monospace; font-size: 10px; margin-top: 1px; }
+          @media print {
+            body { padding: 0; }
+            .label { border: none; }
+          }
+        </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+      </head>
+      <body>
+        <div class="sheet">${labels}</div>
+        <script>
+          window.onload = function () {
+            document.querySelectorAll('.barcode').forEach(function(el) {
+              JsBarcode(el, el.getAttribute('data-code'), {
+                format: 'CODE128', width: 1.4, height: 36, displayValue: false, margin: 0
+              });
+            });
+            setTimeout(function(){ window.print(); }, 500);
+          };
+        </script>
+      </body>
+      </html>`);
+    win.document.close();
+  };
 
   // ─── Styles ────────────────────────────────────────────────────────────────
   const inp = { width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:"10px", fontSize:"15px", boxSizing:"border-box", outline:"none" };
@@ -599,9 +774,10 @@ export default function ERP() {
             </div>
             <div style={{ fontWeight:"800", color:"#e94560", whiteSpace:"nowrap" }}>{fmtCur(p.price)}</div>
             <div style={{ display:"flex", gap:"4px" }}>
-              <button style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>🔳</button>
-              <button style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>✏️</button>
-              <button style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>🗑</button>
+              <button title="Ver código" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>🔳</button>
+              <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>🏷️</button>
+              <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>✏️</button>
+              <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>🗑</button>
             </div>
           </div>
         ))}
@@ -657,11 +833,18 @@ export default function ERP() {
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>⚙️ Configurações</div>
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
         <input style={{ ...inp, marginBottom:"14px" }} value={storeName} onChange={e=>setStoreName(e.target.value)} placeholder="Minha Loja" />
-        <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px" }}>
+        <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
           <span style={{ fontSize:"20px" }}>💾</span>
           <div>
             <div style={{ fontWeight:"700", fontSize:"13px", color:"#166534" }}>Salvamento automático ativo</div>
             <div style={{ fontSize:"12px", color:"#4ade80" }}>Dados salvos no navegador deste dispositivo</div>
+          </div>
+        </div>
+        <div style={{ background:license.configured?"#eff6ff":"#fff7ed", border:`1.5px solid ${license.configured?"#3b82f6":"#f59e0b"}`, borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px" }}>
+          <span style={{ fontSize:"20px" }}>{license.configured?"🔐":"⚠️"}</span>
+          <div>
+            <div style={{ fontWeight:"700", fontSize:"13px", color:license.configured?"#1d4ed8":"#92400e" }}>Licença mensal</div>
+            <div style={{ fontSize:"12px", color:license.configured?"#3b82f6":"#b45309" }}>{license.message}</div>
           </div>
         </div>
       </div>
@@ -672,6 +855,16 @@ export default function ERP() {
       </div>
     </div>
   );
+
+  if (license.loading) {
+    return (
+      <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',sans-serif" }}>
+        <div style={{ background:"#fff", borderRadius:"16px", padding:"22px 26px", fontWeight:"800", color:"#1a1a2e", boxShadow:"0 8px 30px rgba(0,0,0,0.08)" }}>🔐 Verificando licença...</div>
+      </div>
+    );
+  }
+
+  if (!license.active) return <LicenseBlockedScreen license={license} />;
 
   return (
     <div style={{ fontFamily:"'Segoe UI',sans-serif", background:"#f0f4f8", minHeight:"100vh", paddingBottom: isMobile?"80px":"0" }}>
@@ -753,7 +946,10 @@ export default function ERP() {
               <BarcodeImage value={showBarcodeModal.barcode} />
             </div>
             <p style={{ fontFamily:"monospace", fontSize:"13px", margin:"10px 0" }}>{showBarcodeModal.barcode}</p>
-            <button style={{ ...btn("#64748b"), width:"100%" }} onClick={()=>setShowBarcodeModal(null)}>Fechar</button>
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button style={{ ...btn("#16a34a"), flex:1 }} onClick={()=>printProductLabels(showBarcodeModal)}>🏷️ Imprimir</button>
+              <button style={{ ...btn("#64748b"), flex:1 }} onClick={()=>setShowBarcodeModal(null)}>Fechar</button>
+            </div>
           </div>
         </div>
       )}
