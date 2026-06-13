@@ -1,1 +1,778 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+
+// ─── localStorage helpers ────────────────────────────────────────────────────
+function loadLS(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+function saveLS(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// ─── Responsive hook ─────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return mobile;
+}
+
+// ─── Barcode renderer ────────────────────────────────────────────────────────
+function BarcodeImage({ value }) {
+  const ref = useRef();
+  useEffect(() => {
+    if (!value || !ref.current) return;
+    const render = () => {
+      if (window.JsBarcode) {
+        try { window.JsBarcode(ref.current, value, { format:"CODE128", width:1.5, height:40, displayValue:true, fontSize:11, margin:4 }); } catch(_){}
+      }
+    };
+    if (!window.JsBarcode) {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js";
+      s.onload = render; document.head.appendChild(s);
+    } else render();
+  }, [value]);
+  if (!value) return null;
+  return <svg ref={ref} style={{ maxWidth:"100%" }} />;
+}
+
+const genBarcode = () => String(Math.floor(1000000000000 + Math.random() * 9000000000000));
+
+const PAYMENT_METHODS = [
+  { key:"dinheiro", label:"Dinheiro", icon:"💵", color:"#16a34a", light:"#f0fdf4" },
+  { key:"credito",  label:"Crédito",  icon:"💳", color:"#2563eb", light:"#eff6ff" },
+  { key:"debito",   label:"Débito",   icon:"🏧", color:"#7c3aed", light:"#f5f3ff" },
+  { key:"pix",      label:"PIX",      icon:"📱", color:"#0891b2", light:"#ecfeff" },
+];
+
+const initialProducts = [
+  { id:1, name:"Produto A", price:25.9,  stock:50,  category:"Geral", barcode:"7891234560001" },
+  { id:2, name:"Produto B", price:12.5,  stock:30,  category:"Geral", barcode:"7891234560002" },
+  { id:3, name:"Produto C", price:8.0,   stock:100, category:"Geral", barcode:"7891234560003" },
+];
+
+const fmtCur  = (v) => v.toLocaleString("pt-BR",{ style:"currency", currency:"BRL" });
+const fmtDate = (d) => new Date(d).toLocaleString("pt-BR",{ day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+
+// ─── CHECKOUT ────────────────────────────────────────────────────────────────
+function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
+  const [step, setStep]                   = useState("choose");
+  const [selectedMethod, setSelectedMethod] = useState(null);
+  const [amountPaid, setAmountPaid]         = useState("");
+  const [mixedPayments, setMixedPayments]   = useState([]);
+  const [mixedMethod, setMixedMethod]       = useState(null);
+  const [mixedAmount, setMixedAmount]       = useState("");
+
+  const paidSoFar = mixedPayments.reduce((s,p) => s+p.amount, 0);
+  const remaining = total - paidSoFar;
+  const change    = (parseFloat(amountPaid)||0) - total;
+  const mInfo     = (k) => PAYMENT_METHODS.find(m=>m.key===k);
+
+  const handleMethod = (key) => {
+    setSelectedMethod(key);
+    if (key==="dinheiro") { setStep("dinheiro"); setAmountPaid(""); }
+    else if (key==="misto") { setStep("mixed"); setMixedPayments([]); setMixedMethod(null); setMixedAmount(""); }
+    else onConfirm({ payments:[{ method:key, amount:total }], total, change:0 });
+  };
+
+  const confirmDinheiro = () => {
+    const paid = parseFloat(amountPaid)||0;
+    if (paid < total) return;
+    onConfirm({ payments:[{ method:"dinheiro", amount:paid }], total, change: paid-total });
+  };
+
+  const addMixed = () => {
+    const amt = parseFloat(mixedAmount)||0;
+    if (!mixedMethod||amt<=0||amt>remaining+0.001) return;
+    const list = [...mixedPayments, { method:mixedMethod, amount:amt }];
+    setMixedPayments(list);
+    setMixedAmount(""); setMixedMethod(null);
+    if (total - list.reduce((s,p)=>s+p.amount,0) <= 0.001) setStep("mixed_done");
+  };
+
+  const confirmMixed = () => {
+    const ch = mixedPayments.find(p=>p.method==="dinheiro") ? Math.max(0,paidSoFar-total) : 0;
+    onConfirm({ payments:mixedPayments, total, change:ch });
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+      <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"24px 20px 32px", width:"100%", maxWidth:"520px", maxHeight:"92vh", overflowY:"auto" }}>
+        {/* Handle bar */}
+        <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 20px" }} />
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
+          <div style={{ fontWeight:"800", fontSize:"18px" }}>💳 Pagamento</div>
+          <button onClick={onCancel} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>✕</button>
+        </div>
+
+        <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", borderRadius:"14px", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
+          <div>
+            <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.6)", marginBottom:"4px" }}>TOTAL A PAGAR</div>
+            <div style={{ fontSize:"28px", fontWeight:"800", color:"#fff" }}>{fmtCur(total)}</div>
+          </div>
+          <div style={{ fontSize:"36px" }}>🛒</div>
+        </div>
+
+        {step==="choose" && (
+          <>
+            <div style={{ fontSize:"12px", fontWeight:"700", color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:"12px" }}>Forma de Pagamento</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"10px" }}>
+              {PAYMENT_METHODS.map(m=>(
+                <button key={m.key} onClick={()=>handleMethod(m.key)}
+                  style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"18px 10px", borderRadius:"14px", border:`2px solid ${m.color}33`, background:m.light, cursor:"pointer", gap:"6px" }}>
+                  <span style={{ fontSize:"28px" }}>{m.icon}</span>
+                  <span style={{ fontSize:"14px", fontWeight:"700", color:m.color }}>{m.label}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>handleMethod("misto")}
+              style={{ width:"100%", padding:"14px", background:"#fef9ec", border:"2px solid #f59e0b33", borderRadius:"14px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"10px" }}>
+              <span style={{ fontSize:"22px" }}>🔀</span>
+              <span style={{ fontSize:"14px", fontWeight:"700", color:"#92400e" }}>Pagamento Misto</span>
+            </button>
+          </>
+        )}
+
+        {step==="dinheiro" && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:"16px" }}>
+              <div style={{ fontSize:"40px" }}>💵</div>
+              <div style={{ fontWeight:"700", fontSize:"16px" }}>Pagamento em Dinheiro</div>
+              <div style={{ fontSize:"13px", color:"#64748b" }}>Digite o valor recebido</div>
+            </div>
+            <input type="number" placeholder="0,00" value={amountPaid} autoFocus
+              onChange={e=>setAmountPaid(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&confirmDinheiro()}
+              style={{ width:"100%", padding:"16px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"28px", fontWeight:"700", textAlign:"center", boxSizing:"border-box", outline:"none", marginBottom:"10px" }} />
+            <div style={{ display:"flex", gap:"8px", marginBottom:"14px", flexWrap:"wrap" }}>
+              {[total, Math.ceil(total/10)*10, Math.ceil(total/50)*50, Math.ceil(total/100)*100].filter((v,i,a)=>a.indexOf(v)===i).map(v=>(
+                <button key={v} onClick={()=>setAmountPaid(String(v.toFixed(2)))}
+                  style={{ flex:"1 1 auto", padding:"10px 8px", background:"#f1f5f9", border:"1.5px solid #e2e8f0", borderRadius:"10px", cursor:"pointer", fontSize:"13px", fontWeight:"700" }}>
+                  {fmtCur(v)}
+                </button>
+              ))}
+            </div>
+            {(parseFloat(amountPaid)||0)>=total && total>0 && (
+              <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"12px", padding:"14px 16px", display:"flex", justifyContent:"space-between", marginBottom:"14px" }}>
+                <span style={{ fontWeight:"700", color:"#166534" }}>💚 Troco</span>
+                <span style={{ fontWeight:"800", fontSize:"18px", color:"#16a34a" }}>{fmtCur((parseFloat(amountPaid)||0)-total)}</span>
+              </div>
+            )}
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>← Voltar</button>
+              <button onClick={confirmDinheiro} disabled={(parseFloat(amountPaid)||0)<total}
+                style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(parseFloat(amountPaid)||0)<total?0.4:1 }}>
+                ✅ Confirmar
+              </button>
+            </div>
+          </>
+        )}
+
+        {(step==="mixed"||step==="mixed_done") && (
+          <>
+            <div style={{ fontWeight:"700", fontSize:"15px", marginBottom:"12px" }}>🔀 Pagamento Misto</div>
+            {mixedPayments.map((p,i)=>{
+              const m=mInfo(p.method);
+              return (
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"8px 12px", background:"#f8fafc", borderRadius:"8px", marginBottom:"6px", fontSize:"14px" }}>
+                  <span>{m?.icon} {m?.label}</span><span style={{ fontWeight:"700" }}>{fmtCur(p.amount)}</span>
+                </div>
+              );
+            })}
+            {step==="mixed" && (
+              <>
+                <div style={{ background:"#fef9ec", border:"1.5px solid #f59e0b", borderRadius:"10px", padding:"12px 16px", display:"flex", justifyContent:"space-between", marginBottom:"14px" }}>
+                  <span style={{ fontWeight:"700", color:"#92400e" }}>⏳ Restante</span>
+                  <span style={{ fontWeight:"800", fontSize:"18px", color:"#d97706" }}>{fmtCur(remaining)}</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
+                  {PAYMENT_METHODS.map(m=>(
+                    <button key={m.key} onClick={()=>setMixedMethod(m.key)}
+                      style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"10px 4px", borderRadius:"10px", border:`2px solid ${mixedMethod===m.key?m.color:m.color+"33"}`, background:mixedMethod===m.key?m.light:"#fff", cursor:"pointer", gap:"4px" }}>
+                      <span style={{ fontSize:"20px" }}>{m.icon}</span>
+                      <span style={{ fontSize:"10px", fontWeight:"700", color:mixedMethod===m.key?m.color:"#475569" }}>{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <input type="number" placeholder={`Máx: ${fmtCur(remaining)}`} value={mixedAmount}
+                  onChange={e=>setMixedAmount(e.target.value)}
+                  style={{ width:"100%", padding:"12px", border:"1.5px solid #e2e8f0", borderRadius:"10px", fontSize:"16px", boxSizing:"border-box", marginBottom:"10px", outline:"none" }} />
+                <button onClick={addMixed} disabled={!mixedMethod||(parseFloat(mixedAmount)||0)<=0}
+                  style={{ width:"100%", padding:"13px", background:"#6366f1", color:"#fff", border:"none", borderRadius:"10px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(!mixedMethod||(parseFloat(mixedAmount)||0)<=0)?0.4:1, marginBottom:"10px" }}>
+                  + Adicionar Pagamento
+                </button>
+              </>
+            )}
+            {step==="mixed_done" && (
+              <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"10px", padding:"12px", textAlign:"center", marginBottom:"12px" }}>
+                <div style={{ fontWeight:"700", color:"#166534" }}>✅ Valor total coberto!</div>
+              </div>
+            )}
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button onClick={()=>{setStep("choose");setSelectedMethod(null);setMixedPayments([]);}}
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>← Voltar</button>
+              {step==="mixed_done" && (
+                <button onClick={confirmMixed}
+                  style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>
+                  ✅ Confirmar Venda
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── RECEIPT ─────────────────────────────────────────────────────────────────
+function ReceiptModal({ sale, storeName, onClose }) {
+  const receiptRef = useRef();
+  const mLabel = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.label || k;
+  const mIcon  = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.icon  || "💳";
+  const mColor = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.color || "#64748b";
+
+  const printReceipt = () => {
+    const win = window.open("","_blank","width=420,height=700");
+    win.document.write(`<!DOCTYPE html><html><head><title>Comprovante #${sale.id}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:320px;margin:0 auto;background:#fff}
+      h2{text-align:center;font-size:18px;margin-bottom:2px}.sub{text-align:center;font-size:11px;color:#555;margin-bottom:10px}
+      hr{border:none;border-top:1px dashed #999;margin:8px 0}.row{display:flex;justify-content:space-between;margin-bottom:3px}
+      .bold{font-weight:bold}.total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:16px;margin:4px 0}
+      .footer{text-align:center;font-size:11px;color:#777;margin-top:10px}
+    </style></head><body>${receiptRef.current.innerHTML}</body></html>`);
+    win.document.close(); win.print();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:300, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
+      <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"24px 20px 32px", width:"100%", maxWidth:"520px", maxHeight:"92vh", overflowY:"auto" }}>
+        <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 20px" }} />
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
+          <div style={{ fontWeight:"800", fontSize:"18px" }}>🧾 Comprovante #{sale.id}</div>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>✕</button>
+        </div>
+
+        <div ref={receiptRef} style={{ background:"#fafafa", border:"1px dashed #ccc", borderRadius:"12px", padding:"20px", fontFamily:"'Courier New',monospace", fontSize:"13px", lineHeight:1.7 }}>
+          <div style={{ textAlign:"center", marginBottom:"8px" }}>
+            <div style={{ fontWeight:"800", fontSize:"18px" }}>{storeName||"ERPmini"}</div>
+            <div style={{ fontSize:"11px", color:"#777" }}>Comprovante de Pagamento</div>
+          </div>
+          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <div style={{ display:"flex", justifyContent:"space-between" }}><span>Pedido</span><span style={{ fontWeight:"700" }}>#{sale.id}</span></div>
+          <div style={{ display:"flex", justifyContent:"space-between" }}><span>Data</span><span>{fmtDate(sale.date)}</span></div>
+          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <div style={{ fontWeight:"700", fontSize:"11px", textTransform:"uppercase", marginBottom:"4px" }}>Itens</div>
+          {sale.items.map(item=>(
+            <div key={item.id} style={{ marginBottom:"4px" }}>
+              <div style={{ fontSize:"13px", fontWeight:"600" }}>{item.name}</div>
+              <div style={{ display:"flex", justifyContent:"space-between", color:"#555", fontSize:"12px" }}>
+                <span>{item.qty}x {fmtCur(item.price)}</span>
+                <span style={{ fontWeight:"700", color:"#000" }}>{fmtCur(item.price*item.qty)}</span>
+              </div>
+            </div>
+          ))}
+          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <div style={{ display:"flex", justifyContent:"space-between", fontWeight:"800", fontSize:"16px", margin:"4px 0" }}>
+            <span>TOTAL</span><span>{fmtCur(sale.total)}</span>
+          </div>
+          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <div style={{ fontWeight:"700", fontSize:"11px", textTransform:"uppercase", marginBottom:"6px" }}>Pagamento</div>
+          {sale.payments.map((p,i)=>(
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", marginBottom:"3px" }}>
+              <span>{mIcon(p.method)} {mLabel(p.method)}</span>
+              <span style={{ fontWeight:"700" }}>{fmtCur(p.amount)}</span>
+            </div>
+          ))}
+          {sale.change>0 && (
+            <>
+              <hr style={{ border:"none", borderTop:"1px dashed #22c55e", margin:"8px 0" }} />
+              <div style={{ display:"flex", justifyContent:"space-between", fontWeight:"800", fontSize:"15px", color:"#16a34a" }}>
+                <span>💚 TROCO</span><span>{fmtCur(sale.change)}</span>
+              </div>
+            </>
+          )}
+          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferência! ❤️<br/>Volte sempre.</div>
+        </div>
+
+        <div style={{ display:"flex", gap:"10px", marginTop:"16px" }}>
+          <button onClick={printReceipt} style={{ flex:1, padding:"14px", background:"#1a1a2e", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>🖨️ Imprimir</button>
+          <button onClick={onClose} style={{ flex:1, padding:"14px", background:"#f1f5f9", color:"#64748b", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN ────────────────────────────────────────────────────────────────────
+export default function ERP() {
+  const isMobile = useIsMobile();
+  const [tab, setTab]             = useState("pdv");
+  const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
+  const [cart, setCart]           = useState([]);
+  const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showReceipt, setShowReceipt]   = useState(false);
+  const [newProduct, setNewProduct]     = useState({ name:"", price:"", stock:"", category:"Geral", barcode:"" });
+  const [editingId, setEditingId]       = useState(null);
+  const [searchProd, setSearchProd]     = useState("");
+  const [notification, setNotification] = useState(null);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeFlash, setBarcodeFlash] = useState(null);
+  const [showBarcodeModal, setShowBarcodeModal] = useState(null);
+  const [storeName, setStoreName] = useState(()=>loadLS("erpmini_storename","Minha Loja"));
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showCart, setShowCart]   = useState(false);   // mobile cart drawer
+  const [showSettings, setShowSettings] = useState(false);
+  const barcodeRef  = useRef();
+  const saleCounter = useRef(loadLS("erpmini_salecounter", 1000));
+
+  useEffect(()=>{ saveLS("erpmini_products", products); }, [products]);
+  useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
+  useEffect(()=>{ saveLS("erpmini_storename", storeName); }, [storeName]);
+  useEffect(()=>{ saveLS("erpmini_salecounter", saleCounter.current); });
+
+  const notify = (msg, type="success") => {
+    setNotification({ msg, type });
+    setTimeout(()=>setNotification(null), 2500);
+  };
+
+  const clearAllData = () => {
+    ["erpmini_products","erpmini_sales","erpmini_storename","erpmini_salecounter"].forEach(k=>localStorage.removeItem(k));
+    setProducts(initialProducts); setSales([]); setStoreName("Minha Loja"); setCart([]);
+    saleCounter.current = 1000; setShowClearConfirm(false);
+    notify("Dados resetados!");
+  };
+
+  useEffect(()=>{
+    if (tab==="pdv" && !isMobile && barcodeRef.current) barcodeRef.current.focus();
+  },[tab, isMobile]);
+
+  const addToCart = useCallback((product) => {
+    if (product.stock<=0) { notify("Produto sem estoque!", "error"); return false; }
+    setCart(prev=>{
+      const exists = prev.find(i=>i.id===product.id);
+      if (exists) {
+        if (exists.qty>=product.stock) { notify("Estoque insuficiente!", "error"); return prev; }
+        return prev.map(i=>i.id===product.id?{...i,qty:i.qty+1}:i);
+      }
+      return [...prev, {...product, qty:1}];
+    });
+    return true;
+  },[]);
+
+  const removeFromCart = (id) => setCart(prev=>prev.filter(i=>i.id!==id));
+  const updateQty = (id, qty) => {
+    const p = products.find(p=>p.id===id);
+    if (qty<1) return;
+    if (qty>p.stock) return notify("Estoque insuficiente!", "error");
+    setCart(prev=>prev.map(i=>i.id===id?{...i,qty}:i));
+  };
+
+  const handleBarcodeScan = (code) => {
+    const t = code.trim();
+    if (!t) return;
+    const found = products.find(p=>p.barcode===t);
+    if (found) {
+      const ok = addToCart(found);
+      setBarcodeFlash(ok?"ok":"error");
+      if (ok) notify(`✅ ${found.name} adicionado!`);
+    } else {
+      setBarcodeFlash("error");
+      notify(`Código não encontrado!`,"error");
+    }
+    setTimeout(()=>setBarcodeFlash(null), 600);
+    setBarcodeInput("");
+  };
+
+  const total = cart.reduce((s,i)=>s+i.price*i.qty, 0);
+  const cartCount = cart.reduce((s,i)=>s+i.qty, 0);
+
+  const handleCheckoutConfirm = ({ payments, total:t, change }) => {
+    const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change };
+    setProducts(prev=>prev.map(p=>{ const item=cart.find(i=>i.id===p.id); return item?{...p,stock:p.stock-item.qty}:p; }));
+    setSales(prev=>[sale,...prev]);
+    setSelectedSale(sale);
+    setCart([]); setShowCheckout(false); setShowCart(false); setShowReceipt(true);
+    notify("✅ Venda finalizada!");
+  };
+
+  const saveProduct = () => {
+    if (!newProduct.name||!newProduct.price||!newProduct.stock) return notify("Preencha todos os campos!","error");
+    const barcode = newProduct.barcode || genBarcode();
+    if (!editingId && products.find(p=>p.barcode===barcode)) return notify("Código de barras já cadastrado!","error");
+    if (editingId) {
+      setProducts(prev=>prev.map(p=>p.id===editingId?{...p,...newProduct,barcode,price:parseFloat(newProduct.price),stock:parseInt(newProduct.stock)}:p));
+      setEditingId(null); notify("Produto atualizado!");
+    } else {
+      setProducts(prev=>[...prev,{id:Date.now(),...newProduct,barcode,price:parseFloat(newProduct.price),stock:parseInt(newProduct.stock)}]);
+      notify("Produto cadastrado!");
+    }
+    setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});
+  };
+
+  const editProduct = (p) => { setNewProduct({name:p.name,price:p.price,stock:p.stock,category:p.category,barcode:p.barcode}); setEditingId(p.id); setTab("estoque"); };
+  const deleteProduct = (id) => { setProducts(prev=>prev.filter(p=>p.id!==id)); notify("Produto removido!"); };
+  const filteredProducts = products.filter(p=>p.name.toLowerCase().includes(searchProd.toLowerCase())||(p.barcode&&p.barcode.includes(searchProd)));
+  const totalSales = sales.reduce((s,v)=>s+v.total,0);
+  const mIcon  = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.icon  ||"💳";
+  const mLabel = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.label ||k;
+  const mColor = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.color ||"#64748b";
+
+  // ─── Styles ────────────────────────────────────────────────────────────────
+  const inp = { width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:"10px", fontSize:"15px", boxSizing:"border-box", outline:"none" };
+  const btn = (c) => ({ background:c||"#e94560", color:"#fff", border:"none", borderRadius:"10px", padding:"12px 18px", cursor:"pointer", fontWeight:"700", fontSize:"15px" });
+  const btnSm = (c) => ({ background:c||"#64748b", color:"#fff", border:"none", borderRadius:"8px", padding:"6px 12px", cursor:"pointer", fontSize:"13px", fontWeight:"600" });
+  const tag = (c) => ({ background:c, color:"#fff", borderRadius:"20px", padding:"3px 10px", fontSize:"11px", display:"inline-block" });
+  const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
+
+  const NAV_ITEMS = [
+    { key:"pdv",     icon:"🛒", label:"PDV"     },
+    { key:"estoque", icon:"📦", label:"Estoque" },
+    { key:"vendas",  icon:"📊", label:"Vendas"  },
+    { key:"config",  icon:"⚙️", label:"Config"  },
+  ];
+
+  // ─── Cart Drawer (mobile) ─────────────────────────────────────────────────
+  const CartDrawer = () => (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:150, display:"flex", alignItems:"flex-end" }} onClick={()=>setShowCart(false)}>
+      <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"20px 16px 32px", width:"100%", maxHeight:"80vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 16px" }} />
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+          <div style={{ fontWeight:"800", fontSize:"17px" }}>🛒 Carrinho ({cartCount})</div>
+          <button onClick={()=>setShowCart(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer" }}>✕</button>
+        </div>
+        {cart.length===0
+          ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Carrinho vazio</p>
+          : cart.map(item=>(
+            <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:"700", fontSize:"14px" }}>{item.name}</div>
+                <div style={{ color:"#e94560", fontSize:"13px" }}>{fmtCur(item.price)} × {item.qty}</div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>−</button>
+                <span style={{ minWidth:"22px", textAlign:"center", fontWeight:"700" }}>{item.qty}</span>
+                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
+                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>✕</button>
+              </div>
+              <div style={{ fontWeight:"800", fontSize:"14px", minWidth:"72px", textAlign:"right" }}>{fmtCur(item.price*item.qty)}</div>
+            </div>
+          ))
+        }
+        {cart.length>0 && (
+          <div style={{ marginTop:"14px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:"20px", fontWeight:"800", marginBottom:"14px" }}>
+              <span>Total</span><span style={{ color:"#e94560" }}>{fmtCur(total)}</span>
+            </div>
+            <button style={{ ...btn(), width:"100%", padding:"16px", fontSize:"17px" }} onClick={()=>{ setShowCart(false); setShowCheckout(true); }}>
+              💳 Pagar {fmtCur(total)}
+            </button>
+            <button style={{ ...btn("#94a3b8"), width:"100%", padding:"12px", fontSize:"14px", marginTop:"8px" }} onClick={()=>setCart([])}>
+              🗑 Limpar carrinho
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── PDV tab ───────────────────────────────────────────────────────────────
+  const PDVTab = () => (
+    <div>
+      {/* Barcode scanner */}
+      <div style={{ ...card, display:"flex", alignItems:"center", gap:"10px",
+        border:`2px solid ${barcodeFlash==="ok"?"#22c55e":barcodeFlash==="error"?"#ef4444":"#6366f1"}`,
+        background:barcodeFlash==="ok"?"#f0fdf4":barcodeFlash==="error"?"#fef2f2":"#eef2ff", transition:"all 0.2s", marginBottom:"12px" }}>
+        <span style={{ fontSize:"22px" }}>📷</span>
+        <input ref={barcodeRef}
+          style={{ flex:1, border:"none", background:"transparent", fontSize:"15px", outline:"none", fontWeight:"600" }}
+          placeholder="Código de barras..." value={barcodeInput}
+          onChange={e=>setBarcodeInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&handleBarcodeScan(barcodeInput)} />
+        <button style={btnSm("#6366f1")} onClick={()=>handleBarcodeScan(barcodeInput)}>OK</button>
+      </div>
+
+      {/* Search */}
+      <input style={{ ...inp, marginBottom:"12px" }} placeholder="🔍 Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
+
+      {/* Product grid */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"10px" }}>
+        {filteredProducts.map(p=>(
+          <button key={p.id}
+            style={{ background:p.stock>0?"#fff":"#f8f8f8", border:`2px solid ${p.stock>0?"#e2e8f0":"#fecaca"}`, borderRadius:"12px", padding:"14px 10px", cursor:p.stock>0?"pointer":"not-allowed", textAlign:"left", opacity:p.stock>0?1:0.6, transition:"all 0.15s" }}
+            onClick={()=>{ addToCart(p); if(isMobile) notify(`✅ ${p.name}`); }}>
+            <div style={{ fontSize:"14px", fontWeight:"700", color:"#1a1a2e", marginBottom:"4px", lineHeight:1.3 }}>{p.name}</div>
+            <div style={{ fontSize:"16px", fontWeight:"800", color:"#e94560" }}>{fmtCur(p.price)}</div>
+            <div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.barcode}</div>
+            <div style={{ fontSize:"11px", color:p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444", marginTop:"4px", fontWeight:"600" }}>
+              {p.stock>0?`${p.stock} un.`:"Esgotado"}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop cart */}
+      {!isMobile && cart.length>0 && (
+        <div style={{ ...card, marginTop:"16px" }}>
+          <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>🛒 Carrinho</div>
+          {cart.map(item=>(
+            <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:"600", fontSize:"13px" }}>{item.name}</div>
+                <div style={{ color:"#e94560", fontSize:"12px" }}>{fmtCur(item.price)} × {item.qty}</div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>−</button>
+                <span style={{ minWidth:"20px", textAlign:"center" }}>{item.qty}</span>
+                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
+                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>✕</button>
+              </div>
+              <div style={{ fontWeight:"700", minWidth:"70px", textAlign:"right" }}>{fmtCur(item.price*item.qty)}</div>
+            </div>
+          ))}
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:"20px", fontWeight:"800", margin:"14px 0 12px" }}>
+            <span>Total</span><span style={{ color:"#e94560" }}>{fmtCur(total)}</span>
+          </div>
+          <button style={{ ...btn(), width:"100%", padding:"14px", fontSize:"16px" }} onClick={()=>setShowCheckout(true)}>
+            💳 Ir para Pagamento
+          </button>
+          <button style={{ ...btn("#94a3b8"), width:"100%", padding:"10px", fontSize:"13px", marginTop:"8px" }} onClick={()=>setCart([])}>
+            🗑 Limpar Carrinho
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── Estoque tab ────────────────────────────────────────────────────────────
+  const EstoqueTab = () => (
+    <div>
+      <div style={card}>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>{editingId?"✏️ Editar Produto":"➕ Novo Produto"}</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+          {[["Nome do Produto","text","name","Ex: Camiseta Azul M"],["Preço (R$)","number","price","0.00"],["Estoque","number","stock","0"],["Categoria","text","category","Geral"]].map(([lbl,type,key,ph])=>(
+            <div key={key}>
+              <label style={{ fontSize:"12px", fontWeight:"600", color:"#64748b", marginBottom:"4px", display:"block" }}>{lbl}</label>
+              <input style={inp} type={type} value={newProduct[key]} placeholder={ph} onChange={e=>setNewProduct({...newProduct,[key]:e.target.value})} />
+            </div>
+          ))}
+          <div>
+            <label style={{ fontSize:"12px", fontWeight:"600", color:"#64748b", marginBottom:"4px", display:"block" }}>Código de Barras</label>
+            <div style={{ display:"flex", gap:"8px" }}>
+              <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automático se vazio"
+                onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
+              <button style={btnSm("#6366f1")} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>🎲</button>
+            </div>
+            {newProduct.barcode&&(
+              <div style={{ marginTop:"8px", background:"#f8fafc", borderRadius:"8px", padding:"8px", textAlign:"center", overflowX:"auto" }}>
+                <BarcodeImage value={newProduct.barcode} />
+              </div>
+            )}
+          </div>
+          <div style={{ display:"flex", gap:"8px" }}>
+            <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"💾 Salvar":"➕ Cadastrar"}</button>
+            {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});}}>✕</button>}
+          </div>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>📦 Produtos ({products.length})</div>
+        {products.map(p=>(
+          <div key={p.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:"700", fontSize:"14px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
+              <div style={{ display:"flex", gap:"6px", marginTop:"4px", flexWrap:"wrap" }}>
+                <span style={tag("#6366f1")}>{p.category}</span>
+                <span style={tag(p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444")}>{p.stock} un.</span>
+              </div>
+              {p.barcode&&<div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px" }}>🔳 {p.barcode}</div>}
+            </div>
+            <div style={{ fontWeight:"800", color:"#e94560", whiteSpace:"nowrap" }}>{fmtCur(p.price)}</div>
+            <div style={{ display:"flex", gap:"4px" }}>
+              <button style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>🔳</button>
+              <button style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>✏️</button>
+              <button style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>🗑</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ─── Vendas tab ─────────────────────────────────────────────────────────────
+  const VendasTab = () => (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
+        {[
+          ["Total de Vendas", fmtCur(totalSales), "linear-gradient(135deg,#e94560,#c0392b)"],
+          ["Transações", sales.length, "linear-gradient(135deg,#6366f1,#4338ca)"],
+          ["Ticket Médio", sales.length?fmtCur(totalSales/sales.length):"R$ 0,00","linear-gradient(135deg,#22c55e,#16a34a)"],
+        ].map(([l,v,c],i)=>(
+          <div key={i} style={{ background:c, borderRadius:"12px", padding:"16px", color:"#fff", gridColumn:i===2&&isMobile?"1 / -1":undefined }}>
+            <div style={{ fontSize:"11px", opacity:0.8, marginBottom:"4px" }}>{l}</div>
+            <div style={{ fontSize:"20px", fontWeight:"800" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={card}>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>📋 Histórico</div>
+        {sales.length===0
+          ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Nenhuma venda ainda</p>
+          : sales.map(sale=>(
+            <div key={sale.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
+              <div style={{ background:"#f1f5f9", borderRadius:"8px", padding:"6px 10px", fontSize:"12px", fontWeight:"700", color:"#64748b", whiteSpace:"nowrap" }}>#{sale.id}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:"12px", color:"#64748b" }}>{fmtDate(sale.date)}</div>
+                <div style={{ display:"flex", gap:"4px", marginTop:"2px", flexWrap:"wrap" }}>
+                  {sale.payments.map((p,i)=>(
+                    <span key={i} style={{ background:mColor(p.method)+"22", color:mColor(p.method), borderRadius:"10px", padding:"1px 7px", fontSize:"11px", fontWeight:"700" }}>
+                      {mIcon(p.method)} {mLabel(p.method)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ fontWeight:"800", fontSize:"14px", whiteSpace:"nowrap" }}>{fmtCur(sale.total)}</div>
+              <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>🧾</button>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+
+  // ─── Config tab ─────────────────────────────────────────────────────────────
+  const ConfigTab = () => (
+    <div>
+      <div style={card}>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>⚙️ Configurações</div>
+        <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
+        <input style={{ ...inp, marginBottom:"14px" }} value={storeName} onChange={e=>setStoreName(e.target.value)} placeholder="Minha Loja" />
+        <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px" }}>
+          <span style={{ fontSize:"20px" }}>💾</span>
+          <div>
+            <div style={{ fontWeight:"700", fontSize:"13px", color:"#166534" }}>Salvamento automático ativo</div>
+            <div style={{ fontSize:"12px", color:"#4ade80" }}>Dados salvos no navegador deste dispositivo</div>
+          </div>
+        </div>
+      </div>
+      <div style={card}>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"6px", color:"#ef4444" }}>⚠️ Zona de Perigo</div>
+        <p style={{ fontSize:"13px", color:"#64748b", marginBottom:"14px" }}>Apaga todos os produtos, vendas e configurações salvos.</p>
+        <button style={{ ...btn("#ef4444"), width:"100%" }} onClick={()=>setShowClearConfirm(true)}>🗑 Resetar todos os dados</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily:"'Segoe UI',sans-serif", background:"#f0f4f8", minHeight:"100vh", paddingBottom: isMobile?"80px":"0" }}>
+
+      {/* Notification */}
+      {notification && (
+        <div style={{ position:"fixed", top:"16px", left:"50%", transform:"translateX(-50%)", zIndex:600,
+          background:notification.type==="error"?"#ef4444":"#22c55e", color:"#fff", padding:"10px 20px",
+          borderRadius:"40px", fontWeight:"700", fontSize:"14px", boxShadow:"0 4px 16px rgba(0,0,0,0.2)", whiteSpace:"nowrap" }}>
+          {notification.msg}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
+        <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
+        <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>💾 Salvo</span>
+        <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
+        {/* Mobile cart button */}
+        {isMobile && tab==="pdv" && (
+          <button onClick={()=>setShowCart(true)}
+            style={{ background:"#e94560", border:"none", borderRadius:"10px", padding:"8px 12px", cursor:"pointer", color:"#fff", fontWeight:"700", fontSize:"14px", position:"relative" }}>
+            🛒
+            {cartCount>0&&<span style={{ position:"absolute", top:"-6px", right:"-6px", background:"#fbbf24", color:"#000", borderRadius:"50%", width:"18px", height:"18px", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:"800" }}>{cartCount}</span>}
+          </button>
+        )}
+      </div>
+
+      {/* Desktop nav */}
+      {!isMobile && (
+        <div style={{ background:"#fff", borderBottom:"2px solid #e2e8f0", display:"flex", padding:"0 24px" }}>
+          {NAV_ITEMS.map(({key,icon,label})=>(
+            <button key={key} onClick={()=>setTab(key)}
+              style={{ padding:"14px 20px", border:"none", background:"transparent", cursor:"pointer", fontWeight:tab===key?"700":"500", color:tab===key?"#e94560":"#64748b", borderBottom:tab===key?"3px solid #e94560":"3px solid transparent", fontSize:"14px", transition:"all 0.2s" }}>
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div style={{ padding:isMobile?"12px":"24px", maxWidth:"1200px", margin:"0 auto" }}>
+        {tab==="pdv"     && <PDVTab />}
+        {tab==="estoque" && <EstoqueTab />}
+        {tab==="vendas"  && <VendasTab />}
+        {tab==="config"  && <ConfigTab />}
+      </div>
+
+      {/* Mobile bottom nav */}
+      {isMobile && (
+        <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"2px solid #f1f5f9", display:"flex", zIndex:50, boxShadow:"0 -4px 20px rgba(0,0,0,0.1)" }}>
+          {NAV_ITEMS.map(({key,icon,label})=>(
+            <button key={key} onClick={()=>setTab(key)}
+              style={{ flex:1, padding:"10px 4px", border:"none", background:"transparent", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:"2px" }}>
+              <span style={{ fontSize:"20px" }}>{icon}</span>
+              <span style={{ fontSize:"10px", fontWeight:tab===key?"700":"500", color:tab===key?"#e94560":"#94a3b8" }}>{label}</span>
+              {tab===key&&<div style={{ width:"20px", height:"3px", background:"#e94560", borderRadius:"2px" }} />}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Mobile cart drawer */}
+      {isMobile && showCart && <CartDrawer />}
+
+      {/* Checkout */}
+      {showCheckout && <CheckoutScreen cart={cart} total={total} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
+
+      {/* Receipt */}
+      {showReceipt && selectedSale && <ReceiptModal sale={selectedSale} storeName={storeName} onClose={()=>setShowReceipt(false)} />}
+
+      {/* Barcode modal */}
+      {showBarcodeModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setShowBarcodeModal(null)}>
+          <div style={{ background:"#fff", borderRadius:"16px", padding:"24px", maxWidth:"340px", width:"90%", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+            <h3 style={{ margin:"0 0 4px" }}>{showBarcodeModal.name}</h3>
+            <p style={{ color:"#64748b", fontSize:"13px", margin:"0 0 16px" }}>Código de Barras</p>
+            <div style={{ background:"#f8fafc", borderRadius:"10px", padding:"12px", overflowX:"auto" }}>
+              <BarcodeImage value={showBarcodeModal.barcode} />
+            </div>
+            <p style={{ fontFamily:"monospace", fontSize:"13px", margin:"10px 0" }}>{showBarcodeModal.barcode}</p>
+            <button style={{ ...btn("#64748b"), width:"100%" }} onClick={()=>setShowBarcodeModal(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Clear confirm */}
+      {showClearConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setShowClearConfirm(false)}>
+          <div style={{ background:"#fff", borderRadius:"16px", padding:"28px", maxWidth:"320px", width:"90%", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
+            <div style={{ fontSize:"48px", marginBottom:"12px" }}>⚠️</div>
+            <h3 style={{ margin:"0 0 8px", fontSize:"18px" }}>Resetar todos os dados?</h3>
+            <p style={{ color:"#64748b", fontSize:"13px", margin:"0 0 20px", lineHeight:1.5 }}>Apaga <strong>produtos, vendas e configurações</strong>. Esta ação não pode ser desfeita.</p>
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button style={{ ...btn("#ef4444"), flex:1 }} onClick={clearAllData}>🗑 Apagar tudo</button>
+              <button style={{ flex:1, background:"#f1f5f9", color:"#64748b", border:"none", borderRadius:"10px", padding:"12px", cursor:"pointer", fontWeight:"700" }} onClick={()=>setShowClearConfirm(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
