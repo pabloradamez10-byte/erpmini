@@ -714,10 +714,10 @@ export default function ERP() {
 
       {/* Main content */}
       <div style={{ padding:isMobile?"12px":"24px", maxWidth:"1200px", margin:"0 auto" }}>
-        {tab==="pdv"     && <PDVTab />}
-        {tab==="estoque" && <EstoqueTab />}
-        {tab==="vendas"  && <VendasTab />}
-        {tab==="config"  && <ConfigTab />}
+        {tab==="pdv"     && PDVTab()}
+        {tab==="estoque" && EstoqueTab()}
+        {tab==="vendas"  && VendasTab()}
+        {tab==="config"  && ConfigTab()}
       </div>
 
       {/* Mobile bottom nav */}
@@ -735,7 +735,7 @@ export default function ERP() {
       )}
 
       {/* Mobile cart drawer */}
-      {isMobile && showCart && <CartDrawer />}
+      {isMobile && showCart && CartDrawer()}
 
       {/* Checkout */}
       {showCheckout && <CheckoutScreen cart={cart} total={total} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
@@ -775,4 +775,3 @@ export default function ERP() {
     </div>
   );
 }
-
