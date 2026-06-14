@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "DASHBOARD-ETAPA10-20260614-1610";
+const APP_VERSION = "CAIXA-RELATORIOS-ETAPA11-20260614-1645";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -651,6 +651,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
 export default function ERP() {
   const isMobile = useIsMobile();
   const [tab, setTab]             = useState("dashboard");
+  const [caixaView, setCaixaView] = useState("resumo");
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
   const [cart, setCart]           = useState([]);
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
@@ -834,6 +835,21 @@ export default function ERP() {
 
   const monthKey = (d=new Date()) => new Date(d).toISOString().slice(0,7);
   const isSameMonth = (date, key=monthKey()) => String(date || "").slice(0,7) === key;
+  const startOfWeek = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0,0,0,0);
+    return d;
+  };
+  const isThisWeek = (date) => {
+    const d = new Date(date);
+    const start = startOfWeek();
+    const end = new Date(start);
+    end.setDate(start.getDate()+7);
+    return d >= start && d < end;
+  };
   const salesOfToday = sales.filter(s=>isSameDay(s.date));
   const salesOfMonth = sales.filter(s=>isSameMonth(s.date));
   const salesTodayTotal = salesOfToday.reduce((sum,s)=>sum+s.total,0);
@@ -1343,6 +1359,7 @@ export default function ERP() {
 
 
 
+
   // --- Caixa tab --------------------------------------------------------------
   const CaixaTab = () => {
     const key = dayKey();
@@ -1354,8 +1371,35 @@ export default function ERP() {
     const recebimentosFiadoHoje = paymentsOfDay(key).filter(p=>p.origin==="Recebimento fiado").reduce((sum,p)=>sum+(parseFloat(p.amount)||0),0);
     const ultimosPagamentos = paymentsOfDay(key).sort((a,b)=>new Date(b.date)-new Date(a.date));
 
-    return (
-      <div>
+    const vendasSemana = sales.filter(s=>isThisWeek(s.date));
+    const vendasSemanaTotal = vendasSemana.reduce((sum,s)=>sum+s.total,0);
+    const vendasMesTotal = salesOfMonth.reduce((sum,s)=>sum+s.total,0);
+    const ticketMes = salesOfMonth.length ? vendasMesTotal/salesOfMonth.length : 0;
+    const fiadoAbertoLista = fiadoSales.filter(s=>fiadoOpenAmount(s)>0).sort((a,b)=>fiadoOpenAmount(b)-fiadoOpenAmount(a));
+    const topClientesCaixa = topClients;
+    const topProdutosCaixa = productRanking;
+
+    const pill = (key,label) => (
+      <button
+        onClick={()=>setCaixaView(key)}
+        style={{
+          flex:1,
+          padding:"10px 8px",
+          border:"none",
+          borderRadius:"12px",
+          cursor:"pointer",
+          background:caixaView===key?"#e94560":"#f1f5f9",
+          color:caixaView===key?"#fff":"#64748b",
+          fontWeight:"900",
+          fontSize:"13px"
+        }}
+      >
+        {label}
+      </button>
+    );
+
+    const ResumoCaixa = () => (
+      <>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
           {[
             ["Entradas hoje", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
@@ -1419,23 +1463,133 @@ export default function ERP() {
             </div>
           ))}
         </div>
+      </>
+    );
 
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}>🧾 Fechamentos salvos</div>
-          {cashClosures.length===0 ? (
-            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum fechamento registrado.</div>
-          ) : cashClosures.slice(0,10).map(c=>(
-            <div key={c.id} style={{ padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px" }}>
-                <div>
-                  <div style={{ fontWeight:"900" }}>{fmtDate(c.date)}</div>
-                  <div style={{ fontSize:"12px", color:"#64748b" }}>{c.salesCount} transacoes | Fiado aberto: {fmtCur(c.fiadoAberto||0)}</div>
-                </div>
-                <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
-              </div>
+    const RelatoriosCaixa = () => (
+      <>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+          {[
+            ["Hoje", fmtCur(vendasHoje), "#16a34a"],
+            ["Semana", fmtCur(vendasSemanaTotal), "#2563eb"],
+            ["Mes", fmtCur(vendasMesTotal), "#e94560"],
+            ["Ticket mes", fmtCur(ticketMes), "#6366f1"],
+          ].map(([l,v,c])=>(
+            <div key={l} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+              <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+              <div style={{ fontSize:"20px", fontWeight:"900", color:c }}>{v}</div>
             </div>
           ))}
         </div>
+
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>📊 Relatorio por pagamento hoje</div>
+          {[
+            ["Dinheiro", byMethod.dinheiro, "#16a34a"],
+            ["PIX", byMethod.pix, "#0891b2"],
+            ["Debito", byMethod.debito, "#7c3aed"],
+            ["Credito", byMethod.credito, "#2563eb"],
+          ].map(([label,value,color])=>{
+            const pct = entradas>0 ? Math.round((value/entradas)*100) : 0;
+            return (
+              <div key={label} style={{ marginBottom:"12px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"5px" }}>
+                  <span style={{ fontWeight:"900", color:"#334155" }}>{label}</span>
+                  <span style={{ fontWeight:"900", color }}>{fmtCur(value)} ({pct}%)</span>
+                </div>
+                <div style={{ height:"8px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:"999px" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"14px" }}>
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🏆 Top clientes</div>
+            {topClientesCaixa.length===0 ? <div style={{ color:"#94a3b8" }}>Sem dados ainda.</div> :
+              topClientesCaixa.map((c,i)=>(
+                <div key={c.id} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
+                  <div>
+                    <div style={{ fontWeight:"900" }}>{i+1}. {c.name}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>Aberto: {fmtCur(c.openBalance)}</div>
+                  </div>
+                  <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.totalBought)}</div>
+                </div>
+              ))
+            }
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🔥 Top produtos</div>
+            {topProdutosCaixa.length===0 ? <div style={{ color:"#94a3b8" }}>Sem produtos vendidos ainda.</div> :
+              topProdutosCaixa.map((p,i)=>(
+                <div key={p.id} style={{ padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between" }}>
+                    <div style={{ fontWeight:"900" }}>{i+1}. {p.name}</div>
+                    <div style={{ fontWeight:"900", color:"#2563eb" }}>{p.sold} un.</div>
+                  </div>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>Total: {fmtCur(p.total)}</div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🤝 Fiados em aberto</div>
+          {fiadoAbertoLista.length===0 ? (
+            <div style={{ color:"#94a3b8" }}>Nenhum fiado em aberto.</div>
+          ) : fiadoAbertoLista.slice(0,10).map(s=>(
+            <div key={s.id} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
+              <div>
+                <div style={{ fontWeight:"900" }}>#{s.id} - {s.fiado.clientName}</div>
+                <div style={{ fontSize:"12px", color:"#64748b" }}>Vence: {s.fiado.dueDate || "-"} | Compra: {fmtCur(s.total)}</div>
+              </div>
+              <div style={{ fontWeight:"900", color:"#e94560" }}>{fmtCur(fiadoOpenAmount(s))}</div>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+
+    const HistoricoCaixa = () => (
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🧾 Historico de fechamentos</div>
+        {cashClosures.length===0 ? (
+          <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum fechamento registrado.</div>
+        ) : cashClosures.map(c=>(
+          <div key={c.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", marginBottom:"6px" }}>
+              <div>
+                <div style={{ fontWeight:"900" }}>{fmtDate(c.date)}</div>
+                <div style={{ fontSize:"12px", color:"#64748b" }}>{c.salesCount} transacoes | Fiado aberto: {fmtCur(c.fiadoAberto||0)}</div>
+              </div>
+              <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", fontSize:"12px", color:"#64748b" }}>
+              <div>Dinheiro: <strong>{fmtCur(c.byMethod?.dinheiro||0)}</strong></div>
+              <div>PIX: <strong>{fmtCur(c.byMethod?.pix||0)}</strong></div>
+              <div>Debito: <strong>{fmtCur(c.byMethod?.debito||0)}</strong></div>
+              <div>Credito: <strong>{fmtCur(c.byMethod?.credito||0)}</strong></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
+    return (
+      <div>
+        <div style={{ display:"flex", gap:"8px", background:"#fff", borderRadius:"16px", padding:"8px", marginBottom:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+          {pill("resumo","Resumo")}
+          {pill("relatorios","Relatorios")}
+          {pill("historico","Historico")}
+        </div>
+
+        {caixaView==="resumo" && <ResumoCaixa />}
+        {caixaView==="relatorios" && <RelatoriosCaixa />}
+        {caixaView==="historico" && <HistoricoCaixa />}
       </div>
     );
   };
@@ -1710,7 +1864,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-dash1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixa2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
