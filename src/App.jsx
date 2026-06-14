@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "BACKUP-ETAPA13-20260614-1905";
+const APP_VERSION = "RECEBER-ETAPA14-20260614-2010";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -226,6 +226,7 @@ const genBarcode = () => String(Math.floor(1000000000000 + Math.random() * 90000
 const PAYMENT_METHODS = [
   { key:"dinheiro", label:"Dinheiro", icon:"Dinheiro", color:"#16a34a", light:"#f0fdf4" },
   { key:"credito",  label:"Credito",  icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
+  { key:"credito_parcelado", label:"Cred. Parcelado", icon:"Parcelado", color:"#0ea5e9", light:"#f0f9ff" },
   { key:"debito",   label:"Debito",   icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
   { key:"pix",      label:"PIX",      icon:"PIX", color:"#0891b2", light:"#ecfeff" },
   { key:"fiado",    label:"Fiado",    icon:"🤝", color:"#f59e0b", light:"#fffbeb" },
@@ -250,6 +251,10 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const [mixedAmount, setMixedAmount]       = useState("");
   const [fiadoClientId, setFiadoClientId]   = useState("");
   const [fiadoDueDate, setFiadoDueDate]     = useState("");
+  const [installmentClientId, setInstallmentClientId] = useState("");
+  const [installmentClientName, setInstallmentClientName] = useState("");
+  const [installmentCount, setInstallmentCount] = useState("2");
+  const [installmentFirstDueDate, setInstallmentFirstDueDate] = useState("");
 
   const paidSoFar = mixedPayments.reduce((s,p) => s+p.amount, 0);
   const remaining = total - paidSoFar;
@@ -264,6 +269,13 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
     if (isReceive) { setStep("receive_amount"); setAmountPaid(total.toFixed(2)); return; }
     if (key==="dinheiro") { setStep("dinheiro"); setAmountPaid(""); }
     else if (key==="fiado") { setStep("fiado"); setFiadoClientId(clients[0]?.id ? String(clients[0].id) : ""); setFiadoDueDate(""); }
+    else if (key==="credito_parcelado") {
+      setStep("parcelado");
+      setInstallmentClientId(clients[0]?.id ? String(clients[0].id) : "");
+      setInstallmentClientName("");
+      setInstallmentCount("2");
+      setInstallmentFirstDueDate(todayISO());
+    }
     else if (key==="misto") { setStep("mixed"); setMixedPayments([]); setMixedMethod(null); setMixedAmount(""); }
     else onConfirm({ payments:[{ method:key, amount:total }], total, change:0 });
   };
@@ -293,6 +305,26 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
     if (!client) return;
     if (isPastDate(fiadoDueDate)) return;
     onConfirm({ payments:[{ method:"fiado", amount:total }], total, change:0, fiado:{ clientId:client.id, clientName:client.name, dueDate:fiadoDueDate || "" } });
+  };
+
+  const confirmInstallments = () => {
+    const n = Math.max(2, Math.min(12, parseInt(installmentCount,10)||2));
+    const selectedClient = clients.find(c=>String(c.id)===String(installmentClientId));
+    const clientName = (selectedClient?.name || installmentClientName || "").trim();
+    if (!clientName) return;
+    if (!installmentFirstDueDate || isPastDate(installmentFirstDueDate)) return;
+    onConfirm({
+      payments:[{ method:"credito_parcelado", amount:total, installments:n }],
+      total,
+      change:0,
+      receivablePlan:{
+        type:"credito_parcelado",
+        clientId:selectedClient?.id || null,
+        clientName,
+        installments:n,
+        firstDueDate:installmentFirstDueDate
+      }
+    });
   };
 
   const confirmReceive = () => {
@@ -371,6 +403,65 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
               <button onClick={confirmReceive} disabled={(parseFloat(amountPaid)||0)<=0 || (parseFloat(amountPaid)||0)>total}
                 style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:((parseFloat(amountPaid)||0)<=0 || (parseFloat(amountPaid)||0)>total)?0.4:1 }}>
                 Confirmar Recebimento
+              </button>
+            </div>
+          </>
+        )}
+
+
+
+        {step==="parcelado" && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:"16px" }}>
+              <div style={{ fontSize:"40px" }}>Parcelado</div>
+              <div style={{ fontWeight:"700", fontSize:"16px" }}>Credito parcelado</div>
+              <div style={{ fontSize:"13px", color:"#64748b" }}>Gera automaticamente contas a receber</div>
+            </div>
+
+            {clients.length>0 ? (
+              <>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Cliente cadastrado</label>
+                <select value={installmentClientId} onChange={e=>setInstallmentClientId(e.target.value)}
+                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"12px" }}>
+                  {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"12px" }}>Ou deixe um cliente selecionado acima.</div>
+              </>
+            ) : (
+              <>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome do cliente</label>
+                <input value={installmentClientName} onChange={e=>setInstallmentClientName(e.target.value)} placeholder="Ex: Maria Silva"
+                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"12px" }} />
+              </>
+            )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+              <div>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Parcelas</label>
+                <select value={installmentCount} onChange={e=>setInstallmentCount(e.target.value)}
+                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box" }}>
+                  {[2,3,4,5,6,7,8,9,10,11,12].map(n=><option key={n} value={n}>{n}x de {fmtCur(total/n)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>1º vencimento</label>
+                <input type="date" min={todayISO()} value={installmentFirstDueDate} onChange={e=>setInstallmentFirstDueDate(e.target.value)}
+                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box" }} />
+              </div>
+            </div>
+
+            <div style={{ background:"#f0f9ff", border:"1.5px solid #7dd3fc", borderRadius:"12px", padding:"12px", marginBottom:"14px" }}>
+              <div style={{ fontWeight:"900", color:"#0369a1", marginBottom:"6px" }}>Resumo do parcelamento</div>
+              <div style={{ fontSize:"13px", color:"#075985" }}>{installmentCount} parcela(s) de {fmtCur(total/(parseInt(installmentCount,10)||2))}</div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>As parcelas entrarao em Caixa / Financeiro / A receber.</div>
+            </div>
+
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
+              <button onClick={confirmInstallments}
+                style={{ flex:1, padding:"14px", background:"#0ea5e9", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800", fontSize:"15px" }}>
+                Confirmar parcelado
               </button>
             </div>
           </>
@@ -658,8 +749,11 @@ export default function ERP() {
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
   const [cashClosures, setCashClosures] = useState(()=>loadLS("erpmini_cash_closures", []));
   const [payables, setPayables] = useState(()=>loadLS("erpmini_payables", []));
+  const [receivables, setReceivables] = useState(()=>loadLS("erpmini_receivables", []));
+  const [financeiroView, setFinanceiroView] = useState("pagar");
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
   const [newPayable, setNewPayable] = useState({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
+  const [newReceivable, setNewReceivable] = useState({ clientName:"", document:"", description:"", amount:"", dueDate:"", category:"Geral", installments:"1" });
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -710,6 +804,7 @@ export default function ERP() {
   useEffect(()=>{ saveLS("erpmini_clients", clients); }, [clients]);
   useEffect(()=>{ saveLS("erpmini_cash_closures", cashClosures); }, [cashClosures]);
   useEffect(()=>{ saveLS("erpmini_payables", payables); }, [payables]);
+  useEffect(()=>{ saveLS("erpmini_receivables", receivables); }, [receivables]);
   useEffect(()=>{ saveLS("erpmini_storename", storeName); }, [storeName]);
   useEffect(()=>{ saveLS("erpmini_salecounter", saleCounter.current); });
 
@@ -733,6 +828,7 @@ export default function ERP() {
       clients,
       cashClosures,
       payables,
+      receivables,
       storeName,
       saleCounter:saleCounter.current
     }
@@ -783,6 +879,7 @@ export default function ERP() {
     setClients(Array.isArray(d.clients) ? d.clients : []);
     setCashClosures(Array.isArray(d.cashClosures) ? d.cashClosures : []);
     setPayables(Array.isArray(d.payables) ? d.payables : []);
+    setReceivables(Array.isArray(d.receivables) ? d.receivables : []);
     setStoreName(d.storeName || payload.storeName || "Minha Loja");
     saleCounter.current = d.saleCounter || payload.saleCounter || 1000;
 
@@ -791,6 +888,7 @@ export default function ERP() {
     saveLS("erpmini_clients", Array.isArray(d.clients) ? d.clients : []);
     saveLS("erpmini_cash_closures", Array.isArray(d.cashClosures) ? d.cashClosures : []);
     saveLS("erpmini_payables", Array.isArray(d.payables) ? d.payables : []);
+    saveLS("erpmini_receivables", Array.isArray(d.receivables) ? d.receivables : []);
     saveLS("erpmini_storename", d.storeName || payload.storeName || "Minha Loja");
     saveLS("erpmini_salecounter", d.saleCounter || payload.saleCounter || 1000);
     setCart([]);
@@ -842,8 +940,8 @@ export default function ERP() {
   }, []);
 
   const clearAllData = () => {
-    ["erpmini_products","erpmini_sales","erpmini_clients","erpmini_cash_closures","erpmini_payables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
-    setProducts(initialProducts); setSales([]); setClients([]); setCashClosures([]); setPayables([]); setStoreName("Minha Loja"); setCart([]);
+    ["erpmini_products","erpmini_sales","erpmini_clients","erpmini_cash_closures","erpmini_payables","erpmini_receivables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
+    setProducts(initialProducts); setSales([]); setClients([]); setCashClosures([]); setPayables([]); setReceivables([]); setStoreName("Minha Loja"); setCart([]);
     saleCounter.current = 1000; setShowClearConfirm(false);
     notify("Dados resetados!");
   };
@@ -933,10 +1031,15 @@ export default function ERP() {
   const isSameDay = (date, key=dayKey()) => String(date || "").slice(0,10) === key;
   const paymentsOfDay = (key=dayKey()) => {
     const list = [];
+    receivables.forEach(r => {
+      (r.payments || []).forEach(p => {
+        if (isSameDay(p.date, key)) list.push({ ...p, origin:"Recebimento a receber", saleId:r.saleId || r.id, date:p.date, clientName:r.clientName || "" });
+      });
+    });
     sales.forEach(s => {
       if (isSameDay(s.date, key)) {
         (s.payments || []).forEach(p => {
-          if (p.method !== "fiado") list.push({ ...p, origin:"Venda", saleId:s.id, date:s.date, clientName:s.fiado?.clientName || "" });
+          if (p.method !== "fiado" && p.method !== "credito_parcelado") list.push({ ...p, origin:"Venda", saleId:s.id, date:s.date, clientName:s.fiado?.clientName || "" });
         });
       }
       if (s.fiado && s.fiado.payments) {
@@ -1020,7 +1123,116 @@ export default function ERP() {
   const payablesOverdueTotal = payablesOverdue.reduce((sum,p)=>sum+payableAmount(p),0);
   const payablesMonthTotal = payables.filter(p=>isSameMonth(p.dueDate)).reduce((sum,p)=>sum+payableAmount(p),0);
   const payablesPaidMonthTotal = paidPayables.filter(p=>isSameMonth(p.paidDate || p.dueDate)).reduce((sum,p)=>sum+payableAmount(p),0);
-  const expectedMonthBalance = salesMonthTotal - payablesMonthTotal;
+  const receivableAmount = (r) => parseFloat(r.amount)||0;
+  const receivablePaid = (r) => parseFloat(r.paidAmount)||0;
+  const receivableOpenAmount = (r) => Math.max(0, receivableAmount(r)-receivablePaid(r));
+  const openReceivables = receivables.filter(r=>!r.paid && receivableOpenAmount(r)>0);
+  const paidReceivables = receivables.filter(r=>r.paid);
+  const receivablesDueToday = openReceivables.filter(r=>r.dueDate === dayKey());
+  const receivablesOverdue = openReceivables.filter(r=>r.dueDate && r.dueDate < dayKey());
+  const receivablesNext7 = openReceivables.filter(r=>{
+    if (!r.dueDate) return false;
+    const d = new Date(r.dueDate + "T00:00:00");
+    const start = new Date(dayKey() + "T00:00:00");
+    const end = new Date(start); end.setDate(start.getDate()+7);
+    return d >= start && d <= end;
+  });
+  const receivablesNext30 = openReceivables.filter(r=>{
+    if (!r.dueDate) return false;
+    const d = new Date(r.dueDate + "T00:00:00");
+    const start = new Date(dayKey() + "T00:00:00");
+    const end = new Date(start); end.setDate(start.getDate()+30);
+    return d >= start && d <= end;
+  });
+  const receivablesOpenTotal = openReceivables.reduce((sum,r)=>sum+receivableOpenAmount(r),0);
+  const receivablesDueTodayTotal = receivablesDueToday.reduce((sum,r)=>sum+receivableOpenAmount(r),0);
+  const receivablesOverdueTotal = receivablesOverdue.reduce((sum,r)=>sum+receivableOpenAmount(r),0);
+  const receivablesNext30Total = receivablesNext30.reduce((sum,r)=>sum+receivableOpenAmount(r),0);
+  const receivablesMonthTotal = receivables.filter(r=>isSameMonth(r.dueDate)).reduce((sum,r)=>sum+receivableOpenAmount(r),0);
+  const expectedMonthBalance = salesMonthTotal + receivablesMonthTotal - payablesMonthTotal;
+  const cashFlow30 = receivablesNext30Total - payablesNext7.reduce((sum,p)=>sum+payableAmount(p),0);
+
+  const addMonthsISO = (dateStr, months) => {
+    const d = new Date((dateStr || dayKey()) + "T00:00:00");
+    d.setMonth(d.getMonth()+months);
+    return d.toISOString().slice(0,10);
+  };
+
+  const createReceivableInstallments = ({ clientName, clientId=null, document="", description="", amount, dueDate, category="Geral", installments=1, saleId=null, source="manual" }) => {
+    const totalAmount = parseMoney(amount);
+    const n = Math.max(1, Math.min(12, parseInt(installments,10)||1));
+    if (!clientName || totalAmount<=0 || !dueDate || dueDate < dayKey()) {
+      notify("Informe cliente, valor e vencimento valido.", "error");
+      return [];
+    }
+    const base = Math.floor((totalAmount/n)*100)/100;
+    let created = [];
+    let remainingCents = Math.round(totalAmount*100);
+    for (let i=1;i<=n;i++) {
+      const cents = i===n ? remainingCents : Math.round(base*100);
+      remainingCents -= cents;
+      created.push({
+        id: Date.now()+i+Math.floor(Math.random()*1000),
+        saleId,
+        clientId,
+        clientName:String(clientName).trim(),
+        document:String(document||"").trim(),
+        description:String(description||"").trim(),
+        amount:cents/100,
+        paidAmount:0,
+        paid:false,
+        dueDate:addMonthsISO(dueDate, i-1),
+        category:category || "Geral",
+        installmentNumber:i,
+        totalInstallments:n,
+        source,
+        payments:[],
+        createdAt:new Date().toISOString()
+      });
+    }
+    setReceivables(prev=>[...created,...prev]);
+    return created;
+  };
+
+  const addReceivable = () => {
+    const created = createReceivableInstallments({
+      clientName:newReceivable.clientName,
+      document:newReceivable.document,
+      description:newReceivable.description,
+      amount:newReceivable.amount,
+      dueDate:newReceivable.dueDate,
+      category:newReceivable.category,
+      installments:newReceivable.installments,
+      source:"manual"
+    });
+    if (created.length) {
+      setNewReceivable({ clientName:"", document:"", description:"", amount:"", dueDate:"", category:"Geral", installments:"1" });
+      notify("Conta a receber cadastrada!");
+    }
+  };
+
+  const receiveReceivable = (id) => {
+    const rec = receivables.find(r=>r.id===id);
+    if (!rec) return;
+    const aberto = receivableOpenAmount(rec);
+    const txt = window.prompt(`Valor recebido de ${rec.clientName}:`, aberto.toFixed(2));
+    if (txt===null) return;
+    const val = Math.min(aberto, parseMoney(txt));
+    if (val<=0) return notify("Valor invalido.", "error");
+    const method = window.prompt("Forma de recebimento: dinheiro, pix, debito ou credito", "pix") || "pix";
+    const normalizedMethod = ["dinheiro","pix","debito","credito"].includes(method.toLowerCase()) ? method.toLowerCase() : "pix";
+    setReceivables(prev=>prev.map(r=>{
+      if (r.id!==id) return r;
+      const paidAmount = (parseFloat(r.paidAmount)||0) + val;
+      const paid = paidAmount >= receivableAmount(r)-0.001;
+      return {...r, paidAmount, paid, paidDate:paid?new Date().toISOString():r.paidDate, payments:[...(r.payments||[]), { amount:val, method:normalizedMethod, date:new Date().toISOString() }]};
+    }));
+    notify("Recebimento registrado!");
+  };
+
+  const deleteReceivable = (id) => {
+    if (window.confirm("Excluir esta conta a receber?")) setReceivables(prev=>prev.filter(r=>r.id!==id));
+  };
 
   const addPayable = () => {
     const amount = parseMoney(newPayable.amount);
@@ -1052,9 +1264,23 @@ export default function ERP() {
     if (window.confirm("Excluir esta conta a pagar?")) setPayables(prev=>prev.filter(p=>p.id!==id));
   };
 
-  const handleCheckoutConfirm = ({ payments, total:t, change, fiado }) => {
-    const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null };
+  const handleCheckoutConfirm = ({ payments, total:t, change, fiado, receivablePlan }) => {
+    const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null, receivablePlan:receivablePlan || null };
     setProducts(prev=>prev.map(p=>{ const item=cart.find(i=>i.id===p.id); return item?{...p,stock:p.stock-item.qty}:p; }));
+    if (receivablePlan) {
+      createReceivableInstallments({
+        clientName:receivablePlan.clientName,
+        clientId:receivablePlan.clientId,
+        document:`Venda #${sale.id}`,
+        description:"Credito parcelado",
+        amount:t,
+        dueDate:receivablePlan.firstDueDate,
+        category:"Venda parcelada",
+        installments:receivablePlan.installments,
+        saleId:sale.id,
+        source:"credito_parcelado"
+      });
+    }
     setSales(prev=>[sale,...prev]);
     setSelectedSale(sale);
     setCart([]); setShowCheckout(false); setShowCart(false); setShowReceipt(true);
@@ -1288,8 +1514,10 @@ export default function ERP() {
           ["Clientes", clients.length, "#6366f1"],
           ["Estoque baixo", lowStockProducts.length, "#ef4444"],
           ["Fiados vencidos", overdueFiado.length, "#f97316"],
-          ["Contas hoje", payablesDueToday.length, "#f59e0b"],
-          ["Contas vencidas", payablesOverdue.length, "#dc2626"],
+          ["Pagar hoje", payablesDueToday.length, "#f59e0b"],
+          ["Pagar vencidas", payablesOverdue.length, "#dc2626"],
+          ["Receber hoje", receivablesDueToday.length, "#16a34a"],
+          ["Receber atrasadas", receivablesOverdue.length, "#e94560"],
         ].map(([l,v,c],i)=>(
           <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
@@ -1298,7 +1526,7 @@ export default function ERP() {
         ))}
       </div>
 
-      {(overdueFiado.length>0 || lowStockProducts.length>0 || payablesDueToday.length>0 || payablesOverdue.length>0) && (
+      {(overdueFiado.length>0 || lowStockProducts.length>0 || payablesDueToday.length>0 || payablesOverdue.length>0 || receivablesDueToday.length>0 || receivablesOverdue.length>0) && (
         <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}>🚨 Alertas</div>
           {overdueFiado.length>0 && (
@@ -1319,6 +1547,20 @@ export default function ERP() {
               <div style={{ fontWeight:"900", color:"#9a3412" }}>{payablesDueToday.length} conta(s) vencem hoje</div>
               <div style={{ fontSize:"12px", color:"#9a3412", marginBottom:"8px" }}>Total para pagar hoje: {fmtCur(payablesDueTodayTotal)}.</div>
               <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); }} style={{ ...btn("#f59e0b"), padding:"9px 12px", fontSize:"13px" }}>Ver contas de hoje</button>
+            </div>
+          )}
+          {receivablesOverdue.length>0 && (
+            <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+              <div style={{ fontWeight:"900", color:"#991b1b" }}>{receivablesOverdue.length} conta(s) a receber atrasada(s)</div>
+              <div style={{ fontSize:"12px", color:"#991b1b", marginBottom:"8px" }}>Total atrasado: {fmtCur(receivablesOverdueTotal)}.</div>
+              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); setFinanceiroView("receber"); }} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px" }}>Ver contas a receber</button>
+            </div>
+          )}
+          {receivablesDueToday.length>0 && (
+            <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+              <div style={{ fontWeight:"900", color:"#166534" }}>{receivablesDueToday.length} conta(s) a receber hoje</div>
+              <div style={{ fontSize:"12px", color:"#166534", marginBottom:"8px" }}>Total previsto hoje: {fmtCur(receivablesDueTodayTotal)}.</div>
+              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); setFinanceiroView("receber"); }} style={{ ...btn("#16a34a"), padding:"9px 12px", fontSize:"13px" }}>Ver recebimentos</button>
             </div>
           )}
           {lowStockProducts.length>0 && (
@@ -1682,6 +1924,16 @@ export default function ERP() {
         </div>
 
         <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💰 Resumo financeiro previsto</div>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px" }}>
+            <div style={{ background:"#f0fdf4", borderRadius:"12px", padding:"10px" }}><div style={{ fontSize:"11px", color:"#166534", fontWeight:"900" }}>A receber 30 dias</div><div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(receivablesNext30Total)}</div></div>
+            <div style={{ background:"#fef2f2", borderRadius:"12px", padding:"10px" }}><div style={{ fontSize:"11px", color:"#991b1b", fontWeight:"900" }}>A pagar 7 dias</div><div style={{ fontWeight:"900", color:"#dc2626" }}>{fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0))}</div></div>
+            <div style={{ background:"#eff6ff", borderRadius:"12px", padding:"10px" }}><div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"900" }}>Saldo projetado</div><div style={{ fontWeight:"900", color:cashFlow30>=0?"#2563eb":"#dc2626" }}>{fmtCur(cashFlow30)}</div></div>
+            <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"10px" }}><div style={{ fontSize:"11px", color:"#475569", fontWeight:"900" }}>A receber aberto</div><div style={{ fontWeight:"900", color:"#334155" }}>{fmtCur(receivablesOpenTotal)}</div></div>
+          </div>
+        </div>
+
+        <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>📊 Relatorio por pagamento hoje</div>
           {[
             ["Dinheiro", byMethod.dinheiro, "#16a34a"],
@@ -1773,8 +2025,17 @@ export default function ERP() {
     const FinanceiroCaixa = () => {
       const statusColor = (p) => p.paid ? "#16a34a" : (p.dueDate < dayKey() ? "#dc2626" : (p.dueDate === dayKey() ? "#f59e0b" : "#64748b"));
       const statusLabel = (p) => p.paid ? "Pago" : (p.dueDate < dayKey() ? "Vencida" : (p.dueDate === dayKey() ? "Vence hoje" : "Em aberto"));
+      const contasAbertasOrdenadas = [...openPayables].sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+      const receberAbertasOrdenadas = [...openReceivables].sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
 
-      return (
+      const subBtn = (key,label) => (
+        <button onClick={()=>setFinanceiroView(key)}
+          style={{ flex:1, padding:"10px", border:"none", borderRadius:"12px", cursor:"pointer", background:financeiroView===key?"#e94560":"#f1f5f9", color:financeiroView===key?"#fff":"#64748b", fontWeight:"900" }}>
+          {label}
+        </button>
+      );
+
+      const ContasPagar = () => (
         <>
           <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
             {[
@@ -1782,8 +2043,8 @@ export default function ERP() {
               ["Vence hoje", fmtCur(payablesDueTodayTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
               ["Vencidas", fmtCur(payablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
               ["Prox. 7 dias", fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0)), "linear-gradient(135deg,#6366f1,#4338ca)"],
-            ].map(([l,v,c])=>(
-              <div key={l} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
+            ].map(([l,v,c],i)=>(
+              <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
                 <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
                 <div style={{ fontSize:"18px", fontWeight:"900" }}>{v}</div>
               </div>
@@ -1827,30 +2088,137 @@ export default function ERP() {
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:"8px", marginTop:"10px" }}>
-                  <button style={btnSm("#16a34a")} onClick={()=>markPayablePaid(p.id)}>Pagar</button>
-                  <button style={btnSm("#ef4444")} onClick={()=>deletePayable(p.id)}>Excluir</button>
+                  <button style={{ ...btn("#16a34a"), padding:"9px 12px", fontSize:"13px" }} onClick={()=>markPayablePaid(p.id)}>Pagar</button>
+                  <button style={{ ...btn("#ef4444"), padding:"9px 12px", fontSize:"13px" }} onClick={()=>deletePayable(p.id)}>Excluir</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      );
+
+      const ContasReceber = () => (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+            {[
+              ["A receber aberto", fmtCur(receivablesOpenTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
+              ["Receber hoje", fmtCur(receivablesDueTodayTotal), "linear-gradient(135deg,#22c55e,#16a34a)"],
+              ["Atrasadas", fmtCur(receivablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
+              ["Prox. 30 dias", fmtCur(receivablesNext30Total), "linear-gradient(135deg,#0ea5e9,#2563eb)"],
+            ].map(([l,v,c],i)=>(
+              <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
+                <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
+                <div style={{ fontSize:"18px", fontWeight:"900" }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>➕ Nova conta a receber</div>
+            <input style={{ ...inp, marginBottom:"8px" }} placeholder="Cliente" value={newReceivable.clientName} onChange={e=>setNewReceivable({...newReceivable,clientName:e.target.value})} />
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
+              <input style={{ ...inp, marginBottom:"8px" }} placeholder="Documento / referencia" value={newReceivable.document} onChange={e=>setNewReceivable({...newReceivable,document:e.target.value})} />
+              <input style={{ ...inp, marginBottom:"8px" }} placeholder="Valor total" inputMode="decimal" value={newReceivable.amount} onChange={e=>setNewReceivable({...newReceivable,amount:e.target.value})} />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
+              <input style={{ ...inp, marginBottom:"8px" }} type="date" min={dayKey()} value={newReceivable.dueDate} onChange={e=>{
+                const value = e.target.value;
+                if (value && value < dayKey()) { notify("Escolha uma data de hoje em diante.", "error"); return; }
+                setNewReceivable({...newReceivable,dueDate:value});
+              }} />
+              <select style={{ ...inp, marginBottom:"8px" }} value={newReceivable.installments} onChange={e=>setNewReceivable({...newReceivable,installments:e.target.value})}>
+                {[1,2,3,4,5,6,7,8,9,10,11,12].map(n=><option key={n} value={n}>{n}x</option>)}
+              </select>
+            </div>
+            <input style={{ ...inp, marginBottom:"8px" }} placeholder="Categoria" value={newReceivable.category} onChange={e=>setNewReceivable({...newReceivable,category:e.target.value})} />
+            <input style={{ ...inp, marginBottom:"10px" }} placeholder="Descricao / observacao" value={newReceivable.description} onChange={e=>setNewReceivable({...newReceivable,description:e.target.value})} />
+            <button style={{ ...btn("#16a34a"), width:"100%" }} onClick={addReceivable}>Cadastrar recebimento</button>
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>📌 Contas a receber em aberto</div>
+            {receberAbertasOrdenadas.length===0 ? (
+              <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma conta a receber em aberto.</div>
+            ) : receberAbertasOrdenadas.map(r=>(
+              <div key={r.id} style={{ border:"1px solid #e2e8f0", borderRadius:"12px", padding:"12px", marginBottom:"10px", background:r.dueDate<dayKey()?"#fef2f2":"#fff" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", alignItems:"flex-start" }}>
+                  <div>
+                    <div style={{ fontWeight:"900", color:"#1a1a2e" }}>{r.clientName}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>{r.document ? `Doc: ${r.document} | ` : ""}Vence: {r.dueDate}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>Parcela {r.installmentNumber}/{r.totalInstallments} | {r.category || "Geral"}</div>
+                    {r.description && <div style={{ fontSize:"12px", color:"#64748b" }}>{r.description}</div>}
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontWeight:"900", color:statusColor(r), whiteSpace:"nowrap" }}>{fmtCur(receivableOpenAmount(r))}</div>
+                    <div style={{ fontSize:"11px", color:statusColor(r), fontWeight:"800" }}>{statusLabel(r)}</div>
+                    {receivablePaid(r)>0 && <div style={{ fontSize:"11px", color:"#16a34a" }}>Pago: {fmtCur(receivablePaid(r))}</div>}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:"8px", marginTop:"10px" }}>
+                  <button style={{ ...btn("#16a34a"), padding:"9px 12px", fontSize:"13px" }} onClick={()=>receiveReceivable(r.id)}>Receber</button>
+                  <button style={{ ...btn("#ef4444"), padding:"9px 12px", fontSize:"13px" }} onClick={()=>deleteReceivable(r.id)}>Excluir</button>
                 </div>
               </div>
             ))}
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>✅ Contas pagas recentes</div>
-            {contasPagasRecentes.length===0 ? (
-              <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma conta paga registrada.</div>
-            ) : contasPagasRecentes.slice(0,10).map(p=>(
-              <div key={p.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>✅ Recebidas recentes</div>
+            {paidReceivables.slice(0,5).length===0 ? (
+              <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum recebimento quitado.</div>
+            ) : paidReceivables.slice(0,5).map(r=>(
+              <div key={r.id} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
                 <div>
-                  <div style={{ fontWeight:"900" }}>{p.supplier}</div>
-                  <div style={{ fontSize:"12px", color:"#64748b" }}>Pago em: {fmtDate(p.paidDate)} | Venc.: {p.dueDate}</div>
+                  <div style={{ fontWeight:"900" }}>{r.clientName}</div>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>{r.document} | {fmtDate(r.paidDate || r.createdAt)}</div>
                 </div>
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(p.amount)}</div>
-                  <button style={{ ...btnSm("#64748b"), marginTop:"4px" }} onClick={()=>reopenPayable(p.id)}>Reabrir</button>
-                </div>
+                <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(r.amount)}</div>
               </div>
             ))}
           </div>
+        </>
+      );
+
+      const FluxoCaixa = () => (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+            {[
+              ["Receber 30 dias", fmtCur(receivablesNext30Total), "#16a34a"],
+              ["Pagar 7 dias", fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0)), "#dc2626"],
+              ["Saldo projetado", fmtCur(cashFlow30), cashFlow30>=0?"#2563eb":"#dc2626"],
+              ["Saldo mes", fmtCur(expectedMonthBalance), expectedMonthBalance>=0?"#16a34a":"#dc2626"],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+                <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+                <div style={{ fontSize:"19px", fontWeight:"900", color:c }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>📊 Fluxo de caixa previsto</div>
+            <div style={{ background:"#f0fdf4", borderRadius:"12px", padding:"12px", marginBottom:"8px", display:"flex", justifyContent:"space-between" }}>
+              <strong>Entradas previstas 30 dias</strong><strong style={{ color:"#16a34a" }}>{fmtCur(receivablesNext30Total)}</strong>
+            </div>
+            <div style={{ background:"#fef2f2", borderRadius:"12px", padding:"12px", marginBottom:"8px", display:"flex", justifyContent:"space-between" }}>
+              <strong>Saidas proximos 7 dias</strong><strong style={{ color:"#dc2626" }}>{fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0))}</strong>
+            </div>
+            <div style={{ background:"#eff6ff", borderRadius:"12px", padding:"12px", display:"flex", justifyContent:"space-between" }}>
+              <strong>Saldo projetado</strong><strong style={{ color:cashFlow30>=0?"#2563eb":"#dc2626" }}>{fmtCur(cashFlow30)}</strong>
+            </div>
+          </div>
+        </>
+      );
+
+      return (
+        <>
+          <div style={{ display:"flex", gap:"8px", background:"#fff", borderRadius:"16px", padding:"8px", marginBottom:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+            {subBtn("pagar","A pagar")}
+            {subBtn("receber","A receber")}
+            {subBtn("fluxo","Fluxo")}
+          </div>
+          {financeiroView==="pagar" && ContasPagar()}
+          {financeiroView==="receber" && ContasReceber()}
+          {financeiroView==="fluxo" && FluxoCaixa()}
         </>
       );
     };
@@ -2223,7 +2591,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-bkp1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-rec1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
