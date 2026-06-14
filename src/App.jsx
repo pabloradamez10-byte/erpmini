@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA5-20260614-1030";
+const APP_VERSION = "FIADO-ETAPA6-20260614-1210";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -289,6 +289,15 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const confirmFiado = () => {
     const client = clients.find(c=>String(c.id)===String(fiadoClientId));
     if (!client) return;
+    const saldoAtual = client.currentBalance || 0;
+    const limite = parseFloat(client.limit)||0;
+    const saldoFinal = saldoAtual + total;
+
+    if (limite > 0 && saldoFinal > limite) {
+      const msg = `Cliente ultrapassara o limite de credito.\n\nCliente: ${client.name}\nLimite: ${fmtCur(limite)}\nSaldo atual: ${fmtCur(saldoAtual)}\nNova venda: ${fmtCur(total)}\nSaldo final: ${fmtCur(saldoFinal)}\n\nDeseja autorizar mesmo assim?`;
+      if (!window.confirm(msg)) return;
+    }
+
     onConfirm({ payments:[{ method:"fiado", amount:total }], total, change:0, fiado:{ clientId:client.id, clientName:client.name, dueDate:fiadoDueDate || "" } });
   };
 
@@ -395,6 +404,22 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                 <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Vencimento</label>
                 <input type="date" value={fiadoDueDate} onChange={e=>setFiadoDueDate(e.target.value)}
                   style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"14px" }} />
+                {(() => {
+                  const c = clients.find(x=>String(x.id)===String(fiadoClientId));
+                  if (!c || !(parseFloat(c.limit)>0)) return null;
+                  const saldoAtual = c.currentBalance || 0;
+                  const saldoFinal = saldoAtual + total;
+                  const excede = saldoFinal > (parseFloat(c.limit)||0);
+                  return (
+                    <div style={{ background:excede?"#fef2f2":"#f0fdf4", border:`1.5px solid ${excede?"#ef4444":"#22c55e"}`, borderRadius:"12px", padding:"12px", marginBottom:"14px" }}>
+                      <div style={{ fontWeight:"800", color:excede?"#991b1b":"#166534", marginBottom:"4px" }}>{excede ? "Limite excedido" : "Limite OK"}</div>
+                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Limite: {fmtCur(parseFloat(c.limit)||0)}</div>
+                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Saldo atual: {fmtCur(saldoAtual)}</div>
+                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Nova venda: {fmtCur(total)}</div>
+                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Saldo final: {fmtCur(saldoFinal)}</div>
+                    </div>
+                  );
+                })()}
               </>
             )}
             <div style={{ display:"flex", gap:"10px" }}>
@@ -1254,7 +1279,7 @@ export default function ERP() {
             <div style={{ fontSize:"13px", color:"#64748b" }}>Compras fiadas: <strong>{historico.length}</strong></div>
             <div style={{ fontSize:"13px", color:"#64748b" }}>Primeira compra: <strong>{primeiraCompra ? fmtDate(primeiraCompra) : "-"}</strong></div>
             <div style={{ fontSize:"13px", color:"#64748b" }}>Ultima compra: <strong>{ultimaCompra ? fmtDate(ultimaCompra) : "-"}</strong></div>
-            {client.limit>0 && <div style={{ fontSize:"13px", color:"#64748b" }}>Limite disponivel: <strong>{fmtCur(client.limit - saldo)}</strong></div>}
+            {client.limit>0 && <div style={{ fontSize:"13px", color:(client.limit - saldo)<0?"#dc2626":"#64748b" }}>Limite disponivel: <strong>{fmtCur(client.limit - saldo)}</strong></div>}
           </div>
 
           <div style={{ display:"flex", gap:"8px", marginBottom:"14px" }}>
@@ -1385,7 +1410,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado5</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado6</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1439,7 +1464,13 @@ export default function ERP() {
       {selectedClientHistory && <ClientHistoryModal client={selectedClientHistory} onClose={()=>setSelectedClientHistory(null)} />}
 
       {/* Checkout */}
-      {showCheckout && <CheckoutScreen cart={cart} total={total} clients={clients} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
+      {showCheckout && <CheckoutScreen
+        cart={cart}
+        total={total}
+        clients={clients.map(c=>({...c,currentBalance:clientBalance(c.id)}))}
+        onCancel={()=>setShowCheckout(false)}
+        onConfirm={handleCheckoutConfirm}
+      />}
 
       {showFiadoReceive && selectedFiadoSale && (
         <CheckoutScreen
