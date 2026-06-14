@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CAIXA-ETAPA9-FECHAMENTO-20260614-1355";
+const APP_VERSION = "DASHBOARD-ETAPA10-20260614-1610";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -650,7 +650,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
 // --- MAIN --------------------------------------------------------------------
 export default function ERP() {
   const isMobile = useIsMobile();
-  const [tab, setTab]             = useState("pdv");
+  const [tab, setTab]             = useState("dashboard");
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
   const [cart, setCart]           = useState([]);
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
@@ -832,6 +832,29 @@ export default function ERP() {
     notify("Caixa fechado com sucesso!");
   };
 
+  const monthKey = (d=new Date()) => new Date(d).toISOString().slice(0,7);
+  const isSameMonth = (date, key=monthKey()) => String(date || "").slice(0,7) === key;
+  const salesOfToday = sales.filter(s=>isSameDay(s.date));
+  const salesOfMonth = sales.filter(s=>isSameMonth(s.date));
+  const salesTodayTotal = salesOfToday.reduce((sum,s)=>sum+s.total,0);
+  const salesMonthTotal = salesOfMonth.reduce((sum,s)=>sum+s.total,0);
+  const ticketToday = salesOfToday.length ? salesTodayTotal/salesOfToday.length : 0;
+  const overdueFiado = fiadoSales.filter(s=>s.fiado?.dueDate && s.fiado.dueDate < dayKey());
+  const lowStockProducts = products.filter(p=>(parseFloat(p.stock)||0) <= 5);
+  const topClients = clients.map(c=>({
+    ...c,
+    totalBought: clientTotalBought(c.id),
+    openBalance: clientBalance(c.id)
+  })).filter(c=>c.totalBought>0 || c.openBalance>0).sort((a,b)=>b.totalBought-a.totalBought).slice(0,5);
+  const productRanking = products.map(p=>{
+    const sold = sales.reduce((sum,s)=>sum+((s.items||[]).find(i=>i.id===p.id)?.qty||0),0);
+    const total = sales.reduce((sum,s)=>{
+      const it = (s.items||[]).find(i=>i.id===p.id);
+      return sum + (it ? (it.price*it.qty) : 0);
+    },0);
+    return {...p, sold, total};
+  }).filter(p=>p.sold>0).sort((a,b)=>b.sold-a.sold).slice(0,5);
+
   const handleCheckoutConfirm = ({ payments, total:t, change, fiado }) => {
     const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null };
     setProducts(prev=>prev.map(p=>{ const item=cart.find(i=>i.id===p.id); return item?{...p,stock:p.stock-item.qty}:p; }));
@@ -991,6 +1014,7 @@ export default function ERP() {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
+    { key:"dashboard", icon:"🏠", label:"Inicio"  },
     { key:"pdv",     icon:"🛒", label:"PDV"     },
     { key:"estoque", icon:"📦", label:"Estoque" },
     { key:"vendas",  icon:"📊", label:"Vendas"  },
@@ -1039,6 +1063,108 @@ export default function ERP() {
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+
+
+  // --- Dashboard tab ----------------------------------------------------------
+  const DashboardTab = () => (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+        {[
+          ["Vendas hoje", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
+          ["Vendas do mes", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
+          ["Ticket medio hoje", fmtCur(ticketToday), "linear-gradient(135deg,#6366f1,#4338ca)"],
+          ["Fiado aberto", fmtCur(fiadoTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
+        ].map(([l,v,c],i)=>(
+          <div key={i} style={{ background:c, borderRadius:"14px", padding:"15px", color:"#fff" }}>
+            <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
+            <div style={{ fontSize:isMobile?"18px":"22px", fontWeight:"900" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+        {[
+          ["Vendas hoje", salesOfToday.length, "#e94560"],
+          ["Clientes", clients.length, "#6366f1"],
+          ["Estoque baixo", lowStockProducts.length, "#ef4444"],
+          ["Fiados vencidos", overdueFiado.length, "#f97316"],
+        ].map(([l,v,c],i)=>(
+          <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+            <div style={{ fontSize:"24px", fontWeight:"900", color:c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {(overdueFiado.length>0 || lowStockProducts.length>0) && (
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}>🚨 Alertas</div>
+          {overdueFiado.length>0 && (
+            <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+              <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
+              <div style={{ fontSize:"12px", color:"#9a3412" }}>Acesse a aba Fiado para cobrar os clientes.</div>
+            </div>
+          )}
+          {lowStockProducts.length>0 && (
+            <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontWeight:"900", color:"#991b1b" }}>{lowStockProducts.length} produto(s) com estoque baixo</div>
+              <div style={{ fontSize:"12px", color:"#991b1b" }}>Produtos com 5 unidades ou menos.</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"14px" }}>
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🏆 Top clientes</div>
+          {topClients.length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum cliente com compras ainda.</div>
+          ) : topClients.map((c,i)=>(
+            <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div>
+                <div style={{ fontWeight:"900" }}>{i+1}. {c.name}</div>
+                <div style={{ fontSize:"12px", color:"#64748b" }}>Aberto: {fmtCur(c.openBalance)}</div>
+              </div>
+              <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.totalBought)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🔥 Produtos mais vendidos</div>
+          {productRanking.length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum produto vendido ainda.</div>
+          ) : productRanking.map((p,i)=>(
+            <div key={p.id} style={{ padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px" }}>
+                <div style={{ fontWeight:"900" }}>{i+1}. {p.name}</div>
+                <div style={{ fontWeight:"900", color:"#2563eb" }}>{p.sold} un.</div>
+              </div>
+              <div style={{ height:"8px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden", marginTop:"6px" }}>
+                <div style={{ height:"100%", width:`${Math.min(100, Math.max(8, (p.sold/(productRanking[0]?.sold||1))*100))}%`, background:"#2563eb", borderRadius:"999px" }} />
+              </div>
+              <div style={{ fontSize:"12px", color:"#64748b", marginTop:"4px" }}>Total: {fmtCur(p.total)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>📋 Ultimas vendas</div>
+        {sales.slice(0,5).length===0 ? (
+          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda registrada.</div>
+        ) : sales.slice(0,5).map(s=>(
+          <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
+            <div>
+              <div style={{ fontWeight:"900" }}>Venda #{s.id}</div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>{fmtDate(s.date)} {s.fiado ? `- Fiado: ${s.fiado.clientName}` : ""}</div>
+            </div>
+            <div style={{ fontWeight:"900", color:"#e94560" }}>{fmtCur(s.total)}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1584,7 +1710,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixa1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-dash1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1610,6 +1736,7 @@ export default function ERP() {
 
       {/* Main content */}
       <div style={{ padding:isMobile?"12px":"24px", maxWidth:"1200px", margin:"0 auto" }}>
+        {tab==="dashboard" && DashboardTab()}
         {tab==="pdv"     && PDVTab()}
         {tab==="estoque" && EstoqueTab()}
         {tab==="vendas"  && VendasTab()}
