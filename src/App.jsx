@@ -153,7 +153,7 @@ function LicenseBlockedScreen({ license }) {
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a1a2e,#16213e)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"'Segoe UI',sans-serif" }}>
       <div style={{ background:"#fff", borderRadius:"20px", padding:"28px", maxWidth:"420px", width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
-        <div style={{ fontSize:"54px", marginBottom:"10px" }}>ðŸ”’</div>
+        <div style={{ fontSize:"54px", marginBottom:"10px" }}>Bloqueado</div>
         <h2 style={{ margin:"0 0 8px", color:"#1a1a2e" }}>Sistema bloqueado</h2>
         <p style={{ color:"#64748b", fontSize:"15px", lineHeight:1.5, margin:"0 0 18px" }}>{license?.message || "Sua licenca esta vencida."}</p>
         <a href={`https://wa.me/${whats}?text=${msg}`} style={{ display:"block", background:"#16a34a", color:"#fff", textDecoration:"none", borderRadius:"12px", padding:"14px", fontWeight:"800", marginBottom:"10px" }}>
@@ -171,7 +171,7 @@ function ActivationScreen({ value, onChange, onActivate, checking, error }) {
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a1a2e,#16213e)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"'Segoe UI',sans-serif" }}>
       <div style={{ background:"#fff", borderRadius:"20px", padding:"28px", maxWidth:"420px", width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ fontSize:"54px", marginBottom:"10px" }}>[CHAVE]</div>
+        <div style={{ fontSize:"54px", marginBottom:"10px" }}>Chave</div>
         <h2 style={{ margin:"0 0 8px", color:"#1a1a2e", fontSize:"24px" }}>Ativacao do ERP Mini</h2>
         <p style={{ color:"#64748b", margin:"0 0 18px", lineHeight:1.5 }}>
           Digite a chave de ativacao da empresa para liberar o sistema.
@@ -224,7 +224,7 @@ const genBarcode = () => String(Math.floor(1000000000000 + Math.random() * 90000
 const PAYMENT_METHODS = [
   { key:"dinheiro", label:"Dinheiro", icon:"Dinheiro", color:"#16a34a", light:"#f0fdf4" },
   { key:"credito",  label:"Credito",  icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
-  { key:"debito",   label:"Debito",   icon:"ðŸ§", color:"#7c3aed", light:"#f5f3ff" },
+  { key:"debito",   label:"Debito",   icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
   { key:"pix",      label:"PIX",      icon:"PIX", color:"#0891b2", light:"#ecfeff" },
 ];
 
@@ -286,7 +286,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
           <div style={{ fontWeight:"800", fontSize:"18px" }}>Cartao Pagamento</div>
-          <button onClick={onCancel} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>âœ•</button>
+          <button onClick={onCancel} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>x</button>
         </div>
 
         <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", borderRadius:"14px", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
@@ -311,7 +311,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             </div>
             <button onClick={()=>handleMethod("misto")}
               style={{ width:"100%", padding:"14px", background:"#fef9ec", border:"2px solid #f59e0b33", borderRadius:"14px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"10px" }}>
-              <span style={{ fontSize:"22px" }}>ðŸ”€</span>
+              <span style={{ fontSize:"22px" }}>Trocar</span>
               <span style={{ fontSize:"14px", fontWeight:"700", color:"#92400e" }}>Pagamento Misto</span>
             </button>
           </>
@@ -338,13 +338,13 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             </div>
             {(parseFloat(amountPaid)||0)>=total && total>0 && (
               <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"12px", padding:"14px 16px", display:"flex", justifyContent:"space-between", marginBottom:"14px" }}>
-                <span style={{ fontWeight:"700", color:"#166534" }}>ðŸ’š Troco</span>
+                <span style={{ fontWeight:"700", color:"#166534" }}> Troco</span>
                 <span style={{ fontWeight:"800", fontSize:"18px", color:"#16a34a" }}>{fmtCur((parseFloat(amountPaid)||0)-total)}</span>
               </div>
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>â† Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>< Voltar</button>
               <button onClick={confirmDinheiro} disabled={(parseFloat(amountPaid)||0)<total}
                 style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(parseFloat(amountPaid)||0)<total?0.4:1 }}>
                 OK Confirmar
@@ -355,7 +355,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
 
         {(step==="mixed"||step==="mixed_done") && (
           <>
-            <div style={{ fontWeight:"700", fontSize:"15px", marginBottom:"12px" }}>ðŸ”€ Pagamento Misto</div>
+            <div style={{ fontWeight:"700", fontSize:"15px", marginBottom:"12px" }}>Trocar Pagamento Misto</div>
             {mixedPayments.map((p,i)=>{
               const m=mInfo(p.method);
               return (
@@ -367,7 +367,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             {step==="mixed" && (
               <>
                 <div style={{ background:"#fef9ec", border:"1.5px solid #f59e0b", borderRadius:"10px", padding:"12px 16px", display:"flex", justifyContent:"space-between", marginBottom:"14px" }}>
-                  <span style={{ fontWeight:"700", color:"#92400e" }}>â³ Restante</span>
+                  <span style={{ fontWeight:"700", color:"#92400e" }}>[...] Restante</span>
                   <span style={{ fontWeight:"800", fontSize:"18px", color:"#d97706" }}>{fmtCur(remaining)}</span>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
@@ -395,7 +395,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);setMixedPayments([]);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>â† Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>< Voltar</button>
               {step==="mixed_done" && (
                 <button onClick={confirmMixed}
                   style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>
@@ -436,7 +436,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
         <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 20px" }} />
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
           <div style={{ fontWeight:"800", fontSize:"18px" }}>Recibo Comprovante #{sale.id}</div>
-          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>âœ•</button>
+          <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>x</button>
         </div>
 
         <div ref={receiptRef} style={{ background:"#fafafa", border:"1px dashed #ccc", borderRadius:"12px", padding:"20px", fontFamily:"'Courier New',monospace", fontSize:"13px", lineHeight:1.7 }}>
@@ -474,16 +474,16 @@ function ReceiptModal({ sale, storeName, onClose }) {
             <>
               <hr style={{ border:"none", borderTop:"1px dashed #22c55e", margin:"8px 0" }} />
               <div style={{ display:"flex", justifyContent:"space-between", fontWeight:"800", fontSize:"15px", color:"#16a34a" }}>
-                <span>ðŸ’š TROCO</span><span>{fmtCur(sale.change)}</span>
+                <span> TROCO</span><span>{fmtCur(sale.change)}</span>
               </div>
             </>
           )}
           <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
-          <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! â¤ï¸<br/>Volte sempre.</div>
+          <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! <br/>Volte sempre.</div>
         </div>
 
         <div style={{ display:"flex", gap:"10px", marginTop:"16px" }}>
-          <button onClick={printReceipt} style={{ flex:1, padding:"14px", background:"#1a1a2e", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>ðŸ–¨ï¸ Imprimir</button>
+          <button onClick={printReceipt} style={{ flex:1, padding:"14px", background:"#1a1a2e", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Imprimir Imprimir</button>
           <button onClick={onClose} style={{ flex:1, padding:"14px", background:"#f1f5f9", color:"#64748b", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Fechar</button>
         </div>
       </div>
@@ -739,10 +739,10 @@ export default function ERP() {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
-    { key:"pdv",     icon:"PDV", label:"PDV"     },
-    { key:"estoque", icon:"Estoque", label:"Estoque" },
-    { key:"vendas",  icon:"Vendas", label:"Vendas"  },
-    { key:"config",  icon:"Config", label:"Config"  },
+    { key:"pdv",     icon:"\uD83D\uDED2", label:"PDV"     },
+    { key:"estoque", icon:"\uD83D\uDCE6", label:"Estoque" },
+    { key:"vendas",  icon:"\uD83D\uDCCA", label:"Vendas"  },
+    { key:"config",  icon:"\u2699\uFE0F", label:"Config"  },
   ];
 
   // --- Cart Drawer (mobile) -------------------------------------------------
@@ -752,7 +752,7 @@ export default function ERP() {
         <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 16px" }} />
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
           <div style={{ fontWeight:"800", fontSize:"17px" }}>PDV Carrinho ({cartCount})</div>
-          <button onClick={()=>setShowCart(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer" }}>âœ•</button>
+          <button onClick={()=>setShowCart(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer" }}>x</button>
         </div>
         {cart.length===0
           ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Carrinho vazio</p>
@@ -760,13 +760,13 @@ export default function ERP() {
             <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:"700", fontSize:"14px" }}>{item.name}</div>
-                <div style={{ color:"#e94560", fontSize:"13px" }}>{fmtCur(item.price)} Ã— {item.qty}</div>
+                <div style={{ color:"#e94560", fontSize:"13px" }}>{fmtCur(item.price)} x {item.qty}</div>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>âˆ’</button>
+                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>-</button>
                 <span style={{ minWidth:"22px", textAlign:"center", fontWeight:"700" }}>{item.qty}</span>
                 <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
-                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>âœ•</button>
+                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>x</button>
               </div>
               <div style={{ fontWeight:"800", fontSize:"14px", minWidth:"72px", textAlign:"right" }}>{fmtCur(item.price*item.qty)}</div>
             </div>
@@ -806,7 +806,7 @@ export default function ERP() {
       </div>
 
       {/* Search */}
-      <input style={{ ...inp, marginBottom:"12px" }} placeholder="ðŸ” Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
+      <input style={{ ...inp, marginBottom:"12px" }} placeholder="Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
 
       {/* Product grid */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"10px" }}>
@@ -832,13 +832,13 @@ export default function ERP() {
             <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:"600", fontSize:"13px" }}>{item.name}</div>
-                <div style={{ color:"#e94560", fontSize:"12px" }}>{fmtCur(item.price)} Ã— {item.qty}</div>
+                <div style={{ color:"#e94560", fontSize:"12px" }}>{fmtCur(item.price)} x {item.qty}</div>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>âˆ’</button>
+                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>-</button>
                 <span style={{ minWidth:"20px", textAlign:"center" }}>{item.qty}</span>
                 <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
-                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>âœ•</button>
+                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>x</button>
               </div>
               <div style={{ fontWeight:"700", minWidth:"70px", textAlign:"right" }}>{fmtCur(item.price*item.qty)}</div>
             </div>
@@ -883,8 +883,8 @@ export default function ERP() {
             )}
           </div>
           <div style={{ display:"flex", gap:"8px" }}>
-            <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"[SALVO] Salvar":"+ Cadastrar"}</button>
-            {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});}}>âœ•</button>}
+            <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"Salvar alteracoes":"+ Cadastrar"}</button>
+            {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});}}>x</button>}
           </div>
         </div>
       </div>
@@ -899,11 +899,11 @@ export default function ERP() {
                 <span style={tag("#6366f1")}>{p.category}</span>
                 <span style={tag(p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444")}>{p.stock} un.</span>
               </div>
-              {p.barcode&&<div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px" }}>ðŸ”³ {p.barcode}</div>}
+              {p.barcode&&<div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px" }}> {p.barcode}</div>}
             </div>
             <div style={{ fontWeight:"800", color:"#e94560", whiteSpace:"nowrap" }}>{fmtCur(p.price)}</div>
             <div style={{ display:"flex", gap:"4px" }}>
-              <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>ðŸ”³</button>
+              <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}></button>
               <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>Etiqueta</button>
               <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>Editar</button>
               <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>Excluir</button>
@@ -930,7 +930,7 @@ export default function ERP() {
         ))}
       </div>
       <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>ðŸ“‹ Historico</div>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>Historico</div>
         {sales.length===0
           ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Nenhuma venda ainda</p>
           : sales.map(sale=>(
@@ -963,14 +963,14 @@ export default function ERP() {
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
         <input style={{ ...inp, marginBottom:"14px" }} value={storeName} onChange={e=>setStoreName(e.target.value)} placeholder="Minha Loja" />
         <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
-          <span style={{ fontSize:"20px" }}>[SALVO]</span>
+          <span style={{ fontSize:"20px" }}>Salvo</span>
           <div>
             <div style={{ fontWeight:"700", fontSize:"13px", color:"#166534" }}>Salvamento automatico ativo</div>
             <div style={{ fontSize:"12px", color:"#4ade80" }}>Dados salvos no navegador deste dispositivo</div>
           </div>
         </div>
         <div style={{ background:license.configured?"#eff6ff":"#fff7ed", border:`1.5px solid ${license.configured?"#3b82f6":"#f59e0b"}`, borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px", marginBottom:"10px" }}>
-          <span style={{ fontSize:"20px" }}>{license.configured?"[LICENCA]":"[!]"}</span>
+          <span style={{ fontSize:"20px" }}>{license.configured?"Licenca":"!"}</span>
           <div style={{ flex:1 }}>
             <div style={{ fontWeight:"700", fontSize:"13px", color:license.configured?"#1d4ed8":"#92400e" }}>Licenca mensal</div>
             <div style={{ fontSize:"12px", color:license.configured?"#3b82f6":"#b45309" }}>{license.message}</div>
@@ -978,12 +978,12 @@ export default function ERP() {
           </div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
-          <button style={{ ...btn("#2563eb"), padding:"11px", fontSize:"13px" }} onClick={()=>refreshLicense()}>Verificar Verificar licenca</button>
-          <button style={{ ...btn("#64748b"), padding:"11px", fontSize:"13px" }} onClick={changeActivationKey}>[CHAVE] Trocar chave</button>
+          <button style={{ ...btn("#2563eb"), padding:"11px", fontSize:"13px" }} onClick={()=>refreshLicense()}>Atualizar Verificar licenca</button>
+          <button style={{ ...btn("#64748b"), padding:"11px", fontSize:"13px" }} onClick={changeActivationKey}>Chave Trocar chave</button>
         </div>
       </div>
       <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"6px", color:"#ef4444" }}>[!] Zona de Perigo</div>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"6px", color:"#ef4444" }}>! Zona de Perigo</div>
         <p style={{ fontSize:"13px", color:"#64748b", marginBottom:"14px" }}>Apaga todos os produtos, vendas e configuracoes salvos.</p>
         <button style={{ ...btn("#ef4444"), width:"100%" }} onClick={()=>setShowClearConfirm(true)}>Excluir Resetar todos os dados</button>
       </div>
@@ -1005,7 +1005,7 @@ export default function ERP() {
   if (license.loading) {
     return (
       <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',sans-serif" }}>
-        <div style={{ background:"#fff", borderRadius:"16px", padding:"22px 26px", fontWeight:"800", color:"#1a1a2e", boxShadow:"0 8px 30px rgba(0,0,0,0.08)" }}>[LICENCA] Verificando licenca...</div>
+        <div style={{ background:"#fff", borderRadius:"16px", padding:"22px 26px", fontWeight:"800", color:"#1a1a2e", boxShadow:"0 8px 30px rgba(0,0,0,0.08)" }}>Licenca Verificando licenca...</div>
       </div>
     );
   }
@@ -1027,7 +1027,7 @@ export default function ERP() {
       {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
-        <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>[SALVO] Salvo</span>
+        <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1104,7 +1104,7 @@ export default function ERP() {
       {showClearConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setShowClearConfirm(false)}>
           <div style={{ background:"#fff", borderRadius:"16px", padding:"28px", maxWidth:"320px", width:"90%", textAlign:"center" }} onClick={e=>e.stopPropagation()}>
-            <div style={{ fontSize:"48px", marginBottom:"12px" }}>[!]</div>
+            <div style={{ fontSize:"48px", marginBottom:"12px" }}>!</div>
             <h3 style={{ margin:"0 0 8px", fontSize:"18px" }}>Resetar todos os dados?</h3>
             <p style={{ color:"#64748b", fontSize:"13px", margin:"0 0 20px", lineHeight:1.5 }}>Apaga <strong>produtos, vendas e configuracoes</strong>. Esta acao nao pode ser desfeita.</p>
             <div style={{ display:"flex", gap:"10px" }}>
