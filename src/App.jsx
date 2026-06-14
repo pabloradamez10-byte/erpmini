@@ -346,7 +346,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>< Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
               <button onClick={confirmDinheiro} disabled={(parseFloat(amountPaid)||0)<total}
                 style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(parseFloat(amountPaid)||0)<total?0.4:1 }}>
                 OK Confirmar
@@ -397,7 +397,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);setMixedPayments([]);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>< Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>Voltar</button>
               {step==="mixed_done" && (
                 <button onClick={confirmMixed}
                   style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>
