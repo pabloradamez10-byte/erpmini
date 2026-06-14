@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "LIMPA-SEM-EMOJI-20260613-2325";
+const APP_VERSION = "ICONS-UTF8-20260613-2359";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -346,7 +346,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>⬅️ Voltar</button>
               <button onClick={confirmDinheiro} disabled={(parseFloat(amountPaid)||0)<total}
                 style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(parseFloat(amountPaid)||0)<total?0.4:1 }}>
                 OK Confirmar
@@ -397,7 +397,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);setMixedPayments([]);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>⬅️ Voltar</button>
               {step==="mixed_done" && (
                 <button onClick={confirmMixed}
                   style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>
@@ -741,10 +741,10 @@ export default function ERP() {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
-    { key:"pdv",     icon:"PDV", label:"PDV"     },
-    { key:"estoque", icon:"EST", label:"Estoque" },
-    { key:"vendas",  icon:"VEN", label:"Vendas"  },
-    { key:"config",  icon:"CFG", label:"Config"  },
+    { key:"pdv",     icon:"🛒", label:"PDV"     },
+    { key:"estoque", icon:"📦", label:"Estoque" },
+    { key:"vendas",  icon:"📊", label:"Vendas"  },
+    { key:"config",  icon:"⚙️", label:"Config"  },
   ];
 
   // --- Cart Drawer (mobile) -------------------------------------------------
@@ -753,7 +753,7 @@ export default function ERP() {
       <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"20px 16px 32px", width:"100%", maxHeight:"80vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
         <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 16px" }} />
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
-          <div style={{ fontWeight:"800", fontSize:"17px" }}>PDV Carrinho ({cartCount})</div>
+          <div style={{ fontWeight:"800", fontSize:"17px" }}>🛒 PDV Carrinho ({cartCount})</div>
           <button onClick={()=>setShowCart(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer" }}>x</button>
         </div>
         {cart.length===0
@@ -808,7 +808,7 @@ export default function ERP() {
       </div>
 
       {/* Search */}
-      <input style={{ ...inp, marginBottom:"12px" }} placeholder="Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
+      <input style={{ ...inp, marginBottom:"12px" }} placeholder="🔍 Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
 
       {/* Product grid */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"10px" }}>
@@ -876,7 +876,7 @@ export default function ERP() {
             <div style={{ display:"flex", gap:"8px" }}>
               <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automatico se vazio"
                 onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
-              <button style={btnSm("#6366f1")} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>Gerar</button>
+              <button style={btnSm("#6366f1")} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>🎲 Gerar</button>
             </div>
             {newProduct.barcode&&(
               <div style={{ marginTop:"8px", background:"#f8fafc", borderRadius:"8px", padding:"8px", textAlign:"center", overflowX:"auto" }}>
@@ -892,7 +892,7 @@ export default function ERP() {
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>Estoque Produtos ({products.length})</div>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>📦 Estoque Produtos ({products.length})</div>
         {products.map(p=>(
           <div key={p.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"10px", marginBottom:"8px" }}>
@@ -910,10 +910,10 @@ export default function ERP() {
               </div>
 
               <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", justifyContent:"flex-end" }}>
-                <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>Codigo</button>
-                <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>Etiqueta</button>
-                <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>Editar</button>
-                <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>Excluir</button>
+                <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>🔳 Codigo</button>
+                <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>🏷️ Etiqueta</button>
+                <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>✏️ Editar</button>
+                <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>🗑️ Excluir</button>
               </div>
             </div>
           </div>
@@ -938,7 +938,7 @@ export default function ERP() {
         ))}
       </div>
       <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>Historico</div>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>📋 Historico</div>
         {sales.length===0
           ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Nenhuma venda ainda</p>
           : sales.map(sale=>(
@@ -955,7 +955,7 @@ export default function ERP() {
                 </div>
               </div>
               <div style={{ fontWeight:"800", fontSize:"14px", whiteSpace:"nowrap" }}>{fmtCur(sale.total)}</div>
-              <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>Recibo</button>
+              <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>🧾 Recibo</button>
             </div>
           ))
         }
@@ -1036,7 +1036,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-limpa</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-icones</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
