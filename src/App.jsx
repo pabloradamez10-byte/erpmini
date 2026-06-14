@@ -734,7 +734,7 @@ export default function ERP() {
   // --- Styles ----------------------------------------------------------------
   const inp = { width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:"10px", fontSize:"15px", boxSizing:"border-box", outline:"none" };
   const btn = (c) => ({ background:c||"#e94560", color:"#fff", border:"none", borderRadius:"10px", padding:"12px 18px", cursor:"pointer", fontWeight:"700", fontSize:"15px" });
-  const btnSm = (c) => ({ background:c||"#64748b", color:"#fff", border:"none", borderRadius:"8px", padding:"6px 12px", cursor:"pointer", fontSize:"13px", fontWeight:"600" });
+  const btnSm = (c) => ({ background:c||"#64748b", color:"#fff", border:"none", borderRadius:"8px", padding:"7px 10px", cursor:"pointer", fontSize:"12px", fontWeight:"700", minWidth:"64px" });
   const tag = (c) => ({ background:c, color:"#fff", borderRadius:"20px", padding:"3px 10px", fontSize:"11px", display:"inline-block" });
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
@@ -892,21 +892,27 @@ export default function ERP() {
       <div style={card}>
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>Estoque Produtos ({products.length})</div>
         {products.map(p=>(
-          <div key={p.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontWeight:"700", fontSize:"14px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
-              <div style={{ display:"flex", gap:"6px", marginTop:"4px", flexWrap:"wrap" }}>
+          <div key={p.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"10px", marginBottom:"8px" }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:"800", fontSize:"15px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
+                {p.barcode&&<div style={{ fontSize:"11px", color:"#94a3b8", fontFamily:"monospace", marginTop:"3px" }}>{p.barcode}</div>}
+              </div>
+              <div style={{ fontWeight:"900", color:"#e94560", whiteSpace:"nowrap", fontSize:"16px", textAlign:"right" }}>{fmtCur(p.price)}</div>
+            </div>
+
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:"6px", alignItems:"center", flexWrap:"wrap" }}>
                 <span style={tag("#6366f1")}>{p.category}</span>
                 <span style={tag(p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444")}>{p.stock} un.</span>
               </div>
-              {p.barcode&&<div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px" }}> {p.barcode}</div>}
-            </div>
-            <div style={{ fontWeight:"800", color:"#e94560", whiteSpace:"nowrap" }}>{fmtCur(p.price)}</div>
-            <div style={{ display:"flex", gap:"4px" }}>
-              <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}></button>
-              <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>Etiqueta</button>
-              <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>Editar</button>
-              <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>Excluir</button>
+
+              <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", justifyContent:"flex-end" }}>
+                <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>Codigo</button>
+                <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>Etiqueta</button>
+                <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>Editar</button>
+                <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>Excluir</button>
+              </div>
             </div>
           </div>
         ))}
