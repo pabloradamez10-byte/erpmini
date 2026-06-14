@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA1-20260614-0015";
+const APP_VERSION = "FIADO-ETAPA2-20260614-0015";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1259,3 +1259,6 @@ export default function ERP() {
     </div>
   );
 }
+
+
+/* ETAPA2 PREPARADA: recebimentos, histórico e limites serão adicionados sobre esta base. */
