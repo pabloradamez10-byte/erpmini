@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CAIXA-RELATORIOS-ETAPA11-20260614-1645";
+const APP_VERSION = "FINANCEIRO-ETAPA12-20260614-1730";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -657,7 +657,9 @@ export default function ERP() {
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
   const [cashClosures, setCashClosures] = useState(()=>loadLS("erpmini_cash_closures", []));
+  const [payables, setPayables] = useState(()=>loadLS("erpmini_payables", []));
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
+  const [newPayable, setNewPayable] = useState({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -870,6 +872,57 @@ export default function ERP() {
     },0);
     return {...p, sold, total};
   }).filter(p=>p.sold>0).sort((a,b)=>b.sold-a.sold).slice(0,5);
+
+  const parseMoney = (v) => parseFloat(String(v||"").replace(",",".")) || 0;
+  const openPayables = payables.filter(p=>!p.paid);
+  const paidPayables = payables.filter(p=>p.paid);
+  const payableAmount = (p) => parseFloat(p.amount)||0;
+  const payablesDueToday = openPayables.filter(p=>p.dueDate === dayKey());
+  const payablesOverdue = openPayables.filter(p=>p.dueDate && p.dueDate < dayKey());
+  const payablesNext7 = openPayables.filter(p=>{
+    if (!p.dueDate) return false;
+    const d = new Date(p.dueDate + "T00:00:00");
+    const start = new Date(dayKey() + "T00:00:00");
+    const end = new Date(start);
+    end.setDate(start.getDate()+7);
+    return d >= start && d <= end;
+  });
+  const payablesOpenTotal = openPayables.reduce((sum,p)=>sum+payableAmount(p),0);
+  const payablesDueTodayTotal = payablesDueToday.reduce((sum,p)=>sum+payableAmount(p),0);
+  const payablesOverdueTotal = payablesOverdue.reduce((sum,p)=>sum+payableAmount(p),0);
+  const payablesMonthTotal = payables.filter(p=>isSameMonth(p.dueDate)).reduce((sum,p)=>sum+payableAmount(p),0);
+  const payablesPaidMonthTotal = paidPayables.filter(p=>isSameMonth(p.paidDate || p.dueDate)).reduce((sum,p)=>sum+payableAmount(p),0);
+  const expectedMonthBalance = salesMonthTotal - payablesMonthTotal;
+
+  const addPayable = () => {
+    const amount = parseMoney(newPayable.amount);
+    if (!newPayable.supplier.trim() || amount<=0 || !newPayable.dueDate) {
+      notify("Informe fornecedor, valor e vencimento.", "error");
+      return;
+    }
+    const item = {
+      id: Date.now(),
+      supplier: newPayable.supplier.trim(),
+      document: newPayable.document.trim(),
+      description: newPayable.description.trim(),
+      amount,
+      dueDate: newPayable.dueDate,
+      category: newPayable.category.trim() || "Geral",
+      paid:false,
+      createdAt:new Date().toISOString()
+    };
+    setPayables(prev=>[item,...prev]);
+    setNewPayable({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
+    notify("Conta a pagar cadastrada!");
+  };
+  const markPayablePaid = (id) => {
+    setPayables(prev=>prev.map(p=>p.id===id ? {...p, paid:true, paidDate:new Date().toISOString()} : p));
+    notify("Conta marcada como paga!");
+  };
+  const reopenPayable = (id) => setPayables(prev=>prev.map(p=>p.id===id ? {...p, paid:false, paidDate:null} : p));
+  const deletePayable = (id) => {
+    if (window.confirm("Excluir esta conta a pagar?")) setPayables(prev=>prev.filter(p=>p.id!==id));
+  };
 
   const handleCheckoutConfirm = ({ payments, total:t, change, fiado }) => {
     const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null };
@@ -1107,6 +1160,8 @@ export default function ERP() {
           ["Clientes", clients.length, "#6366f1"],
           ["Estoque baixo", lowStockProducts.length, "#ef4444"],
           ["Fiados vencidos", overdueFiado.length, "#f97316"],
+          ["Contas hoje", payablesDueToday.length, "#f59e0b"],
+          ["Contas vencidas", payablesOverdue.length, "#dc2626"],
         ].map(([l,v,c],i)=>(
           <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
@@ -1115,13 +1170,25 @@ export default function ERP() {
         ))}
       </div>
 
-      {(overdueFiado.length>0 || lowStockProducts.length>0) && (
+      {(overdueFiado.length>0 || lowStockProducts.length>0 || payablesDueToday.length>0 || payablesOverdue.length>0) && (
         <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}>🚨 Alertas</div>
           {overdueFiado.length>0 && (
             <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
               <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
               <div style={{ fontSize:"12px", color:"#9a3412" }}>Acesse a aba Fiado para cobrar os clientes.</div>
+            </div>
+          )}
+          {payablesOverdue.length>0 && (
+            <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+              <div style={{ fontWeight:"900", color:"#991b1b" }}>{payablesOverdue.length} conta(s) vencida(s)</div>
+              <div style={{ fontSize:"12px", color:"#991b1b" }}>Total vencido: {fmtCur(payablesOverdueTotal)}. Acesse Caixa > Financeiro.</div>
+            </div>
+          )}
+          {payablesDueToday.length>0 && (
+            <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+              <div style={{ fontWeight:"900", color:"#9a3412" }}>{payablesDueToday.length} conta(s) vencem hoje</div>
+              <div style={{ fontSize:"12px", color:"#9a3412" }}>Total para pagar hoje: {fmtCur(payablesDueTodayTotal)}.</div>
             </div>
           )}
           {lowStockProducts.length>0 && (
@@ -1378,6 +1445,8 @@ export default function ERP() {
     const fiadoAbertoLista = fiadoSales.filter(s=>fiadoOpenAmount(s)>0).sort((a,b)=>fiadoOpenAmount(b)-fiadoOpenAmount(a));
     const topClientesCaixa = topClients;
     const topProdutosCaixa = productRanking;
+    const contasAbertasOrdenadas = [...openPayables].sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+    const contasPagasRecentes = [...paidPayables].sort((a,b)=>new Date(b.paidDate||b.dueDate)-new Date(a.paidDate||a.dueDate));
 
     const pill = (key,label) => (
       <button
@@ -1538,6 +1607,23 @@ export default function ERP() {
         </div>
 
         <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💼 Resumo financeiro do mes</div>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px" }}>
+            {[
+              ["Entradas mes", salesMonthTotal, "#16a34a"],
+              ["A pagar mes", payablesMonthTotal, "#e94560"],
+              ["Pago mes", payablesPaidMonthTotal, "#2563eb"],
+              ["Previsto", expectedMonthBalance, expectedMonthBalance>=0?"#16a34a":"#dc2626"],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{ background:"#f8fafc", borderRadius:"12px", padding:"10px" }}>
+                <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+                <div style={{ fontWeight:"900", color:c }}>{fmtCur(v)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🤝 Fiados em aberto</div>
           {fiadoAbertoLista.length===0 ? (
             <div style={{ color:"#94a3b8" }}>Nenhum fiado em aberto.</div>
@@ -1553,6 +1639,87 @@ export default function ERP() {
         </div>
       </>
     );
+
+    const FinanceiroCaixa = () => {
+      const statusColor = (p) => p.paid ? "#16a34a" : (p.dueDate < dayKey() ? "#dc2626" : (p.dueDate === dayKey() ? "#f59e0b" : "#64748b"));
+      const statusLabel = (p) => p.paid ? "Pago" : (p.dueDate < dayKey() ? "Vencida" : (p.dueDate === dayKey() ? "Vence hoje" : "Em aberto"));
+
+      return (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+            {[
+              ["A pagar aberto", fmtCur(payablesOpenTotal), "linear-gradient(135deg,#e94560,#c0392b)"],
+              ["Vence hoje", fmtCur(payablesDueTodayTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
+              ["Vencidas", fmtCur(payablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
+              ["Prox. 7 dias", fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0)), "linear-gradient(135deg,#6366f1,#4338ca)"],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
+                <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
+                <div style={{ fontSize:"18px", fontWeight:"900" }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>➕ Nova conta a pagar</div>
+            <input style={{ ...inp, marginBottom:"8px" }} placeholder="Fornecedor" value={newPayable.supplier} onChange={e=>setNewPayable({...newPayable,supplier:e.target.value})} />
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
+              <input style={{ ...inp, marginBottom:"8px" }} placeholder="NF / boleto / documento" value={newPayable.document} onChange={e=>setNewPayable({...newPayable,document:e.target.value})} />
+              <input style={{ ...inp, marginBottom:"8px" }} placeholder="Valor" inputMode="decimal" value={newPayable.amount} onChange={e=>setNewPayable({...newPayable,amount:e.target.value})} />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
+              <input style={{ ...inp, marginBottom:"8px" }} type="date" value={newPayable.dueDate} onChange={e=>setNewPayable({...newPayable,dueDate:e.target.value})} />
+              <input style={{ ...inp, marginBottom:"8px" }} placeholder="Categoria" value={newPayable.category} onChange={e=>setNewPayable({...newPayable,category:e.target.value})} />
+            </div>
+            <input style={{ ...inp, marginBottom:"10px" }} placeholder="Descricao / observacao" value={newPayable.description} onChange={e=>setNewPayable({...newPayable,description:e.target.value})} />
+            <button style={{ ...btn("#e94560"), width:"100%" }} onClick={addPayable}>Cadastrar conta</button>
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>📌 Contas em aberto</div>
+            {contasAbertasOrdenadas.length===0 ? (
+              <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma conta em aberto.</div>
+            ) : contasAbertasOrdenadas.map(p=>(
+              <div key={p.id} style={{ border:"1px solid #e2e8f0", borderRadius:"12px", padding:"12px", marginBottom:"10px", background:p.dueDate<dayKey()?"#fef2f2":"#fff" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", alignItems:"flex-start" }}>
+                  <div>
+                    <div style={{ fontWeight:"900", color:"#1a1a2e" }}>{p.supplier}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>{p.document ? `Doc: ${p.document} | ` : ""}Vence: {p.dueDate}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>{p.category || "Geral"}{p.description ? ` - ${p.description}` : ""}</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontWeight:"900", color:statusColor(p), whiteSpace:"nowrap" }}>{fmtCur(p.amount)}</div>
+                    <div style={{ fontSize:"11px", color:statusColor(p), fontWeight:"800" }}>{statusLabel(p)}</div>
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:"8px", marginTop:"10px" }}>
+                  <button style={btnSm("#16a34a")} onClick={()=>markPayablePaid(p.id)}>Pagar</button>
+                  <button style={btnSm("#ef4444")} onClick={()=>deletePayable(p.id)}>Excluir</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>✅ Contas pagas recentes</div>
+            {contasPagasRecentes.length===0 ? (
+              <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma conta paga registrada.</div>
+            ) : contasPagasRecentes.slice(0,10).map(p=>(
+              <div key={p.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
+                <div>
+                  <div style={{ fontWeight:"900" }}>{p.supplier}</div>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>Pago em: {fmtDate(p.paidDate)} | Venc.: {p.dueDate}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(p.amount)}</div>
+                  <button style={{ ...btnSm("#64748b"), marginTop:"4px" }} onClick={()=>reopenPayable(p.id)}>Reabrir</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      );
+    };
 
     const HistoricoCaixa = () => (
       <div style={card}>
@@ -1584,11 +1751,13 @@ export default function ERP() {
         <div style={{ display:"flex", gap:"8px", background:"#fff", borderRadius:"16px", padding:"8px", marginBottom:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
           {pill("resumo","Resumo")}
           {pill("relatorios","Relatorios")}
+          {pill("financeiro","Financeiro")}
           {pill("historico","Historico")}
         </div>
 
         {caixaView==="resumo" && <ResumoCaixa />}
         {caixaView==="relatorios" && <RelatoriosCaixa />}
+        {caixaView==="financeiro" && <FinanceiroCaixa />}
         {caixaView==="historico" && <HistoricoCaixa />}
       </div>
     );
@@ -1864,7 +2033,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixa2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fin1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
