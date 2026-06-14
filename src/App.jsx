@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FINANCEIRO-ETAPA12-TECLADO-FIX-20260614-1830";
+const APP_VERSION = "FINANCEIRO-ETAPA12-DATA-ALERTA-20260614-1840";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1182,13 +1182,15 @@ export default function ERP() {
           {payablesOverdue.length>0 && (
             <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
               <div style={{ fontWeight:"900", color:"#991b1b" }}>{payablesOverdue.length} conta(s) vencida(s)</div>
-              <div style={{ fontSize:"12px", color:"#991b1b" }}>Total vencido: {fmtCur(payablesOverdueTotal)}. Acesse Caixa / Financeiro.</div>
+              <div style={{ fontSize:"12px", color:"#991b1b", marginBottom:"8px" }}>Total vencido: {fmtCur(payablesOverdueTotal)}.</div>
+              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); }} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px" }}>Ver contas em aberto</button>
             </div>
           )}
           {payablesDueToday.length>0 && (
             <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
               <div style={{ fontWeight:"900", color:"#9a3412" }}>{payablesDueToday.length} conta(s) vencem hoje</div>
-              <div style={{ fontSize:"12px", color:"#9a3412" }}>Total para pagar hoje: {fmtCur(payablesDueTodayTotal)}.</div>
+              <div style={{ fontSize:"12px", color:"#9a3412", marginBottom:"8px" }}>Total para pagar hoje: {fmtCur(payablesDueTodayTotal)}.</div>
+              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); }} style={{ ...btn("#f59e0b"), padding:"9px 12px", fontSize:"13px" }}>Ver contas de hoje</button>
             </div>
           )}
           {lowStockProducts.length>0 && (
@@ -1668,7 +1670,11 @@ export default function ERP() {
               <input style={{ ...inp, marginBottom:"8px" }} placeholder="Valor" inputMode="decimal" value={newPayable.amount} onChange={e=>setNewPayable({...newPayable,amount:e.target.value})} />
             </div>
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
-              <input style={{ ...inp, marginBottom:"8px" }} type="date" value={newPayable.dueDate} onChange={e=>setNewPayable({...newPayable,dueDate:e.target.value})} />
+              <input style={{ ...inp, marginBottom:"8px" }} type="date" min={dayKey()} value={newPayable.dueDate} onChange={e=>{
+                const value = e.target.value;
+                if (value && value < dayKey()) { notify("Escolha uma data de hoje em diante.", "error"); return; }
+                setNewPayable({...newPayable,dueDate:value});
+              }} />
               <input style={{ ...inp, marginBottom:"8px" }} placeholder="Categoria" value={newPayable.category} onChange={e=>setNewPayable({...newPayable,category:e.target.value})} />
             </div>
             <input style={{ ...inp, marginBottom:"10px" }} placeholder="Descricao / observacao" value={newPayable.description} onChange={e=>setNewPayable({...newPayable,description:e.target.value})} />
@@ -2033,7 +2039,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fin3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fin4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
