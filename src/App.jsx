@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FINANCEIRO-ETAPA12-20260614-1730";
+const APP_VERSION = "FINANCEIRO-ETAPA12-CORRIGIDO-20260614-1820";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1182,7 +1182,7 @@ export default function ERP() {
           {payablesOverdue.length>0 && (
             <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
               <div style={{ fontWeight:"900", color:"#991b1b" }}>{payablesOverdue.length} conta(s) vencida(s)</div>
-              <div style={{ fontSize:"12px", color:"#991b1b" }}>Total vencido: {fmtCur(payablesOverdueTotal)}. Acesse Caixa > Financeiro.</div>
+              <div style={{ fontSize:"12px", color:"#991b1b" }}>Total vencido: {fmtCur(payablesOverdueTotal)}. Acesse Caixa / Financeiro.</div>
             </div>
           )}
           {payablesDueToday.length>0 && (
@@ -2033,7 +2033,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fin1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fin2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
