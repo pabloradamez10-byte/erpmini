@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA7-LIMITE-VISUAL-20260614-1235";
+const APP_VERSION = "FIADO-ETAPA8-DATA-FUTURA-20260614-1325";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -256,6 +256,8 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const change    = (parseFloat(amountPaid)||0) - total;
   const mInfo     = (k) => PAYMENT_METHODS.find(m=>m.key===k);
   const isReceive = mode==="receiveFiado";
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const isPastDate = (dateStr) => dateStr && dateStr < todayISO();
 
   const handleMethod = (key) => {
     setSelectedMethod(key);
@@ -289,6 +291,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const confirmFiado = () => {
     const client = clients.find(c=>String(c.id)===String(fiadoClientId));
     if (!client) return;
+    if (isPastDate(fiadoDueDate)) return;
     onConfirm({ payments:[{ method:"fiado", amount:total }], total, change:0, fiado:{ clientId:client.id, clientName:client.name, dueDate:fiadoDueDate || "" } });
   };
 
@@ -393,8 +396,13 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                   {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Vencimento</label>
-                <input type="date" value={fiadoDueDate} onChange={e=>setFiadoDueDate(e.target.value)}
-                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"14px" }} />
+                <input type="date" value={fiadoDueDate} min={todayISO()} onChange={e=>setFiadoDueDate(e.target.value)}
+                  style={{ width:"100%", padding:"14px", border:`2px solid ${isPastDate(fiadoDueDate)?"#ef4444":"#e2e8f0"}`, borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:isPastDate(fiadoDueDate)?"6px":"14px" }} />
+                {isPastDate(fiadoDueDate) && (
+                  <div style={{ background:"#fef2f2", border:"1.5px solid #ef4444", borderRadius:"10px", padding:"10px", color:"#991b1b", fontSize:"12px", fontWeight:"800", marginBottom:"14px" }}>
+                    A data de vencimento nao pode ser anterior a hoje.
+                  </div>
+                )}
                 {(() => {
                   const c = clients.find(x=>String(x.id)===String(fiadoClientId));
                   if (!c || !(parseFloat(c.limit)>0)) return null;
@@ -455,8 +463,8 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                 const saldoAtual = c ? (c.currentBalance || 0) : 0;
                 const excede = limite>0 && (saldoAtual + total) > limite;
                 return (
-                  <button onClick={confirmFiado} disabled={!clients.length || !fiadoClientId}
-                    style={{ flex:1, padding:"14px", background:excede?"#dc2626":"#f59e0b", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800", fontSize:"15px", opacity:(!clients.length || !fiadoClientId)?0.4:1 }}>
+                  <button onClick={confirmFiado} disabled={!clients.length || !fiadoClientId || isPastDate(fiadoDueDate)}
+                    style={{ flex:1, padding:"14px", background:excede?"#dc2626":"#f59e0b", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800", fontSize:"15px", opacity:(!clients.length || !fiadoClientId || isPastDate(fiadoDueDate))?0.4:1 }}>
                     {excede ? "Autorizar venda" : "Confirmar Fiado"}
                   </button>
                 );
@@ -1442,7 +1450,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado7</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado8</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
