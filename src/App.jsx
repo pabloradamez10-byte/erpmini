@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA4-20260614-1005";
+const APP_VERSION = "FIADO-ETAPA5-20260614-1030";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -591,6 +591,7 @@ export default function ERP() {
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
+  const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showFiadoReceive, setShowFiadoReceive] = useState(false);
@@ -727,6 +728,9 @@ export default function ERP() {
   const fiadoSales = sales.filter(s => s.fiado && !s.fiado.paid && fiadoOpenAmount(s) > 0.001);
   const fiadoTotal = fiadoSales.reduce((sum,s)=>sum+fiadoOpenAmount(s),0);
   const clientBalance = (clientId) => fiadoSales.filter(s=>String(s.fiado.clientId)===String(clientId)).reduce((sum,s)=>sum+fiadoOpenAmount(s),0);
+  const clientSales = (clientId) => sales.filter(s=>s.fiado && String(s.fiado.clientId)===String(clientId));
+  const clientTotalBought = (clientId) => clientSales(clientId).reduce((sum,s)=>sum+s.total,0);
+  const clientTotalPaid = (clientId) => clientSales(clientId).reduce((sum,s)=>sum+((s.fiado && s.fiado.paidAmount)||0),0);
 
   const handleCheckoutConfirm = ({ payments, total:t, change, fiado }) => {
     const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null };
@@ -1154,6 +1158,7 @@ export default function ERP() {
                 </div>
               </div>
               <div style={{ display:"flex", gap:"6px", marginTop:"8px", flexWrap:"wrap" }}>
+                <button style={btnSm("#6366f1")} onClick={()=>setSelectedClientHistory(c)}>Historico</button>
                 <button style={btnSm("#16a34a")} onClick={()=>cobrarWhatsApp(c)}>WhatsApp</button>
                 <button style={btnSm("#64748b")} onClick={()=>deleteClient(c.id)}>Excluir</button>
               </div>
@@ -1199,6 +1204,113 @@ export default function ERP() {
       </div>
     </div>
   );
+
+
+  // --- Client history modal --------------------------------------------------
+  const ClientHistoryModal = ({ client, onClose }) => {
+    if (!client) return null;
+    const historico = clientSales(client.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const saldo = clientBalance(client.id);
+    const totalComprado = clientTotalBought(client.id);
+    const totalPago = clientTotalPaid(client.id);
+    const ticketMedio = historico.length ? totalComprado / historico.length : 0;
+    const primeiraCompra = historico.length ? historico[historico.length-1].date : null;
+    const ultimaCompra = historico.length ? historico[0].date : null;
+
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:500, display:"flex", alignItems:"flex-end", justifyContent:"center" }} onClick={onClose}>
+        <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"20px 16px 28px", width:"100%", maxWidth:"620px", maxHeight:"92vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 16px" }} />
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"10px", marginBottom:"14px" }}>
+            <div>
+              <div style={{ fontSize:"22px", fontWeight:"900", color:"#1a1a2e" }}>{client.name}</div>
+              <div style={{ color:"#64748b", fontSize:"13px" }}>{client.phone || "Sem WhatsApp"}</div>
+              {client.limit>0 && <div style={{ color:"#64748b", fontSize:"13px" }}>Limite: {fmtCur(client.limit)}</div>}
+            </div>
+            <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"34px", height:"34px", cursor:"pointer", fontSize:"16px", fontWeight:"800" }}>x</button>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"14px" }}>
+            <div style={{ background:"#fef2f2", borderRadius:"12px", padding:"12px" }}>
+              <div style={{ fontSize:"11px", color:"#991b1b", fontWeight:"800" }}>Saldo em aberto</div>
+              <div style={{ fontSize:"19px", fontWeight:"900", color:"#dc2626" }}>{fmtCur(saldo)}</div>
+            </div>
+            <div style={{ background:"#f0fdf4", borderRadius:"12px", padding:"12px" }}>
+              <div style={{ fontSize:"11px", color:"#166534", fontWeight:"800" }}>Total pago</div>
+              <div style={{ fontSize:"19px", fontWeight:"900", color:"#16a34a" }}>{fmtCur(totalPago)}</div>
+            </div>
+            <div style={{ background:"#eff6ff", borderRadius:"12px", padding:"12px" }}>
+              <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Total comprado</div>
+              <div style={{ fontSize:"19px", fontWeight:"900", color:"#2563eb" }}>{fmtCur(totalComprado)}</div>
+            </div>
+            <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px" }}>
+              <div style={{ fontSize:"11px", color:"#475569", fontWeight:"800" }}>Ticket medio</div>
+              <div style={{ fontSize:"19px", fontWeight:"900", color:"#334155" }}>{fmtCur(ticketMedio)}</div>
+            </div>
+          </div>
+
+          <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px", marginBottom:"14px" }}>
+            <div style={{ fontWeight:"800", fontSize:"14px", marginBottom:"6px" }}>Resumo</div>
+            <div style={{ fontSize:"13px", color:"#64748b" }}>Compras fiadas: <strong>{historico.length}</strong></div>
+            <div style={{ fontSize:"13px", color:"#64748b" }}>Primeira compra: <strong>{primeiraCompra ? fmtDate(primeiraCompra) : "-"}</strong></div>
+            <div style={{ fontSize:"13px", color:"#64748b" }}>Ultima compra: <strong>{ultimaCompra ? fmtDate(ultimaCompra) : "-"}</strong></div>
+            {client.limit>0 && <div style={{ fontSize:"13px", color:"#64748b" }}>Limite disponivel: <strong>{fmtCur(client.limit - saldo)}</strong></div>}
+          </div>
+
+          <div style={{ display:"flex", gap:"8px", marginBottom:"14px" }}>
+            <button style={{ ...btn("#16a34a"), flex:1 }} onClick={()=>cobrarWhatsApp(client)}>WhatsApp</button>
+            <button style={{ ...btn("#64748b"), flex:1 }} onClick={onClose}>Fechar</button>
+          </div>
+
+          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"10px" }}>Historico de compras e pagamentos</div>
+          {historico.length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma compra fiada para este cliente.</div>
+          ) : historico.map(s=>{
+            const pago = (s.fiado && s.fiado.paidAmount) || 0;
+            const aberto = fiadoOpenAmount(s);
+            const payments = (s.fiado && s.fiado.payments) || [];
+            const quitado = aberto <= 0.001;
+            return (
+              <div key={s.id} style={{ border:"1px solid #e2e8f0", borderRadius:"12px", padding:"12px", marginBottom:"10px", background:quitado?"#f8fafc":"#fff" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", alignItems:"flex-start" }}>
+                  <div>
+                    <div style={{ fontWeight:"900" }}>Venda #{s.id}</div>
+                    <div style={{ color:"#64748b", fontSize:"12px" }}>{fmtDate(s.date)} {s.fiado.dueDate ? `- Vence: ${s.fiado.dueDate}` : ""}</div>
+                    <div style={{ color:"#64748b", fontSize:"12px", marginTop:"4px" }}>Compra: {fmtCur(s.total)} | Pago: {fmtCur(pago)}</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontWeight:"900", color:quitado?"#16a34a":"#e94560" }}>{quitado ? "Quitado" : fmtCur(aberto)}</div>
+                    <div style={{ fontSize:"11px", color:"#94a3b8" }}>{quitado ? "sem saldo" : "em aberto"}</div>
+                  </div>
+                </div>
+
+                {s.items && s.items.length>0 && (
+                  <div style={{ marginTop:"8px", background:"#f8fafc", borderRadius:"10px", padding:"8px" }}>
+                    <div style={{ fontSize:"12px", fontWeight:"800", color:"#64748b", marginBottom:"4px" }}>Itens</div>
+                    {s.items.map((it,i)=><div key={i} style={{ fontSize:"12px", color:"#64748b" }}>{it.qty}x {it.name} - {fmtCur(it.price*it.qty)}</div>)}
+                  </div>
+                )}
+
+                {payments.length>0 && (
+                  <div style={{ marginTop:"8px", background:"#f0fdf4", borderRadius:"10px", padding:"8px" }}>
+                    <div style={{ fontSize:"12px", fontWeight:"800", color:"#166534", marginBottom:"4px" }}>Pagamentos</div>
+                    {payments.map((p,i)=><div key={i} style={{ fontSize:"12px", color:"#166534" }}>{fmtDate(p.date)} - {fmtCur(p.amount)} {p.method ? `via ${p.method}` : ""}</div>)}
+                  </div>
+                )}
+
+                {!quitado && (
+                  <div style={{ display:"flex", gap:"6px", marginTop:"8px" }}>
+                    <button style={btnSm("#16a34a")} onClick={()=>openReceiveFiado(s.id)}>Receber</button>
+                    <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(s);setShowReceipt(true);}}>Recibo</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   // --- Config tab -------------------------------------------------------------
   const ConfigTab = () => (
@@ -1273,7 +1385,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado5</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1322,6 +1434,9 @@ export default function ERP() {
 
       {/* Mobile cart drawer */}
       {isMobile && showCart && CartDrawer()}
+
+      {/* Client history */}
+      {selectedClientHistory && <ClientHistoryModal client={selectedClientHistory} onClose={()=>setSelectedClientHistory(null)} />}
 
       {/* Checkout */}
       {showCheckout && <CheckoutScreen cart={cart} total={total} clients={clients} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
