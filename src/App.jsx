@@ -739,10 +739,10 @@ export default function ERP() {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
-    { key:"pdv",     icon:"\uD83D\uDED2", label:"PDV"     },
-    { key:"estoque", icon:"\uD83D\uDCE6", label:"Estoque" },
-    { key:"vendas",  icon:"\uD83D\uDCCA", label:"Vendas"  },
-    { key:"config",  icon:"\u2699\uFE0F", label:"Config"  },
+    { key:"pdv",     icon:"PDV", label:"PDV"     },
+    { key:"estoque", icon:"EST", label:"Estoque" },
+    { key:"vendas",  icon:"VEN", label:"Vendas"  },
+    { key:"config",  icon:"CFG", label:"Config"  },
   ];
 
   // --- Cart Drawer (mobile) -------------------------------------------------
@@ -778,10 +778,10 @@ export default function ERP() {
               <span>Total</span><span style={{ color:"#e94560" }}>{fmtCur(total)}</span>
             </div>
             <button style={{ ...btn(), width:"100%", padding:"16px", fontSize:"17px" }} onClick={()=>{ setShowCart(false); setShowCheckout(true); }}>
-              Cartao Pagar {fmtCur(total)}
+              Pagar {fmtCur(total)}
             </button>
             <button style={{ ...btn("#94a3b8"), width:"100%", padding:"12px", fontSize:"14px", marginTop:"8px" }} onClick={()=>setCart([])}>
-              Excluir Limpar carrinho
+              Limpar carrinho
             </button>
           </div>
         )}
