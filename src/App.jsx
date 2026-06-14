@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA6-20260614-1210";
+const APP_VERSION = "FIADO-ETAPA7-LIMITE-VISUAL-20260614-1235";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -289,15 +289,6 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const confirmFiado = () => {
     const client = clients.find(c=>String(c.id)===String(fiadoClientId));
     if (!client) return;
-    const saldoAtual = client.currentBalance || 0;
-    const limite = parseFloat(client.limit)||0;
-    const saldoFinal = saldoAtual + total;
-
-    if (limite > 0 && saldoFinal > limite) {
-      const msg = `Cliente ultrapassara o limite de credito.\n\nCliente: ${client.name}\nLimite: ${fmtCur(limite)}\nSaldo atual: ${fmtCur(saldoAtual)}\nNova venda: ${fmtCur(total)}\nSaldo final: ${fmtCur(saldoFinal)}\n\nDeseja autorizar mesmo assim?`;
-      if (!window.confirm(msg)) return;
-    }
-
     onConfirm({ payments:[{ method:"fiado", amount:total }], total, change:0, fiado:{ clientId:client.id, clientName:client.name, dueDate:fiadoDueDate || "" } });
   };
 
@@ -408,15 +399,48 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                   const c = clients.find(x=>String(x.id)===String(fiadoClientId));
                   if (!c || !(parseFloat(c.limit)>0)) return null;
                   const saldoAtual = c.currentBalance || 0;
+                  const limite = parseFloat(c.limit)||0;
                   const saldoFinal = saldoAtual + total;
-                  const excede = saldoFinal > (parseFloat(c.limit)||0);
+                  const excede = saldoFinal > limite;
+                  const usadoPct = Math.min(100, Math.round((saldoFinal/limite)*100));
+                  const excedente = Math.max(0, saldoFinal-limite);
                   return (
-                    <div style={{ background:excede?"#fef2f2":"#f0fdf4", border:`1.5px solid ${excede?"#ef4444":"#22c55e"}`, borderRadius:"12px", padding:"12px", marginBottom:"14px" }}>
-                      <div style={{ fontWeight:"800", color:excede?"#991b1b":"#166534", marginBottom:"4px" }}>{excede ? "Limite excedido" : "Limite OK"}</div>
-                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Limite: {fmtCur(parseFloat(c.limit)||0)}</div>
-                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Saldo atual: {fmtCur(saldoAtual)}</div>
-                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Nova venda: {fmtCur(total)}</div>
-                      <div style={{ fontSize:"12px", color:excede?"#991b1b":"#166534" }}>Saldo final: {fmtCur(saldoFinal)}</div>
+                    <div style={{ background:excede?"#fff7ed":"#f0fdf4", border:`1.5px solid ${excede?"#f97316":"#22c55e"}`, borderRadius:"16px", padding:"14px", marginBottom:"14px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"10px" }}>
+                        <div style={{ fontWeight:"900", color:excede?"#9a3412":"#166534", fontSize:"15px" }}>
+                          {excede ? "Limite de credito excedido" : "Limite de credito OK"}
+                        </div>
+                        <div style={{ fontWeight:"900", color:excede?"#ea580c":"#16a34a", fontSize:"13px" }}>{Math.round((saldoFinal/limite)*100)}%</div>
+                      </div>
+
+                      <div style={{ height:"10px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden", marginBottom:"12px" }}>
+                        <div style={{ height:"100%", width:`${usadoPct}%`, background:excede?"#f97316":"#22c55e", borderRadius:"999px" }} />
+                      </div>
+
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:excede?"10px":"0" }}>
+                        <div style={{ background:"#fff", borderRadius:"10px", padding:"8px" }}>
+                          <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>Limite</div>
+                          <div style={{ fontWeight:"900", color:"#1a1a2e" }}>{fmtCur(limite)}</div>
+                        </div>
+                        <div style={{ background:"#fff", borderRadius:"10px", padding:"8px" }}>
+                          <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>Saldo atual</div>
+                          <div style={{ fontWeight:"900", color:"#1a1a2e" }}>{fmtCur(saldoAtual)}</div>
+                        </div>
+                        <div style={{ background:"#fff", borderRadius:"10px", padding:"8px" }}>
+                          <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>Nova venda</div>
+                          <div style={{ fontWeight:"900", color:"#1a1a2e" }}>{fmtCur(total)}</div>
+                        </div>
+                        <div style={{ background:"#fff", borderRadius:"10px", padding:"8px" }}>
+                          <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>Saldo final</div>
+                          <div style={{ fontWeight:"900", color:excede?"#dc2626":"#16a34a" }}>{fmtCur(saldoFinal)}</div>
+                        </div>
+                      </div>
+
+                      {excede && (
+                        <div style={{ background:"#ffedd5", borderRadius:"10px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px" }}>
+                          Excedente: {fmtCur(excedente)}. Para prosseguir, toque em Autorizar venda.
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -425,10 +449,18 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
                 style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
-              <button onClick={confirmFiado} disabled={!clients.length || !fiadoClientId}
-                style={{ flex:1, padding:"14px", background:"#f59e0b", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(!clients.length || !fiadoClientId)?0.4:1 }}>
-                Confirmar Fiado
-              </button>
+              {(() => {
+                const c = clients.find(x=>String(x.id)===String(fiadoClientId));
+                const limite = c ? (parseFloat(c.limit)||0) : 0;
+                const saldoAtual = c ? (c.currentBalance || 0) : 0;
+                const excede = limite>0 && (saldoAtual + total) > limite;
+                return (
+                  <button onClick={confirmFiado} disabled={!clients.length || !fiadoClientId}
+                    style={{ flex:1, padding:"14px", background:excede?"#dc2626":"#f59e0b", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800", fontSize:"15px", opacity:(!clients.length || !fiadoClientId)?0.4:1 }}>
+                    {excede ? "Autorizar venda" : "Confirmar Fiado"}
+                  </button>
+                );
+              })()}
             </div>
           </>
         )}
@@ -1410,7 +1442,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado6</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado7</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
