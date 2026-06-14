@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "ICONS-UTF8-20260613-2359";
+const APP_VERSION = "FIADO-ETAPA1-20260614-0015";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -228,6 +228,7 @@ const PAYMENT_METHODS = [
   { key:"credito",  label:"Credito",  icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
   { key:"debito",   label:"Debito",   icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
   { key:"pix",      label:"PIX",      icon:"PIX", color:"#0891b2", light:"#ecfeff" },
+  { key:"fiado",    label:"Fiado",    icon:"🤝", color:"#f59e0b", light:"#fffbeb" },
 ];
 
 const initialProducts = [
@@ -240,13 +241,15 @@ const fmtCur  = (v) => v.toLocaleString("pt-BR",{ style:"currency", currency:"BR
 const fmtDate = (d) => new Date(d).toLocaleString("pt-BR",{ day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
 // --- CHECKOUT ----------------------------------------------------------------
-function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
+function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
   const [step, setStep]                   = useState("choose");
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [amountPaid, setAmountPaid]         = useState("");
   const [mixedPayments, setMixedPayments]   = useState([]);
   const [mixedMethod, setMixedMethod]       = useState(null);
   const [mixedAmount, setMixedAmount]       = useState("");
+  const [fiadoClientId, setFiadoClientId]   = useState("");
+  const [fiadoDueDate, setFiadoDueDate]     = useState("");
 
   const paidSoFar = mixedPayments.reduce((s,p) => s+p.amount, 0);
   const remaining = total - paidSoFar;
@@ -256,6 +259,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
   const handleMethod = (key) => {
     setSelectedMethod(key);
     if (key==="dinheiro") { setStep("dinheiro"); setAmountPaid(""); }
+    else if (key==="fiado") { setStep("fiado"); setFiadoClientId(clients[0]?.id ? String(clients[0].id) : ""); setFiadoDueDate(""); }
     else if (key==="misto") { setStep("mixed"); setMixedPayments([]); setMixedMethod(null); setMixedAmount(""); }
     else onConfirm({ payments:[{ method:key, amount:total }], total, change:0 });
   };
@@ -278,6 +282,12 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
   const confirmMixed = () => {
     const ch = mixedPayments.find(p=>p.method==="dinheiro") ? Math.max(0,paidSoFar-total) : 0;
     onConfirm({ payments:mixedPayments, total, change:ch });
+  };
+
+  const confirmFiado = () => {
+    const client = clients.find(c=>String(c.id)===String(fiadoClientId));
+    if (!client) return;
+    onConfirm({ payments:[{ method:"fiado", amount:total }], total, change:0, fiado:{ clientId:client.id, clientName:client.name, dueDate:fiadoDueDate || "" } });
   };
 
   return (
@@ -316,6 +326,41 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm }) {
               <span style={{ fontSize:"22px" }}>Trocar</span>
               <span style={{ fontSize:"14px", fontWeight:"700", color:"#92400e" }}>Pagamento Misto</span>
             </button>
+          </>
+        )}
+
+
+        {step==="fiado" && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:"16px" }}>
+              <div style={{ fontSize:"40px" }}>🤝</div>
+              <div style={{ fontWeight:"700", fontSize:"16px" }}>Venda no Fiado</div>
+              <div style={{ fontSize:"13px", color:"#64748b" }}>Selecione o cliente para vincular a divida</div>
+            </div>
+            {clients.length===0 ? (
+              <div style={{ background:"#fff7ed", border:"1.5px solid #f59e0b", borderRadius:"12px", padding:"14px", marginBottom:"14px", color:"#92400e", fontWeight:"700" }}>
+                Cadastre um cliente na aba Fiado antes de vender fiado.
+              </div>
+            ) : (
+              <>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Cliente</label>
+                <select value={fiadoClientId} onChange={e=>setFiadoClientId(e.target.value)}
+                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"12px" }}>
+                  {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Vencimento</label>
+                <input type="date" value={fiadoDueDate} onChange={e=>setFiadoDueDate(e.target.value)}
+                  style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"14px" }} />
+              </>
+            )}
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
+              <button onClick={confirmFiado} disabled={!clients.length || !fiadoClientId}
+                style={{ flex:1, padding:"14px", background:"#f59e0b", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(!clients.length || !fiadoClientId)?0.4:1 }}>
+                Confirmar Fiado
+              </button>
+            </div>
           </>
         )}
 
@@ -500,6 +545,8 @@ export default function ERP() {
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
   const [cart, setCart]           = useState([]);
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
+  const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
+  const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showReceipt, setShowReceipt]   = useState(false);
@@ -541,6 +588,7 @@ export default function ERP() {
 
   useEffect(()=>{ saveLS("erpmini_products", products); }, [products]);
   useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
+  useEffect(()=>{ saveLS("erpmini_clients", clients); }, [clients]);
   useEffect(()=>{ saveLS("erpmini_storename", storeName); }, [storeName]);
   useEffect(()=>{ saveLS("erpmini_salecounter", saleCounter.current); });
 
@@ -629,14 +677,30 @@ export default function ERP() {
 
   const total = cart.reduce((s,i)=>s+i.price*i.qty, 0);
   const cartCount = cart.reduce((s,i)=>s+i.qty, 0);
+  const fiadoSales = sales.filter(s => s.fiado && !s.fiado.paid);
+  const fiadoTotal = fiadoSales.reduce((sum,s)=>sum+s.total,0);
+  const clientBalance = (clientId) => fiadoSales.filter(s=>String(s.fiado.clientId)===String(clientId)).reduce((sum,s)=>sum+s.total,0);
 
-  const handleCheckoutConfirm = ({ payments, total:t, change }) => {
-    const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change };
+  const handleCheckoutConfirm = ({ payments, total:t, change, fiado }) => {
+    const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null };
     setProducts(prev=>prev.map(p=>{ const item=cart.find(i=>i.id===p.id); return item?{...p,stock:p.stock-item.qty}:p; }));
     setSales(prev=>[sale,...prev]);
     setSelectedSale(sale);
     setCart([]); setShowCheckout(false); setShowCart(false); setShowReceipt(true);
     notify("OK Venda finalizada!");
+  };
+
+  const saveClient = () => {
+    if (!newClient.name) return notify("Informe o nome do cliente!","error");
+    const client = { id:Date.now(), name:newClient.name.trim(), phone:newClient.phone.trim(), limit:parseFloat(newClient.limit)||0, active:true };
+    setClients(prev=>[client,...prev]);
+    setNewClient({ name:"", phone:"", limit:"" });
+    notify("Cliente cadastrado!");
+  };
+
+  const deleteClient = (id) => {
+    if (clientBalance(id)>0) return notify("Cliente possui saldo em aberto!","error");
+    setClients(prev=>prev.filter(c=>c.id!==id));
   };
 
   const saveProduct = () => {
@@ -744,6 +808,7 @@ export default function ERP() {
     { key:"pdv",     icon:"🛒", label:"PDV"     },
     { key:"estoque", icon:"📦", label:"Estoque" },
     { key:"vendas",  icon:"📊", label:"Vendas"  },
+    { key:"fiado",   icon:"🤝", label:"Fiado"   },
     { key:"config",  icon:"⚙️", label:"Config"  },
   ];
 
@@ -963,6 +1028,73 @@ export default function ERP() {
     </div>
   );
 
+
+  // --- Fiado tab --------------------------------------------------------------
+  const FiadoTab = () => (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"12px", marginBottom:"14px" }}>
+        <div style={{ background:"linear-gradient(135deg,#f59e0b,#d97706)", borderRadius:"12px", padding:"16px", color:"#fff" }}>
+          <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>Total em aberto</div>
+          <div style={{ fontSize:"22px", fontWeight:"900" }}>{fmtCur(fiadoTotal)}</div>
+        </div>
+        <div style={{ background:"linear-gradient(135deg,#6366f1,#4338ca)", borderRadius:"12px", padding:"16px", color:"#fff" }}>
+          <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>Clientes cadastrados</div>
+          <div style={{ fontSize:"22px", fontWeight:"900" }}>{clients.length}</div>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}>🤝 Novo Cliente</div>
+        <input style={{ ...inp, marginBottom:"8px" }} placeholder="Nome do cliente" value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} />
+        <input style={{ ...inp, marginBottom:"8px" }} placeholder="WhatsApp" value={newClient.phone} onChange={e=>setNewClient({...newClient,phone:e.target.value})} />
+        <input style={{ ...inp, marginBottom:"12px" }} type="number" placeholder="Limite de credito opcional" value={newClient.limit} onChange={e=>setNewClient({...newClient,limit:e.target.value})} />
+        <button style={{ ...btn(), width:"100%" }} onClick={saveClient}>➕ Cadastrar Cliente</button>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}>📋 Clientes e saldos</div>
+        {clients.length===0 ? (
+          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum cliente cadastrado.</div>
+        ) : clients.map(c=>{
+          const saldo = clientBalance(c.id);
+          return (
+            <div key={c.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", alignItems:"flex-start" }}>
+                <div>
+                  <div style={{ fontWeight:"800", fontSize:"15px" }}>{c.name}</div>
+                  <div style={{ color:"#94a3b8", fontSize:"12px" }}>{c.phone || "Sem WhatsApp"}</div>
+                  {c.limit>0 && <div style={{ color:"#64748b", fontSize:"12px" }}>Limite: {fmtCur(c.limit)}</div>}
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontWeight:"900", color:saldo>0?"#e94560":"#16a34a", fontSize:"16px" }}>{fmtCur(saldo)}</div>
+                  <div style={{ color:"#94a3b8", fontSize:"11px" }}>{saldo>0?"em aberto":"sem debito"}</div>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:"6px", marginTop:"8px", flexWrap:"wrap" }}>
+                <button style={btnSm("#64748b")} onClick={()=>deleteClient(c.id)}>Excluir</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}>💳 Vendas fiado em aberto</div>
+        {fiadoSales.length===0 ? (
+          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda fiada em aberto.</div>
+        ) : fiadoSales.map(s=>(
+          <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
+            <div>
+              <div style={{ fontWeight:"800" }}>#{s.id} - {s.fiado.clientName}</div>
+              <div style={{ color:"#94a3b8", fontSize:"12px" }}>{fmtDate(s.date)} {s.fiado.dueDate ? `- Vence: ${s.fiado.dueDate}` : ""}</div>
+            </div>
+            <div style={{ fontWeight:"900", color:"#e94560" }}>{fmtCur(s.total)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   // --- Config tab -------------------------------------------------------------
   const ConfigTab = () => (
     <div>
@@ -1036,7 +1168,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-icones</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1065,6 +1197,7 @@ export default function ERP() {
         {tab==="pdv"     && PDVTab()}
         {tab==="estoque" && EstoqueTab()}
         {tab==="vendas"  && VendasTab()}
+        {tab==="fiado"   && FiadoTab()}
         {tab==="config"  && ConfigTab()}
       </div>
 
@@ -1086,7 +1219,7 @@ export default function ERP() {
       {isMobile && showCart && CartDrawer()}
 
       {/* Checkout */}
-      {showCheckout && <CheckoutScreen cart={cart} total={total} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
+      {showCheckout && <CheckoutScreen cart={cart} total={total} clients={clients} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
 
       {/* Receipt */}
       {showReceipt && selectedSale && <ReceiptModal sale={selectedSale} storeName={storeName} onClose={()=>setShowReceipt(false)} />}
