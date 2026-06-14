@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA3-20260614-0945";
+const APP_VERSION = "FIADO-ETAPA4-20260614-1005";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -241,7 +241,7 @@ const fmtCur  = (v) => v.toLocaleString("pt-BR",{ style:"currency", currency:"BR
 const fmtDate = (d) => new Date(d).toLocaleString("pt-BR",{ day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
 // --- CHECKOUT ----------------------------------------------------------------
-function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
+function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sale", receiveInfo=null }) {
   const [step, setStep]                   = useState("choose");
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [amountPaid, setAmountPaid]         = useState("");
@@ -255,9 +255,11 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
   const remaining = total - paidSoFar;
   const change    = (parseFloat(amountPaid)||0) - total;
   const mInfo     = (k) => PAYMENT_METHODS.find(m=>m.key===k);
+  const isReceive = mode==="receiveFiado";
 
   const handleMethod = (key) => {
     setSelectedMethod(key);
+    if (isReceive) { setStep("receive_amount"); setAmountPaid(total.toFixed(2)); return; }
     if (key==="dinheiro") { setStep("dinheiro"); setAmountPaid(""); }
     else if (key==="fiado") { setStep("fiado"); setFiadoClientId(clients[0]?.id ? String(clients[0].id) : ""); setFiadoDueDate(""); }
     else if (key==="misto") { setStep("mixed"); setMixedPayments([]); setMixedMethod(null); setMixedAmount(""); }
@@ -290,6 +292,12 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
     onConfirm({ payments:[{ method:"fiado", amount:total }], total, change:0, fiado:{ clientId:client.id, clientName:client.name, dueDate:fiadoDueDate || "" } });
   };
 
+  const confirmReceive = () => {
+    const val = parseFloat(amountPaid)||0;
+    if (!selectedMethod || val<=0 || val>total+0.001) return;
+    onConfirm({ payments:[{ method:selectedMethod, amount:val }], total:val, change:0, receiveAmount:val });
+  };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}>
       <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"24px 20px 32px", width:"100%", maxWidth:"520px", maxHeight:"92vh", overflowY:"auto" }}>
@@ -297,23 +305,30 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
         <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 20px" }} />
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
-          <div style={{ fontWeight:"800", fontSize:"18px" }}>Cartao Pagamento</div>
+          <div style={{ fontWeight:"800", fontSize:"18px" }}>{isReceive ? "Receber Fiado" : "Cartao Pagamento"}</div>
           <button onClick={onCancel} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>x</button>
         </div>
 
         <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", borderRadius:"14px", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
           <div>
-            <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.6)", marginBottom:"4px" }}>TOTAL A PAGAR</div>
+            <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.6)", marginBottom:"4px" }}>{isReceive ? "SALDO EM ABERTO" : "TOTAL A PAGAR"}</div>
             <div style={{ fontSize:"28px", fontWeight:"800", color:"#fff" }}>{fmtCur(total)}</div>
           </div>
           <div style={{ fontSize:"36px" }}>PDV</div>
         </div>
 
+        {isReceive && receiveInfo && (
+          <div style={{ background:"#fffbeb", border:"1.5px solid #f59e0b", borderRadius:"12px", padding:"12px 14px", marginBottom:"14px" }}>
+            <div style={{ fontWeight:"800", color:"#92400e" }}>Cliente: {receiveInfo.clientName}</div>
+            <div style={{ fontSize:"12px", color:"#b45309" }}>Venda #{receiveInfo.saleId} {receiveInfo.dueDate ? `- Vence: ${receiveInfo.dueDate}` : ""}</div>
+          </div>
+        )}
+
         {step==="choose" && (
           <>
             <div style={{ fontSize:"12px", fontWeight:"700", color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:"12px" }}>Forma de Pagamento</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"10px" }}>
-              {PAYMENT_METHODS.map(m=>(
+              {PAYMENT_METHODS.filter(m=>!isReceive || m.key!=="fiado").map(m=>(
                 <button key={m.key} onClick={()=>handleMethod(m.key)}
                   style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"18px 10px", borderRadius:"14px", border:`2px solid ${m.color}33`, background:m.light, cursor:"pointer", gap:"6px" }}>
                   <span style={{ fontSize:"28px" }}>{m.icon}</span>
@@ -321,11 +336,40 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
                 </button>
               ))}
             </div>
-            <button onClick={()=>handleMethod("misto")}
+            {!isReceive && <button onClick={()=>handleMethod("misto")}
               style={{ width:"100%", padding:"14px", background:"#fef9ec", border:"2px solid #f59e0b33", borderRadius:"14px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"10px" }}>
               <span style={{ fontSize:"22px" }}>Trocar</span>
               <span style={{ fontSize:"14px", fontWeight:"700", color:"#92400e" }}>Pagamento Misto</span>
-            </button>
+            </button>}
+          </>
+        )}
+
+
+        {step==="receive_amount" && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:"16px" }}>
+              <div style={{ fontSize:"40px" }}>{mInfo(selectedMethod)?.icon}</div>
+              <div style={{ fontWeight:"700", fontSize:"16px" }}>Recebimento via {mInfo(selectedMethod)?.label}</div>
+              <div style={{ fontSize:"13px", color:"#64748b" }}>Informe o valor recebido</div>
+            </div>
+            <input type="number" placeholder="0,00" value={amountPaid} autoFocus
+              onChange={e=>setAmountPaid(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&confirmReceive()}
+              style={{ width:"100%", padding:"16px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"28px", fontWeight:"700", textAlign:"center", boxSizing:"border-box", outline:"none", marginBottom:"10px" }} />
+            <div style={{ display:"flex", gap:"8px", marginBottom:"14px", flexWrap:"wrap" }}>
+              {[total, Math.min(total,20), Math.min(total,50), Math.min(total,100)].filter((v,i,a)=>v>0 && a.indexOf(v)===i).map(v=>(
+                <button key={v} onClick={()=>setAmountPaid(String(v.toFixed(2)))}
+                  style={{ flex:"1 1 auto", padding:"10px", border:"none", borderRadius:"10px", background:"#f1f5f9", fontWeight:"700", color:"#475569" }}>{fmtCur(v)}</button>
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
+              <button onClick={confirmReceive} disabled={(parseFloat(amountPaid)||0)<=0 || (parseFloat(amountPaid)||0)>total}
+                style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:((parseFloat(amountPaid)||0)<=0 || (parseFloat(amountPaid)||0)>total)?0.4:1 }}>
+                Confirmar Recebimento
+              </button>
+            </div>
           </>
         )}
 
@@ -418,7 +462,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[] }) {
                   <span style={{ fontWeight:"800", fontSize:"18px", color:"#d97706" }}>{fmtCur(remaining)}</span>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
-                  {PAYMENT_METHODS.map(m=>(
+                  {PAYMENT_METHODS.filter(m=>!isReceive || m.key!=="fiado").map(m=>(
                     <button key={m.key} onClick={()=>setMixedMethod(m.key)}
                       style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"10px 4px", borderRadius:"10px", border:`2px solid ${mixedMethod===m.key?m.color:m.color+"33"}`, background:mixedMethod===m.key?m.light:"#fff", cursor:"pointer", gap:"4px" }}>
                       <span style={{ fontSize:"20px" }}>{m.icon}</span>
@@ -549,6 +593,8 @@ export default function ERP() {
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [showFiadoReceive, setShowFiadoReceive] = useState(false);
+  const [selectedFiadoSale, setSelectedFiadoSale] = useState(null);
   const [showReceipt, setShowReceipt]   = useState(false);
   const [newProduct, setNewProduct]     = useState({ name:"", price:"", stock:"", category:"Geral", barcode:"" });
   const [editingId, setEditingId]       = useState(null);
@@ -704,20 +750,29 @@ export default function ERP() {
     setClients(prev=>prev.filter(c=>c.id!==id));
   };
 
-  const receiveFiado = (saleId) => {
+  const openReceiveFiado = (saleId) => {
     const sale = sales.find(s=>s.id===saleId);
     if (!sale || !sale.fiado) return;
+    setSelectedFiadoSale(sale);
+    setShowFiadoReceive(true);
+  };
+
+  const handleFiadoReceiveConfirm = ({ payments, receiveAmount }) => {
+    const sale = selectedFiadoSale;
+    if (!sale || !sale.fiado) return;
     const aberto = fiadoOpenAmount(sale);
-    const valor = parseFloat(window.prompt(`Valor recebido de ${sale.fiado.clientName}:`, aberto.toFixed(2)) || "0");
-    if (!valor || valor <= 0) return;
-    if (valor > aberto + 0.001) return notify("Valor maior que o saldo em aberto!","error");
+    const valor = receiveAmount || (payments && payments[0] && payments[0].amount) || 0;
+    if (!valor || valor <= 0 || valor > aberto + 0.001) return notify("Valor invalido!","error");
+    const method = payments && payments[0] ? payments[0].method : "recebimento";
     setSales(prev=>prev.map(s=>{
-      if (s.id!==saleId) return s;
-      const pagos = [...((s.fiado && s.fiado.payments) || []), { date:new Date().toISOString(), amount:valor }];
+      if (s.id!==sale.id) return s;
+      const pagos = [...((s.fiado && s.fiado.payments) || []), { date:new Date().toISOString(), amount:valor, method }];
       const paidAmount = ((s.fiado && s.fiado.paidAmount) || 0) + valor;
       const paid = paidAmount >= s.total - 0.001;
       return {...s, fiado:{...s.fiado, payments:pagos, paidAmount, paid}};
     }));
+    setShowFiadoReceive(false);
+    setSelectedFiadoSale(null);
     notify(valor >= aberto - 0.001 ? "Fiado quitado!" : "Pagamento registrado!");
   };
 
@@ -1135,7 +1190,7 @@ export default function ERP() {
                 </div>
               )}
               <div style={{ display:"flex", gap:"6px", marginTop:"8px", flexWrap:"wrap" }}>
-                <button style={btnSm("#16a34a")} onClick={()=>receiveFiado(s.id)}>Receber</button>
+                <button style={btnSm("#16a34a")} onClick={()=>openReceiveFiado(s.id)}>Receber</button>
                 <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(s);setShowReceipt(true);}}>Recibo</button>
               </div>
             </div>
@@ -1218,7 +1273,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1270,6 +1325,17 @@ export default function ERP() {
 
       {/* Checkout */}
       {showCheckout && <CheckoutScreen cart={cart} total={total} clients={clients} onCancel={()=>setShowCheckout(false)} onConfirm={handleCheckoutConfirm} />}
+
+      {showFiadoReceive && selectedFiadoSale && (
+        <CheckoutScreen
+          cart={[]}
+          total={fiadoOpenAmount(selectedFiadoSale)}
+          mode="receiveFiado"
+          receiveInfo={{ saleId:selectedFiadoSale.id, clientName:selectedFiadoSale.fiado.clientName, dueDate:selectedFiadoSale.fiado.dueDate }}
+          onCancel={()=>{setShowFiadoReceive(false);setSelectedFiadoSale(null);}}
+          onConfirm={handleFiadoReceiveConfirm}
+        />
+      )}
 
       {/* Receipt */}
       {showReceipt && selectedSale && <ReceiptModal sale={selectedSale} storeName={storeName} onClose={()=>setShowReceipt(false)} />}
