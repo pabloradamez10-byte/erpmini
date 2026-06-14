@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FINANCEIRO-ETAPA12-DATA-ALERTA-20260614-1840";
+const APP_VERSION = "BACKUP-ETAPA13-20260614-1905";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -677,6 +677,9 @@ export default function ERP() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showCart, setShowCart]   = useState(false);   // mobile cart drawer
   const [showSettings, setShowSettings] = useState(false);
+  const backupImportRef = useRef();
+  const adminBackupImportRef = useRef();
+  const backupAutoRan = useRef(false);
   const barcodeRef  = useRef();
   const saleCounter = useRef(loadLS("erpmini_salecounter", 1000));
   const [activationKey, setActivationKey] = useState(()=>loadLS("erpmini_activation_key", ""));
@@ -705,6 +708,8 @@ export default function ERP() {
   useEffect(()=>{ saveLS("erpmini_products", products); }, [products]);
   useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
   useEffect(()=>{ saveLS("erpmini_clients", clients); }, [clients]);
+  useEffect(()=>{ saveLS("erpmini_cash_closures", cashClosures); }, [cashClosures]);
+  useEffect(()=>{ saveLS("erpmini_payables", payables); }, [payables]);
   useEffect(()=>{ saveLS("erpmini_storename", storeName); }, [storeName]);
   useEffect(()=>{ saveLS("erpmini_salecounter", saleCounter.current); });
 
@@ -713,9 +718,132 @@ export default function ERP() {
     setTimeout(()=>setNotification(null), 2500);
   };
 
+  const BACKUP_ADMIN_PASSWORD = "PABLO";
+  const makeBackupPayload = (mode="manual") => ({
+    app:"ERPmini",
+    backupVersion:1,
+    mode,
+    appVersion:APP_VERSION,
+    createdAt:new Date().toISOString(),
+    storeName,
+    saleCounter:saleCounter.current,
+    data:{
+      products,
+      sales,
+      clients,
+      cashClosures,
+      payables,
+      storeName,
+      saleCounter:saleCounter.current
+    }
+  });
+
+  const backupFileName = (payload) => {
+    const d = new Date(payload.createdAt);
+    const pad = n => String(n).padStart(2,"0");
+    return `erpmini-backup-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  };
+
+  const downloadJson = (payload) => {
+    const blob = new Blob([JSON.stringify(payload,null,2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = backupFileName(payload);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 500);
+  };
+
+  const saveBackupSnapshot = (payload) => {
+    saveLS("erpmini_backup_latest", payload);
+    const history = loadLS("erpmini_backup_history", []);
+    const updated = [payload, ...history].slice(0, 7);
+    saveLS("erpmini_backup_history", updated);
+    saveLS("erpmini_backup_last_date", dayKey());
+  };
+
+  const createBackup = (mode="manual", shouldDownload=true) => {
+    const payload = makeBackupPayload(mode);
+    saveBackupSnapshot(payload);
+    if (shouldDownload) downloadJson(payload);
+    notify(mode==="auto" ? "Backup diario gerado." : "Backup gerado com sucesso!");
+    return payload;
+  };
+
+  const applyBackupPayload = (payload) => {
+    if (!payload || payload.app !== "ERPmini" || !payload.data) {
+      notify("Arquivo de backup invalido.", "error");
+      return false;
+    }
+    const d = payload.data;
+    setProducts(Array.isArray(d.products) ? d.products : initialProducts);
+    setSales(Array.isArray(d.sales) ? d.sales : []);
+    setClients(Array.isArray(d.clients) ? d.clients : []);
+    setCashClosures(Array.isArray(d.cashClosures) ? d.cashClosures : []);
+    setPayables(Array.isArray(d.payables) ? d.payables : []);
+    setStoreName(d.storeName || payload.storeName || "Minha Loja");
+    saleCounter.current = d.saleCounter || payload.saleCounter || 1000;
+
+    saveLS("erpmini_products", Array.isArray(d.products) ? d.products : initialProducts);
+    saveLS("erpmini_sales", Array.isArray(d.sales) ? d.sales : []);
+    saveLS("erpmini_clients", Array.isArray(d.clients) ? d.clients : []);
+    saveLS("erpmini_cash_closures", Array.isArray(d.cashClosures) ? d.cashClosures : []);
+    saveLS("erpmini_payables", Array.isArray(d.payables) ? d.payables : []);
+    saveLS("erpmini_storename", d.storeName || payload.storeName || "Minha Loja");
+    saveLS("erpmini_salecounter", d.saleCounter || payload.saleCounter || 1000);
+    setCart([]);
+    notify("Backup restaurado com sucesso!");
+    return true;
+  };
+
+  const restoreLatestBackup = () => {
+    const payload = loadLS("erpmini_backup_latest", null);
+    if (!payload) { notify("Nenhum backup salvo neste aparelho.", "error"); return; }
+    if (!window.confirm("Restaurar o ultimo backup salvo neste aparelho? Os dados atuais serao substituidos.")) return;
+    applyBackupPayload(payload);
+  };
+
+  const importBackupFile = (file, admin=false) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(reader.result);
+        if (admin) {
+          const senha = window.prompt("Senha ADM para restaurar versao anterior:");
+          if (senha !== BACKUP_ADMIN_PASSWORD) { notify("Senha ADM incorreta.", "error"); return; }
+        }
+        if (!window.confirm("Restaurar este backup? Os dados atuais serao substituidos.")) return;
+        saveBackupSnapshot(payload);
+        applyBackupPayload(payload);
+      } catch(_) {
+        notify("Nao foi possivel ler o arquivo de backup.", "error");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const restoreOldBackupFromHistory = (payload) => {
+    const senha = window.prompt("Senha ADM para restaurar versao anterior:");
+    if (senha !== BACKUP_ADMIN_PASSWORD) { notify("Senha ADM incorreta.", "error"); return; }
+    if (!window.confirm("Restaurar esta versao anterior? Os dados atuais serao substituidos.")) return;
+    applyBackupPayload(payload);
+  };
+
+  useEffect(()=>{
+    if (backupAutoRan.current) return;
+    backupAutoRan.current = true;
+    const last = loadLS("erpmini_backup_last_date", "");
+    if (last === dayKey()) return;
+    const t = setTimeout(()=>createBackup("auto", true), 1800);
+    return ()=>clearTimeout(t);
+  }, []);
+
   const clearAllData = () => {
-    ["erpmini_products","erpmini_sales","erpmini_storename","erpmini_salecounter"].forEach(k=>localStorage.removeItem(k));
-    setProducts(initialProducts); setSales([]); setStoreName("Minha Loja"); setCart([]);
+    ["erpmini_products","erpmini_sales","erpmini_clients","erpmini_cash_closures","erpmini_payables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
+    setProducts(initialProducts); setSales([]); setClients([]); setCashClosures([]); setPayables([]); setStoreName("Minha Loja"); setCart([]);
     saleCounter.current = 1000; setShowClearConfirm(false);
     notify("Dados resetados!");
   };
@@ -1993,6 +2121,62 @@ export default function ERP() {
           <button style={{ ...btn("#64748b"), padding:"11px", fontSize:"13px" }} onClick={changeActivationKey}>Chave Trocar chave</button>
         </div>
       </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"8px" }}>💾 Backup e restauracao</div>
+        <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
+          <div style={{ fontWeight:"800", color:"#1d4ed8", marginBottom:"4px" }}>Backup automatico diario ativo</div>
+          <div style={{ fontSize:"12px", color:"#2563eb" }}>
+            O ERP gera 1 backup por dia no primeiro acesso. O usuario tambem pode baixar um backup manual a qualquer momento.
+          </div>
+        </div>
+
+        <input
+          ref={backupImportRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display:"none" }}
+          onChange={e=>{ importBackupFile(e.target.files?.[0], false); e.target.value=""; }}
+        />
+        <input
+          ref={adminBackupImportRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display:"none" }}
+          onChange={e=>{ importBackupFile(e.target.files?.[0], true); e.target.value=""; }}
+        />
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
+          <button style={{ ...btn("#16a34a"), padding:"11px", fontSize:"13px" }} onClick={()=>createBackup("manual", true)}>📤 Fazer backup agora</button>
+          <button style={{ ...btn("#2563eb"), padding:"11px", fontSize:"13px" }} onClick={restoreLatestBackup}>📥 Restaurar ultimo backup</button>
+        </div>
+
+        <button style={{ ...btn("#64748b"), width:"100%", padding:"11px", fontSize:"13px", marginBottom:"8px" }} onClick={()=>backupImportRef.current?.click()}>
+          📂 Importar backup mais recente
+        </button>
+
+        <details style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
+          <summary style={{ fontWeight:"900", color:"#334155", cursor:"pointer" }}>🔐 Area ADM - versoes anteriores</summary>
+          <div style={{ fontSize:"12px", color:"#64748b", margin:"8px 0" }}>
+            Somente o ADM consegue restaurar backups antigos. Senha solicitada na hora da restauracao.
+          </div>
+          <button style={{ ...btn("#7c3aed"), width:"100%", padding:"10px", fontSize:"13px", marginBottom:"8px" }} onClick={()=>adminBackupImportRef.current?.click()}>
+            Importar backup antigo
+          </button>
+          {(loadLS("erpmini_backup_history", []) || []).slice(1).length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"12px" }}>Nenhuma versao anterior salva neste aparelho.</div>
+          ) : (loadLS("erpmini_backup_history", []) || []).slice(1).map((b,i)=>(
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", padding:"8px 0", borderTop:"1px solid #e2e8f0" }}>
+              <div>
+                <div style={{ fontWeight:"800", color:"#1a1a2e" }}>{fmtDate(b.createdAt)}</div>
+                <div style={{ fontSize:"11px", color:"#64748b" }}>{b.mode==="auto" ? "Automatico" : "Manual"} - {b.appVersion}</div>
+              </div>
+              <button style={{ ...btn("#7c3aed"), padding:"7px 9px", fontSize:"12px" }} onClick={()=>restoreOldBackupFromHistory(b)}>Restaurar</button>
+            </div>
+          ))}
+        </details>
+      </div>
+
       <div style={card}>
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"6px", color:"#ef4444" }}>! Zona de Perigo</div>
         <p style={{ fontSize:"13px", color:"#64748b", marginBottom:"14px" }}>Apaga todos os produtos, vendas e configuracoes salvos.</p>
@@ -2039,7 +2223,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fin4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-bkp1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
