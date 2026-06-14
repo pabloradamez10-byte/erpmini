@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FIADO-ETAPA8-DATA-FUTURA-20260614-1325";
+const APP_VERSION = "CAIXA-ETAPA9-FECHAMENTO-20260614-1355";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -655,6 +655,7 @@ export default function ERP() {
   const [cart, setCart]           = useState([]);
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
+  const [cashClosures, setCashClosures] = useState(()=>loadLS("erpmini_cash_closures", []));
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
@@ -796,6 +797,40 @@ export default function ERP() {
   const clientSales = (clientId) => sales.filter(s=>s.fiado && String(s.fiado.clientId)===String(clientId));
   const clientTotalBought = (clientId) => clientSales(clientId).reduce((sum,s)=>sum+s.total,0);
   const clientTotalPaid = (clientId) => clientSales(clientId).reduce((sum,s)=>sum+((s.fiado && s.fiado.paidAmount)||0),0);
+
+  const dayKey = (d=new Date()) => new Date(d).toISOString().slice(0,10);
+  const isSameDay = (date, key=dayKey()) => String(date || "").slice(0,10) === key;
+  const paymentsOfDay = (key=dayKey()) => {
+    const list = [];
+    sales.forEach(s => {
+      if (isSameDay(s.date, key)) {
+        (s.payments || []).forEach(p => {
+          if (p.method !== "fiado") list.push({ ...p, origin:"Venda", saleId:s.id, date:s.date, clientName:s.fiado?.clientName || "" });
+        });
+      }
+      if (s.fiado && s.fiado.payments) {
+        s.fiado.payments.forEach(p => {
+          if (isSameDay(p.date, key)) list.push({ ...p, origin:"Recebimento fiado", saleId:s.id, date:p.date, clientName:s.fiado.clientName || "" });
+        });
+      }
+    });
+    return list;
+  };
+  const paymentSummary = (key=dayKey()) => {
+    const base = { dinheiro:0, pix:0, debito:0, credito:0 };
+    paymentsOfDay(key).forEach(p => { base[p.method] = (base[p.method] || 0) + (parseFloat(p.amount)||0); });
+    return base;
+  };
+  const closeCash = () => {
+    const key = dayKey();
+    const byMethod = paymentSummary(key);
+    const entradas = Object.values(byMethod).reduce((a,b)=>a+b,0);
+    const vendasHoje = sales.filter(s=>isSameDay(s.date,key)).reduce((sum,s)=>sum+s.total,0);
+    const fiadoHoje = sales.filter(s=>isSameDay(s.date,key) && s.fiado).reduce((sum,s)=>sum+s.total,0);
+    const closure = { id:Date.now(), date:new Date().toISOString(), day:key, byMethod, entradas, vendasHoje, fiadoHoje, fiadoAberto:fiadoTotal, salesCount:sales.filter(s=>isSameDay(s.date,key)).length };
+    setCashClosures(prev=>[closure,...prev]);
+    notify("Caixa fechado com sucesso!");
+  };
 
   const handleCheckoutConfirm = ({ payments, total:t, change, fiado }) => {
     const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null };
@@ -959,6 +994,7 @@ export default function ERP() {
     { key:"pdv",     icon:"🛒", label:"PDV"     },
     { key:"estoque", icon:"📦", label:"Estoque" },
     { key:"vendas",  icon:"📊", label:"Vendas"  },
+    { key:"caixa",   icon:"💰", label:"Caixa"   },
     { key:"fiado",   icon:"🤝", label:"Fiado"   },
     { key:"config",  icon:"⚙️", label:"Config"  },
   ];
@@ -1179,6 +1215,104 @@ export default function ERP() {
     </div>
   );
 
+
+
+  // --- Caixa tab --------------------------------------------------------------
+  const CaixaTab = () => {
+    const key = dayKey();
+    const byMethod = paymentSummary(key);
+    const entradas = Object.values(byMethod).reduce((a,b)=>a+b,0);
+    const vendasHojeList = sales.filter(s=>isSameDay(s.date,key));
+    const vendasHoje = vendasHojeList.reduce((sum,s)=>sum+s.total,0);
+    const fiadoHoje = vendasHojeList.filter(s=>s.fiado).reduce((sum,s)=>sum+s.total,0);
+    const recebimentosFiadoHoje = paymentsOfDay(key).filter(p=>p.origin==="Recebimento fiado").reduce((sum,p)=>sum+(parseFloat(p.amount)||0),0);
+    const ultimosPagamentos = paymentsOfDay(key).sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+    return (
+      <div>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
+          {[
+            ["Entradas hoje", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
+            ["Vendas hoje", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
+            ["Fiado vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
+            ["Recebido fiado", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
+          ].map(([l,v,c],i)=>(
+            <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
+              <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
+              <div style={{ fontSize:"19px", fontWeight:"900" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💰 Fechamento de caixa</div>
+          <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
+            <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"8px" }}>Resumo das entradas recebidas hoje</div>
+            {[
+              ["Dinheiro", byMethod.dinheiro, "#16a34a"],
+              ["PIX", byMethod.pix, "#0891b2"],
+              ["Debito", byMethod.debito, "#7c3aed"],
+              ["Credito", byMethod.credito, "#2563eb"],
+            ].map(([label,value,color])=>(
+              <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid #e2e8f0" }}>
+                <span style={{ fontWeight:"800", color:"#334155" }}>{label}</span>
+                <span style={{ fontWeight:"900", color }}>{fmtCur(value)}</span>
+              </div>
+            ))}
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0 0" }}>
+              <span style={{ fontWeight:"900", color:"#1a1a2e" }}>Total de entradas</span>
+              <span style={{ fontWeight:"900", color:"#16a34a", fontSize:"18px" }}>{fmtCur(entradas)}</span>
+            </div>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"12px" }}>
+            <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#9a3412", fontWeight:"800" }}>Fiado em aberto total</div>
+              <div style={{ fontSize:"18px", fontWeight:"900", color:"#ea580c" }}>{fmtCur(fiadoTotal)}</div>
+            </div>
+            <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Transacoes hoje</div>
+              <div style={{ fontSize:"18px", fontWeight:"900", color:"#2563eb" }}>{vendasHojeList.length}</div>
+            </div>
+          </div>
+
+          <button style={{ ...btn("#16a34a"), width:"100%" }} onClick={closeCash}>✅ Fechar caixa de hoje</button>
+        </div>
+
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}>📋 Movimentacoes de hoje</div>
+          {ultimosPagamentos.length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma entrada recebida hoje.</div>
+          ) : ultimosPagamentos.map((p,i)=>(
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div>
+                <div style={{ fontWeight:"800", color:"#1a1a2e" }}>{mLabel(p.method)} - {p.origin}</div>
+                <div style={{ fontSize:"12px", color:"#64748b" }}>#{p.saleId} {p.clientName ? `- ${p.clientName}` : ""} | {fmtDate(p.date)}</div>
+              </div>
+              <div style={{ fontWeight:"900", color:mColor(p.method), whiteSpace:"nowrap" }}>{fmtCur(parseFloat(p.amount)||0)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}>🧾 Fechamentos salvos</div>
+          {cashClosures.length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum fechamento registrado.</div>
+          ) : cashClosures.slice(0,10).map(c=>(
+            <div key={c.id} style={{ padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px" }}>
+                <div>
+                  <div style={{ fontWeight:"900" }}>{fmtDate(c.date)}</div>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>{c.salesCount} transacoes | Fiado aberto: {fmtCur(c.fiadoAberto||0)}</div>
+                </div>
+                <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // --- Fiado tab --------------------------------------------------------------
   const FiadoTab = () => (
@@ -1450,7 +1584,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fiado8</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixa1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -1479,6 +1613,7 @@ export default function ERP() {
         {tab==="pdv"     && PDVTab()}
         {tab==="estoque" && EstoqueTab()}
         {tab==="vendas"  && VendasTab()}
+        {tab==="caixa"   && CaixaTab()}
         {tab==="fiado"   && FiadoTab()}
         {tab==="config"  && ConfigTab()}
       </div>
