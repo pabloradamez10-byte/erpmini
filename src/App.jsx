@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CAIXA-PRO-ETAPA17-TURNOS-20260614-2255";
+const APP_VERSION = "FINANCEIRO-COMPRA-ETAPA18-20260614-2320";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -820,7 +820,9 @@ export default function ERP() {
   const [financeiroView, setFinanceiroView] = useState("pagar");
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
   const [newPayable, setNewPayable] = useState({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
+  const [purchaseItems, setPurchaseItems] = useState([{ productId:"", name:"", qty:"", cost:"" }]);
   const [newReceivable, setNewReceivable] = useState({ clientName:"", document:"", description:"", amount:"", dueDate:"", category:"Geral", installments:"1" });
+  const [selectedReceivable, setSelectedReceivable] = useState(null);
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -1381,28 +1383,39 @@ export default function ERP() {
   const receiveReceivable = (id) => {
     const rec = receivables.find(r=>r.id===id);
     if (!rec) return;
-    const aberto = receivableOpenAmount(rec);
-    const txt = window.prompt(`Valor recebido de ${rec.clientName}:`, aberto.toFixed(2));
-    if (txt===null) return;
-    const val = Math.min(aberto, parseMoney(txt));
+    setSelectedReceivable(rec);
+  };
+
+  const handleReceivableReceiveConfirm = ({ payments, total:t }) => {
+    if (!selectedReceivable) return;
+    const rec = selectedReceivable;
+    const val = Math.min(receivableOpenAmount(rec), parseFloat(t)||0);
     if (val<=0) return notify("Valor invalido.", "error");
-    const method = window.prompt("Forma de recebimento: dinheiro, pix, debito ou credito", "pix") || "pix";
-    const normalizedMethod = ["dinheiro","pix","debito","credito"].includes(method.toLowerCase()) ? method.toLowerCase() : "pix";
     setReceivables(prev=>prev.map(r=>{
-      if (r.id!==id) return r;
+      if (r.id!==rec.id) return r;
       const paidAmount = (parseFloat(r.paidAmount)||0) + val;
       const paid = paidAmount >= receivableAmount(r)-0.001;
-      return {...r, paidAmount, paid, paidDate:paid?new Date().toISOString():r.paidDate, payments:[...(r.payments||[]), { amount:val, method:normalizedMethod, date:new Date().toISOString() }]};
+      return {...r, paidAmount, paid, paidDate:paid?new Date().toISOString():r.paidDate, payments:[...(r.payments||[]), ...payments.map(p=>({ ...p, date:new Date().toISOString() }))]};
     }));
+    setSelectedReceivable(null);
     notify("Recebimento registrado!");
   };
 
   const deleteReceivable = (id) => {
-    if (window.confirm("Excluir esta conta a receber?")) setReceivables(prev=>prev.filter(r=>r.id!==id));
+    const rec = receivables.find(r=>r.id===id);
+    if (!rec) return;
+    const ok = window.confirm(`Excluir conta a receber de ${rec.clientName}?\\nDocumento: ${rec.document || "-"}\\nValor em aberto: ${fmtCur(receivableOpenAmount(rec))}`);
+    if (ok) setReceivables(prev=>prev.filter(r=>r.id!==id));
   };
 
+  const addPurchaseItemRow = () => setPurchaseItems(prev=>[...prev,{ productId:"", name:"", qty:"", cost:"" }]);
+  const removePurchaseItemRow = (idx) => setPurchaseItems(prev=>prev.length<=1 ? [{ productId:"", name:"", qty:"", cost:"" }] : prev.filter((_,i)=>i!==idx));
+  const updatePurchaseItem = (idx, patch) => setPurchaseItems(prev=>prev.map((it,i)=>i===idx ? {...it,...patch} : it));
+
   const addPayable = () => {
-    const amount = parseMoney(newPayable.amount);
+    const items = cleanPurchaseItems();
+    const calculatedTotal = purchaseItemsTotal();
+    const amount = calculatedTotal > 0 ? calculatedTotal : parseMoney(newPayable.amount);
     if (!newPayable.supplier.trim() || amount<=0 || !newPayable.dueDate) {
       notify("Informe fornecedor, valor e vencimento.", "error");
       return;
@@ -1415,12 +1428,36 @@ export default function ERP() {
       amount,
       dueDate: newPayable.dueDate,
       category: newPayable.category.trim() || "Geral",
+      purchaseItems: items,
+      stockMoved: items.length>0,
       paid:false,
       createdAt:new Date().toISOString()
     };
+    if (items.length>0) {
+      setProducts(prev=>{
+        let updated = [...prev];
+        items.forEach((it,idx)=>{
+          const existingIndex = updated.findIndex(p=>String(p.id)===String(it.productId) || p.name.toLowerCase()===it.name.toLowerCase());
+          if (existingIndex>=0) {
+            updated[existingIndex] = { ...updated[existingIndex], stock:(parseFloat(updated[existingIndex].stock)||0)+it.qty };
+          } else {
+            updated.push({
+              id: Date.now()+idx+1,
+              name: it.name,
+              price: it.cost || 0,
+              stock: it.qty,
+              category: newPayable.category.trim() || "Geral",
+              barcode: genBarcode()
+            });
+          }
+        });
+        return updated;
+      });
+    }
     setPayables(prev=>[item,...prev]);
     setNewPayable({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
-    notify("Conta a pagar cadastrada!");
+    setPurchaseItems([{ productId:"", name:"", qty:"", cost:"" }]);
+    notify(items.length>0 ? "Conta cadastrada e estoque atualizado!" : "Conta a pagar cadastrada!");
   };
   const markPayablePaid = (id) => {
     setPayables(prev=>prev.map(p=>p.id===id ? {...p, paid:true, paidDate:new Date().toISOString()} : p));
@@ -2283,6 +2320,38 @@ export default function ERP() {
               <input style={{ ...inp, marginBottom:"8px" }} placeholder="Categoria" value={newPayable.category} onChange={e=>setNewPayable({...newPayable,category:e.target.value})} />
             </div>
             <input style={{ ...inp, marginBottom:"10px" }} placeholder="Descricao / observacao" value={newPayable.description} onChange={e=>setNewPayable({...newPayable,description:e.target.value})} />
+
+            <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"14px", padding:"12px", marginBottom:"10px" }}>
+              <div style={{ fontWeight:"900", color:"#334155", marginBottom:"6px" }}>📦 Itens comprados / entrada no estoque</div>
+              <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"10px" }}>Opcional. Se preencher, o sistema soma as quantidades ao estoque.</div>
+              {purchaseItems.map((it,idx)=>(
+                <div key={idx} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+                  <select value={it.productId} onChange={e=>{
+                    const prod = products.find(p=>String(p.id)===String(e.target.value));
+                    updatePurchaseItem(idx,{ productId:e.target.value, name:prod?.name || "", cost:it.cost || (prod?.price ? String(prod.price) : "") });
+                  }} style={{ ...inp, marginBottom:"8px" }}>
+                    <option value="">Novo item ou selecione produto existente</option>
+                    {products.map(p=><option key={p.id} value={p.id}>{p.name} - estoque: {p.stock}</option>)}
+                  </select>
+                  <input style={{ ...inp, marginBottom:"8px" }} placeholder="Nome do item comprado" value={it.name} onChange={e=>updatePurchaseItem(idx,{ name:e.target.value, productId:"" })} />
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                    <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Quantidade" value={it.qty} onChange={e=>updatePurchaseItem(idx,{ qty:e.target.value })} />
+                    <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Custo unit." value={it.cost} onChange={e=>updatePurchaseItem(idx,{ cost:e.target.value })} />
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"8px" }}>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>Subtotal: <strong>{fmtCur((parseFloat(String(it.qty||"").replace(",","."))||0) * parseMoney(it.cost))}</strong></div>
+                    <button onClick={()=>removePurchaseItemRow(idx)} style={{ ...btn("#ef4444"), padding:"7px 10px", fontSize:"12px" }}>Remover</button>
+                  </div>
+                </div>
+              ))}
+              <button onClick={addPurchaseItemRow} style={{ ...btn("#64748b"), width:"100%", padding:"9px", fontSize:"13px" }}>+ Adicionar outro item</button>
+              {purchaseItemsTotal()>0 && (
+                <div style={{ marginTop:"10px", background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px", display:"flex", justifyContent:"space-between" }}>
+                  <strong>Total dos itens</strong><strong style={{ color:"#16a34a" }}>{fmtCur(purchaseItemsTotal())}</strong>
+                </div>
+              )}
+            </div>
+
             <button style={{ ...btn("#e94560"), width:"100%" }} onClick={addPayable}>Cadastrar conta</button>
           </div>
 
@@ -2297,6 +2366,11 @@ export default function ERP() {
                     <div style={{ fontWeight:"900", color:"#1a1a2e" }}>{p.supplier}</div>
                     <div style={{ fontSize:"12px", color:"#64748b" }}>{p.document ? `Doc: ${p.document} | ` : ""}Vence: {p.dueDate}</div>
                     <div style={{ fontSize:"12px", color:"#64748b" }}>{p.category || "Geral"}{p.description ? ` - ${p.description}` : ""}</div>
+                    {Array.isArray(p.purchaseItems) && p.purchaseItems.length>0 && (
+                      <div style={{ marginTop:"6px", background:"#f8fafc", borderRadius:"8px", padding:"7px", fontSize:"11px", color:"#475569" }}>
+                        <strong>Itens:</strong> {p.purchaseItems.map(it=>`${it.qty}x ${it.name}`).join(" | ")}
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontWeight:"900", color:statusColor(p), whiteSpace:"nowrap" }}>{fmtCur(p.amount)}</div>
@@ -2829,7 +2903,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixapro3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fincompra1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -2901,6 +2975,17 @@ export default function ERP() {
           receiveInfo={{ saleId:selectedFiadoSale.id, clientName:selectedFiadoSale.fiado.clientName, dueDate:selectedFiadoSale.fiado.dueDate }}
           onCancel={()=>{setShowFiadoReceive(false);setSelectedFiadoSale(null);}}
           onConfirm={handleFiadoReceiveConfirm}
+        />
+      )}
+
+      {selectedReceivable && (
+        <CheckoutScreen
+          cart={[]}
+          total={receivableOpenAmount(selectedReceivable)}
+          mode="receiveFiado"
+          receiveInfo={{ saleId:selectedReceivable.document || selectedReceivable.id, clientName:selectedReceivable.clientName, dueDate:selectedReceivable.dueDate }}
+          onCancel={()=>setSelectedReceivable(null)}
+          onConfirm={handleReceivableReceiveConfirm}
         />
       )}
 
