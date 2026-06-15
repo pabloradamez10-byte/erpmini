@@ -1,6 +1,113 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-const APP_VERSION = "FINANCEIRO-COMPRA-ETAPA18-NF-CLIENTE-20260614-2340";
+
+const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_PAIUP7LETrzQfZLMWcpsfw_8v8IeXTx";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const AuthContext = createContext(null);
+
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setUser(data.session?.user || null);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password });
+  const signUp = (email, password) => supabase.auth.signUp({ email, password });
+  const signOut = () => supabase.auth.signOut();
+
+  return (
+    <AuthContext.Provider value={{ user, authLoading, signIn, signUp, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function useAuth() {
+  return useContext(AuthContext);
+}
+
+function AuthScreen() {
+  const { signIn, signUp } = useAuth();
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg("");
+    setBusy(true);
+    const result = mode === "login"
+      ? await signIn(email.trim(), password)
+      : await signUp(email.trim(), password);
+    setBusy(false);
+    if (result.error) return setMsg(result.error.message);
+    if (mode === "signup") {
+      setMsg("Cadastro criado. Agora clique em Entrar.");
+      setMode("login");
+      setPassword("");
+    }
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
+      <form onSubmit={submit} style={{ width:"100%", maxWidth:"380px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)" }}>
+        <div style={{ textAlign:"center", marginBottom:"18px" }}>
+          <div style={{ fontSize:"30px", fontWeight:"900", color:"#0f172a" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
+          <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"700" }}>Gestao Inteligente</div>
+        </div>
+        <div style={{ display:"flex", background:"#f1f5f9", borderRadius:"14px", padding:"5px", marginBottom:"16px" }}>
+          <button type="button" onClick={()=>{setMode("login");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="login"?"#e94560":"transparent", color:mode==="login"?"#fff":"#64748b" }}>Entrar</button>
+          <button type="button" onClick={()=>{setMode("signup");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="signup"?"#e94560":"transparent", color:mode==="signup"?"#fff":"#64748b" }}>Cadastro</button>
+        </div>
+        <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>E-mail</label>
+        <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
+        <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
+          {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar acesso"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function AuthGate() {
+  const { user, authLoading, signOut } = useAuth();
+  if (authLoading) return <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0f172a", color:"#fff", fontWeight:"900" }}>Carregando ERPmini...</div>;
+  if (!user) return <AuthScreen />;
+  return (
+    <>
+      <button onClick={signOut} style={{ position:"fixed", top:"10px", right:"10px", zIndex:9999, border:"none", borderRadius:"999px", background:"#0f172a", color:"#fff", padding:"9px 13px", fontWeight:"900", boxShadow:"0 6px 20px rgba(0,0,0,0.25)" }}>Sair</button>
+      <ERPInner />
+    </>
+  );
+}
+
+
+const APP_VERSION = "AUTH-SUPABASE-ETAPA19-20260615-0005";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -802,7 +909,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
 }
 
 // --- MAIN --------------------------------------------------------------------
-export default function ERP() {
+function ERPInner() {
   const isMobile = useIsMobile();
   const [tab, setTab]             = useState("dashboard");
   const [caixaView, setCaixaView] = useState("resumo");
@@ -2927,7 +3034,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fincompra3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-auth1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -3049,5 +3156,14 @@ export default function ERP() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }
