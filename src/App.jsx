@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CAIXA-PRO-ETAPA17-FECHADO-20260614-2235";
+const APP_VERSION = "CAIXA-PRO-ETAPA17-TURNOS-20260614-2255";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1127,11 +1127,38 @@ export default function ERP() {
     return base;
   };
   const cashOpsOfDay = (key=dayKey()) => cashOps.filter(o=>isSameDay(o.date,key));
-  const cashOpeningOfDay = (key=dayKey()) => cashOpsOfDay(key).find(o=>o.type==="abertura");
-  const cashClosureOfDay = (key=dayKey()) => cashClosures.find(c=>c.day===key);
-  const isCashClosedToday = () => !!cashClosureOfDay(dayKey());
-  const cashOpsTotals = (key=dayKey()) => {
-    const ops = cashOpsOfDay(key);
+  const cashClosuresOfDay = (key=dayKey()) => cashClosures.filter(c=>c.day===key).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const lastCashClosureOfDay = (key=dayKey()) => cashClosuresOfDay(key)[0] || null;
+  const cashOpeningOfDay = (key=dayKey()) => {
+    const lastClose = lastCashClosureOfDay(key);
+    return cashOpsOfDay(key)
+      .filter(o=>o.type==="abertura" && (!lastClose || new Date(o.date) > new Date(lastClose.date)))
+      .sort((a,b)=>new Date(b.date)-new Date(a.date))[0] || null;
+  };
+  const isCashOpenNow = () => !!cashOpeningOfDay(dayKey());
+  const paymentsOfPeriod = (startIso, endIso=new Date().toISOString()) => {
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    return paymentsOfDay(dayKey()).filter(p=>{
+      const d = new Date(p.date);
+      return d >= start && d <= end;
+    });
+  };
+  const paymentSummaryPeriod = (startIso, endIso=new Date().toISOString()) => {
+    const base = { dinheiro:0, pix:0, debito:0, credito:0 };
+    paymentsOfPeriod(startIso, endIso).forEach(p => { base[p.method] = (base[p.method] || 0) + (parseFloat(p.amount)||0); });
+    return base;
+  };
+  const cashOpsTotals = (key=dayKey(), startIso=null, endIso=new Date().toISOString()) => {
+    let ops = cashOpsOfDay(key);
+    if (startIso) {
+      const start = new Date(startIso);
+      const end = new Date(endIso);
+      ops = ops.filter(o=>{
+        const d = new Date(o.date);
+        return d >= start && d <= end;
+      });
+    }
     return {
       abertura: ops.filter(o=>o.type==="abertura").reduce((s,o)=>s+(parseFloat(o.amount)||0),0),
       reforco: ops.filter(o=>o.type==="reforco").reduce((s,o)=>s+(parseFloat(o.amount)||0),0),
@@ -1140,22 +1167,23 @@ export default function ERP() {
     };
   };
   const expectedCashBalance = (key=dayKey()) => {
-    const byMethod = paymentSummary(key);
-    const ops = cashOpsTotals(key);
+    const opening = cashOpeningOfDay(key);
+    if (!opening) return 0;
+    const byMethod = paymentSummaryPeriod(opening.date);
+    const ops = cashOpsTotals(key, opening.date);
     return ops.abertura + (parseFloat(byMethod.dinheiro)||0) + ops.reforco - ops.sangria;
   };
   const openCash = () => {
     const value = parseMoney(cashOpeningValue);
-    if (isCashClosedToday()) { notify("Caixa de hoje ja foi fechado.", "error"); return; }
-    if (cashOpeningOfDay()) { notify("Caixa de hoje ja foi aberto.", "error"); return; }
+    if (cashOpeningOfDay()) { notify("Ja existe um caixa aberto. Feche antes de abrir outro turno.", "error"); return; }
     if (value < 0) { notify("Valor de abertura invalido.", "error"); return; }
-    setCashOps(prev=>[{ id:Date.now(), type:"abertura", amount:value, note:"Abertura de caixa", date:new Date().toISOString() }, ...prev]);
+    const turno = cashClosuresOfDay().length + 1;
+    setCashOps(prev=>[{ id:Date.now(), type:"abertura", amount:value, note:`Abertura de caixa - turno ${turno}`, date:new Date().toISOString() }, ...prev]);
     setCashOpeningValue("");
-    notify("Caixa aberto com sucesso!");
+    notify(`Caixa aberto para o turno ${turno}!`);
   };
   const addCashOperation = () => {
     const amount = parseMoney(cashOpForm.amount);
-    if (isCashClosedToday()) { notify("Caixa de hoje ja foi fechado. Movimentacao bloqueada.", "error"); return; }
     if (!cashOpeningOfDay()) { notify("Abra o caixa antes de registrar movimentacoes.", "error"); return; }
     if (amount<=0) { notify("Informe um valor valido.", "error"); return; }
     setCashOps(prev=>[{ id:Date.now(), type:cashOpForm.type, amount, note:cashOpForm.note || (cashOpForm.type==="sangria"?"Sangria":"Reforco"), date:new Date().toISOString() }, ...prev]);
@@ -1164,26 +1192,34 @@ export default function ERP() {
   };
   const closeCash = () => {
     const key = dayKey();
-    if (cashClosureOfDay(key)) { notify("Caixa de hoje ja foi fechado.", "error"); return; }
-    if (!cashOpeningOfDay(key)) { notify("Abra o caixa antes de fechar.", "error"); return; }
-    const byMethod = paymentSummary(key);
+    const opening = cashOpeningOfDay(key);
+    if (!opening) { notify("Abra o caixa antes de fechar.", "error"); return; }
+    const byMethod = paymentSummaryPeriod(opening.date);
     const entradas = Object.values(byMethod).reduce((a,b)=>a+b,0);
-    const vendasHoje = sales.filter(s=>isSameDay(s.date,key)).reduce((sum,s)=>sum+s.total,0);
-    const fiadoHoje = sales.filter(s=>isSameDay(s.date,key) && s.fiado).reduce((sum,s)=>sum+s.total,0);
-    const ops = cashOpsTotals(key);
+    const vendasPeriodo = sales.filter(s=>{
+      const d = new Date(s.date);
+      return isSameDay(s.date,key) && d >= new Date(opening.date);
+    });
+    const vendasHoje = vendasPeriodo.reduce((sum,s)=>sum+s.total,0);
+    const fiadoHoje = vendasPeriodo.filter(s=>s.fiado).reduce((sum,s)=>sum+s.total,0);
+    const ops = cashOpsTotals(key, opening.date);
     const expected = expectedCashBalance(key);
     const real = cashRealValue === "" ? expected : parseMoney(cashRealValue);
     const difference = real - expected;
+    const turno = cashClosuresOfDay(key).length + 1;
     const closure = {
       id:Date.now(),
       date:new Date().toISOString(),
       day:key,
+      turno,
+      openingId:opening.id,
+      openingDate:opening.date,
       byMethod,
       entradas,
       vendasHoje,
       fiadoHoje,
       fiadoAberto:fiadoTotal,
-      salesCount:sales.filter(s=>isSameDay(s.date,key)).length,
+      salesCount:vendasPeriodo.length,
       abertura:ops.abertura,
       reforco:ops.reforco,
       sangria:ops.sangria,
@@ -1194,7 +1230,7 @@ export default function ERP() {
     };
     setCashClosures(prev=>[closure,...prev]);
     setCashRealValue("");
-    notify(Math.abs(difference)<0.01 ? "Caixa fechado com sucesso!" : "Caixa fechado com diferenca.");
+    notify(Math.abs(difference)<0.01 ? `Turno ${turno} fechado com sucesso!` : `Turno ${turno} fechado com diferenca.`);
   };
 
   const monthKey = (d=new Date()) => new Date(d).toISOString().slice(0,7);
@@ -1697,7 +1733,8 @@ export default function ERP() {
           {lowStockProducts.length>0 && (
             <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px" }}>
               <div style={{ fontWeight:"900", color:"#991b1b" }}>{lowStockProducts.length} produto(s) com estoque baixo</div>
-              <div style={{ fontSize:"12px", color:"#991b1b" }}>Produtos com 5 unidades ou menos.</div>
+              <div style={{ fontSize:"12px", color:"#991b1b", marginBottom:"8px" }}>Produtos com 5 unidades ou menos.</div>
+              <button onClick={()=>setTab("estoque")} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px" }}>Ver estoque baixo</button>
             </div>
           )}
         </div>
@@ -1989,27 +2026,27 @@ export default function ERP() {
         <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💰 Caixa profissional</div>
 
-          {isCashClosedToday() ? (
-            <div style={{ background:"#f1f5f9", border:"1.5px solid #cbd5e1", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
-              <div style={{ fontWeight:"900", color:"#334155" }}>Caixa fechado hoje</div>
-              <div style={{ fontSize:"12px", color:"#475569" }}>
-                Fechado em: {fmtDate(cashClosureOfDay()?.date)} | Diferença: 
-                <strong style={{ color:Math.abs(cashClosureOfDay()?.diferenca||0)<0.01?"#16a34a":"#dc2626" }}> {fmtCur(cashClosureOfDay()?.diferenca||0)}</strong>
+          {!cashOpeningOfDay() ? (
+            <div style={{ background:lastCashClosureOfDay()?"#f1f5f9":"#fff7ed", border:`1.5px solid ${lastCashClosureOfDay()?"#cbd5e1":"#fdba74"}`, borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+              <div style={{ fontWeight:"900", color:lastCashClosureOfDay()?"#334155":"#9a3412", marginBottom:"6px" }}>
+                {lastCashClosureOfDay() ? "Ultimo turno fechado. Pode abrir novo turno." : "Caixa ainda nao aberto hoje"}
               </div>
-            </div>
-          ) : !cashOpeningOfDay() ? (
-            <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
-              <div style={{ fontWeight:"900", color:"#9a3412", marginBottom:"6px" }}>Caixa ainda nao aberto hoje</div>
-              <div style={{ fontSize:"12px", color:"#9a3412", marginBottom:"10px" }}>Informe quanto tem de dinheiro no caixa para troco.</div>
+              {lastCashClosureOfDay() && (
+                <div style={{ fontSize:"12px", color:"#475569", marginBottom:"8px" }}>
+                  Ultimo fechamento: {fmtDate(lastCashClosureOfDay()?.date)} | Diferença:
+                  <strong style={{ color:Math.abs(lastCashClosureOfDay()?.diferenca||0)<0.01?"#16a34a":"#dc2626" }}> {fmtCur(lastCashClosureOfDay()?.diferenca||0)}</strong>
+                </div>
+              )}
+              <div style={{ fontSize:"12px", color:lastCashClosureOfDay()?"#475569":"#9a3412", marginBottom:"10px" }}>Informe quanto tem de dinheiro no caixa para troco.</div>
               <div style={{ display:"flex", gap:"8px" }}>
                 <input style={{ ...inp, flex:1, margin:0 }} inputMode="decimal" placeholder="Saldo inicial" value={cashOpeningValue} onChange={e=>setCashOpeningValue(e.target.value)} />
-                <button style={{ ...btn("#16a34a"), padding:"12px 14px" }} onClick={openCash}>Abrir</button>
+                <button style={{ ...btn("#16a34a"), padding:"12px 14px" }} onClick={openCash}>Abrir turno</button>
               </div>
             </div>
           ) : (
             <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
-              <div style={{ fontWeight:"900", color:"#166534" }}>Caixa aberto</div>
-              <div style={{ fontSize:"12px", color:"#166534" }}>Abertura: {fmtCur(cashOpsTotals().abertura)}</div>
+              <div style={{ fontWeight:"900", color:"#166534" }}>Caixa aberto - turno {cashClosuresOfDay().length + 1}</div>
+              <div style={{ fontSize:"12px", color:"#166534" }}>Abertura: {fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).abertura)}</div>
             </div>
           )}
 
@@ -2029,15 +2066,15 @@ export default function ERP() {
           <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
             <div style={{ background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px" }}>
               <div style={{ fontSize:"11px", color:"#166534", fontWeight:"800" }}>Abertura</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#16a34a" }}>{fmtCur(cashOpsTotals().abertura)}</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#16a34a" }}>{fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).abertura)}</div>
             </div>
             <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"10px" }}>
               <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Reforcos</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#2563eb" }}>{fmtCur(cashOpsTotals().reforco)}</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#2563eb" }}>{fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).reforco)}</div>
             </div>
             <div style={{ background:"#fef2f2", border:"1.5px solid #fecaca", borderRadius:"12px", padding:"10px" }}>
               <div style={{ fontSize:"11px", color:"#991b1b", fontWeight:"800" }}>Sangrias</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#dc2626" }}>{fmtCur(cashOpsTotals().sangria)}</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#dc2626" }}>{fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).sangria)}</div>
             </div>
             <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
               <div style={{ fontSize:"11px", color:"#334155", fontWeight:"800" }}>Esperado</div>
@@ -2064,8 +2101,8 @@ export default function ERP() {
             <div style={{ fontSize:"12px", color:"#64748b" }}>Deixe em branco para fechar com o saldo esperado.</div>
           </div>
 
-          <button style={{ ...btn(isCashClosedToday()?"#94a3b8":"#16a34a"), width:"100%", opacity:isCashClosedToday()?0.65:1 }} onClick={closeCash}>
-            {isCashClosedToday() ? "✅ Caixa ja fechado hoje" : "✅ Fechar caixa de hoje"}
+          <button style={{ ...btn(cashOpeningOfDay()?"#16a34a":"#94a3b8"), width:"100%", opacity:cashOpeningOfDay()?1:0.65 }} onClick={closeCash}>
+            {cashOpeningOfDay() ? "✅ Fechar turno atual" : "✅ Abra um turno para fechar"}
           </button>
         </div>
 
@@ -2416,7 +2453,7 @@ export default function ERP() {
               <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", marginBottom:"8px" }}>
                 <div>
                   <div style={{ fontWeight:"900" }}>{fmtDate(c.date)}</div>
-                  <div style={{ fontSize:"12px", color:"#64748b" }}>{c.salesCount} transacoes | Registro bloqueado</div>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>Turno {c.turno || 1} | {c.salesCount} transacoes | Registro bloqueado</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
@@ -2792,7 +2829,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixapro2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixapro3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
