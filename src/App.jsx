@@ -6,6 +6,103 @@ const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_PAIUP7LETrzQfZLMWcpsfw_8v8IeXTx";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const CLOUD_TABLE = "erpmini_cloud_data";
+const CLOUD_KEYS = [
+  "erpmini_activation_key",
+  "erpmini_backup_history",
+  "erpmini_backup_last_date",
+  "erpmini_backup_latest",
+  "erpmini_cash_closures",
+  "erpmini_cash_ops",
+  "erpmini_clients",
+  "erpmini_payables",
+  "erpmini_products",
+  "erpmini_receivables",
+  "erpmini_salecounter",
+  "erpmini_sales",
+  "erpmini_storename"
+];
+
+let cloudUserId = null;
+let cloudSaveTimer = null;
+let cloudApplyingRemote = false;
+
+function readLocalJsonSafe(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectCloudPayload() {
+  const payload = {};
+  CLOUD_KEYS.forEach((key) => {
+    payload[key] = readLocalJsonSafe(key);
+  });
+  payload.__saved_at = new Date().toISOString();
+  payload.__app_version = APP_VERSION;
+  return payload;
+}
+
+async function uploadCloudSnapshotNow() {
+  if (!cloudUserId || cloudApplyingRemote) return;
+  try {
+    const payload = collectCloudPayload();
+    await supabase
+      .from(CLOUD_TABLE)
+      .upsert(
+        { user_id: cloudUserId, data: payload, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" }
+      );
+  } catch (err) {
+    console.warn("ERPmini cloud save error:", err);
+  }
+}
+
+function scheduleCloudSave() {
+  if (!cloudUserId || cloudApplyingRemote) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(uploadCloudSnapshotNow, 900);
+}
+
+async function downloadCloudSnapshot(userId) {
+  if (!userId) return { ok: false, message: "Usuario nao identificado." };
+
+  cloudUserId = userId;
+
+  const { data, error } = await supabase
+    .from(CLOUD_TABLE)
+    .select("data, updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("ERPmini cloud load error:", error);
+    return { ok: false, message: error.message };
+  }
+
+  if (!data?.data) {
+    await uploadCloudSnapshotNow();
+    return { ok: true, message: "Primeiro backup enviado para nuvem." };
+  }
+
+  cloudApplyingRemote = true;
+  try {
+    CLOUD_KEYS.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(data.data, key) && data.data[key] !== null) {
+        localStorage.setItem(key, JSON.stringify(data.data[key]));
+      }
+    });
+  } finally {
+    cloudApplyingRemote = false;
+  }
+
+  return { ok: true, message: "Dados carregados da nuvem." };
+}
+
 const AuthContext = createContext(null);
 
 function AuthProvider({ children }) {
@@ -96,25 +193,89 @@ function AuthScreen() {
 
 function AuthGate() {
   const { user, authLoading, signOut } = useAuth();
-  if (authLoading) return <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0f172a", color:"#fff", fontWeight:"900" }}>Carregando ERPmini...</div>;
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudMsg, setCloudMsg] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+
+    async function bootCloud() {
+      if (!user) {
+        cloudUserId = null;
+        setCloudReady(false);
+        setCloudMsg("");
+        return;
+      }
+
+      setCloudReady(false);
+      setCloudMsg("Sincronizando nuvem...");
+      const result = await downloadCloudSnapshot(user.id);
+
+      if (!alive) return;
+
+      setCloudMsg(result.ok ? result.message : "Sem conexao com a nuvem. Usando backup local.");
+      setCloudReady(true);
+    }
+
+    bootCloud();
+
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  const handleSignOut = async () => {
+    await uploadCloudSnapshotNow();
+    cloudUserId = null;
+    await signOut();
+  };
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0f172a", color:"#fff", fontWeight:"900" }}>
+        Carregando ERPmini...
+      </div>
+    );
+  }
+
   if (!user) return <AuthScreen />;
+
+  if (!cloudReady) {
+    return (
+      <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"12px", background:"#0f172a", color:"#fff", fontWeight:"900" }}>
+        <div>ERPmini</div>
+        <div style={{ fontSize:"13px", color:"#cbd5e1" }}>{cloudMsg || "Carregando dados..."}</div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <button onClick={signOut} style={{ position:"fixed", top:"10px", right:"10px", zIndex:9999, border:"none", borderRadius:"999px", background:"#0f172a", color:"#fff", padding:"9px 13px", fontWeight:"900", boxShadow:"0 6px 20px rgba(0,0,0,0.25)" }}>Sair</button>
+      <div style={{ position:"fixed", top:"10px", right:"10px", zIndex:9999, display:"flex", gap:"8px", alignItems:"center" }}>
+        <span style={{ borderRadius:"999px", background:"#16a34a", color:"#fff", padding:"8px 11px", fontWeight:"900", fontSize:"12px", boxShadow:"0 6px 20px rgba(0,0,0,0.25)" }}>
+          Nuvem OK
+        </span>
+        <button onClick={handleSignOut} style={{ border:"none", borderRadius:"999px", background:"#0f172a", color:"#fff", padding:"9px 13px", fontWeight:"900", boxShadow:"0 6px 20px rgba(0,0,0,0.25)" }}>
+          Sair
+        </button>
+      </div>
       <ERPInner />
     </>
   );
 }
 
 
-const APP_VERSION = "AUTH-SUPABASE-ETAPA19-20260615-0005";
+const APP_VERSION = "CLOUD-SYNC-ETAPA20-20260615-1735";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 function saveLS(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    if (CLOUD_KEYS.includes(key)) scheduleCloudSave();
+  } catch {}
 }
 
 // --- Responsive hook ---------------------------------------------------------
@@ -3034,7 +3195,7 @@ function ERPInner() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-auth1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-cloud1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
