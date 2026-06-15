@@ -166,7 +166,7 @@ async function checkLicenseByEmail(email) {
   }
 }
 
-function LicenseBlockedScreen({ info, onLogout }) {
+function SupabaseLicenseBlockedScreen({ info, onLogout }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
       <div style={{ width:"100%", maxWidth:"420px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)", textAlign:"center" }}>
@@ -352,7 +352,7 @@ function AuthGate() {
   }
 
   if (!licenseInfo?.ok) {
-    return <LicenseBlockedScreen info={licenseInfo} onLogout={handleSignOut} />;
+    return <SupabaseLicenseBlockedScreen info={licenseInfo} onLogout={handleSignOut} />;
   }
 
   if (!cloudReady) {
