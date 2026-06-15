@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CREDIARIO-ETAPA15-20260614-2110";
+const APP_VERSION = "CARTAO-CREDITO-ETAPA16-20260614-2135";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -255,6 +255,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const [installmentCount, setInstallmentCount] = useState("2");
   const [installmentStartOption, setInstallmentStartOption] = useState("today");
   const [installmentFirstDueDate, setInstallmentFirstDueDate] = useState("");
+  const [creditInstallments, setCreditInstallments] = useState("1");
 
   const paidSoFar = mixedPayments.reduce((s,p) => s+p.amount, 0);
   const remaining = total - paidSoFar;
@@ -273,6 +274,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
     setSelectedMethod(key);
     if (isReceive) { setStep("receive_amount"); setAmountPaid(total.toFixed(2)); return; }
     if (key==="dinheiro") { setStep("dinheiro"); setAmountPaid(""); }
+    else if (key==="credito") { setStep("credito_cartao"); setCreditInstallments("1"); }
     else if (key==="fiado") { setStep("fiado"); setFiadoClientId(clients[0]?.id ? String(clients[0].id) : ""); setFiadoDueDate(""); }
     else if (key==="crediario") {
       setStep("parcelado");
@@ -304,6 +306,11 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const confirmMixed = () => {
     const ch = mixedPayments.find(p=>p.method==="dinheiro") ? Math.max(0,paidSoFar-total) : 0;
     onConfirm({ payments:mixedPayments, total, change:ch });
+  };
+
+  const confirmCreditCard = () => {
+    const n = Math.max(1, Math.min(12, parseInt(creditInstallments,10)||1));
+    onConfirm({ payments:[{ method:"credito", amount:total, installments:n }], total, change:0 });
   };
 
   const confirmFiado = () => {
@@ -382,6 +389,42 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
               <span style={{ fontSize:"22px" }}>Trocar</span>
               <span style={{ fontSize:"14px", fontWeight:"700", color:"#92400e" }}>Pagamento Misto</span>
             </button>}
+          </>
+        )}
+
+
+
+        {step==="credito_cartao" && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:"16px" }}>
+              <div style={{ fontSize:"40px" }}>Cartao</div>
+              <div style={{ fontWeight:"700", fontSize:"16px" }}>Cartao Credito</div>
+              <div style={{ fontSize:"13px", color:"#64748b" }}>Venda no cartao, com ou sem parcelamento</div>
+            </div>
+
+            <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Parcelamento no cartao</label>
+            <select value={creditInstallments} onChange={e=>setCreditInstallments(e.target.value)}
+              style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box", marginBottom:"12px" }}>
+              {[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>(
+                <option key={n} value={n}>{n}x de {fmtCur(total/n)}{n===1 ? " a vista" : ""}</option>
+              ))}
+            </select>
+
+            <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"12px", marginBottom:"14px" }}>
+              <div style={{ fontWeight:"900", color:"#1d4ed8", marginBottom:"6px" }}>Resumo do cartao</div>
+              <div style={{ fontSize:"13px", color:"#1e40af" }}>Total: {fmtCur(total)}</div>
+              <div style={{ fontSize:"13px", color:"#1e40af" }}>{creditInstallments}x de {fmtCur(total/(parseInt(creditInstallments,10)||1))}</div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>Entra no relatorio como Cartao Credito.</div>
+            </div>
+
+            <div style={{ display:"flex", gap:"10px" }}>
+              <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
+              <button onClick={confirmCreditCard}
+                style={{ flex:1, padding:"14px", background:"#2563eb", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800", fontSize:"15px" }}>
+                Confirmar cartao
+              </button>
+            </div>
           </>
         )}
 
@@ -2611,7 +2654,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-cred1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-card1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
