@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "FINANCEIRO-COMPRA-ETAPA18-FIX-20260614-2325";
+const APP_VERSION = "FINANCEIRO-COMPRA-ETAPA18-NF-CLIENTE-20260614-2340";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1409,7 +1409,9 @@ export default function ERP() {
   };
 
 
-  const cleanPurchaseItems = () => purchaseItems
+  const cleanPurchaseItems = () => {
+    if (!String(newPayable.document||"").trim()) return [];
+    return purchaseItems
     .map(it=>({
       productId: it.productId,
       name: String(it.name||"").trim(),
@@ -1417,6 +1419,7 @@ export default function ERP() {
       cost: parseMoney(it.cost)
     }))
     .filter(it=>it.name && it.qty>0);
+  };
 
   const purchaseItemsTotal = () => cleanPurchaseItems().reduce((sum,it)=>sum+(it.qty*it.cost),0);
 
@@ -1658,7 +1661,7 @@ export default function ERP() {
     { key:"estoque", icon:"📦", label:"Estoque" },
     { key:"vendas",  icon:"📊", label:"Vendas"  },
     { key:"caixa",   icon:"💰", label:"Caixa"   },
-    { key:"fiado",   icon:"🤝", label:"Fiado"   },
+    { key:"fiado",   icon:"👥", label:"Cliente" },
     { key:"config",  icon:"⚙️", label:"Config"  },
   ];
 
@@ -1715,7 +1718,7 @@ export default function ERP() {
           ["Vendas hoje", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
           ["Vendas do mes", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
           ["Ticket medio hoje", fmtCur(ticketToday), "linear-gradient(135deg,#6366f1,#4338ca)"],
-          ["Fiado aberto", fmtCur(fiadoTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
+          ["Cliente aberto", fmtCur(fiadoTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
         ].map(([l,v,c],i)=>(
           <div key={i} style={{ background:c, borderRadius:"14px", padding:"15px", color:"#fff" }}>
             <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
@@ -2062,8 +2065,8 @@ export default function ERP() {
           {[
             ["Entradas hoje", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
             ["Vendas hoje", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
-            ["Fiado vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
-            ["Recebido fiado", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
+            ["Crediario vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
+            ["Recebido crediario", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ].map(([l,v,c],i)=>(
             <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
               <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
@@ -2333,34 +2336,43 @@ export default function ERP() {
             </div>
             <input style={{ ...inp, marginBottom:"10px" }} placeholder="Descricao / observacao" value={newPayable.description} onChange={e=>setNewPayable({...newPayable,description:e.target.value})} />
 
-            <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"14px", padding:"12px", marginBottom:"10px" }}>
+            <div style={{ background:String(newPayable.document||"").trim()?"#f8fafc":"#fff7ed", border:`1.5px solid ${String(newPayable.document||"").trim()?"#e2e8f0":"#fdba74"}`, borderRadius:"14px", padding:"12px", marginBottom:"10px" }}>
               <div style={{ fontWeight:"900", color:"#334155", marginBottom:"6px" }}>📦 Itens comprados / entrada no estoque</div>
-              <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"10px" }}>Opcional. Se preencher, o sistema soma as quantidades ao estoque.</div>
-              {purchaseItems.map((it,idx)=>(
-                <div key={idx} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
-                  <select value={it.productId} onChange={e=>{
-                    const prod = products.find(p=>String(p.id)===String(e.target.value));
-                    updatePurchaseItem(idx,{ productId:e.target.value, name:prod?.name || "", cost:it.cost || (prod?.price ? String(prod.price) : "") });
-                  }} style={{ ...inp, marginBottom:"8px" }}>
-                    <option value="">Novo item ou selecione produto existente</option>
-                    {products.map(p=><option key={p.id} value={p.id}>{p.name} - estoque: {p.stock}</option>)}
-                  </select>
-                  <input style={{ ...inp, marginBottom:"8px" }} placeholder="Nome do item comprado" value={it.name} onChange={e=>updatePurchaseItem(idx,{ name:e.target.value, productId:"" })} />
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
-                    <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Quantidade" value={it.qty} onChange={e=>updatePurchaseItem(idx,{ qty:e.target.value })} />
-                    <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Custo unit." value={it.cost} onChange={e=>updatePurchaseItem(idx,{ cost:e.target.value })} />
-                  </div>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"8px" }}>
-                    <div style={{ fontSize:"12px", color:"#64748b" }}>Subtotal: <strong>{fmtCur((parseFloat(String(it.qty||"").replace(",","."))||0) * parseMoney(it.cost))}</strong></div>
-                    <button onClick={()=>removePurchaseItemRow(idx)} style={{ ...btn("#ef4444"), padding:"7px 10px", fontSize:"12px" }}>Remover</button>
-                  </div>
+              {!String(newPayable.document||"").trim() ? (
+                <div>
+                  <div style={{ fontSize:"13px", color:"#9a3412", fontWeight:"800", marginBottom:"4px" }}>Informe a NF / boleto / documento primeiro.</div>
+                  <div style={{ fontSize:"12px", color:"#9a3412" }}>A entrada de produtos fica bloqueada sem documento, para evitar cadastro de estoque fora da compra.</div>
                 </div>
-              ))}
-              <button onClick={addPurchaseItemRow} style={{ ...btn("#64748b"), width:"100%", padding:"9px", fontSize:"13px" }}>+ Adicionar outro item</button>
-              {purchaseItemsTotal()>0 && (
-                <div style={{ marginTop:"10px", background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px", display:"flex", justifyContent:"space-between" }}>
-                  <strong>Total dos itens</strong><strong style={{ color:"#16a34a" }}>{fmtCur(purchaseItemsTotal())}</strong>
-                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"10px" }}>Opcional. Se preencher, o sistema soma as quantidades ao estoque.</div>
+                  {purchaseItems.map((it,idx)=>(
+                    <div key={idx} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+                      <select value={it.productId} onChange={e=>{
+                        const prod = products.find(p=>String(p.id)===String(e.target.value));
+                        updatePurchaseItem(idx,{ productId:e.target.value, name:prod?.name || "", cost:it.cost || (prod?.price ? String(prod.price) : "") });
+                      }} style={{ ...inp, marginBottom:"8px" }}>
+                        <option value="">Novo item ou selecione produto existente</option>
+                        {products.map(p=><option key={p.id} value={p.id}>{p.name} - estoque: {p.stock}</option>)}
+                      </select>
+                      <input style={{ ...inp, marginBottom:"8px" }} placeholder="Nome do item comprado" value={it.name} onChange={e=>updatePurchaseItem(idx,{ name:e.target.value, productId:"" })} />
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                        <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Quantidade" value={it.qty} onChange={e=>updatePurchaseItem(idx,{ qty:e.target.value })} />
+                        <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Custo unit." value={it.cost} onChange={e=>updatePurchaseItem(idx,{ cost:e.target.value })} />
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"8px" }}>
+                        <div style={{ fontSize:"12px", color:"#64748b" }}>Subtotal: <strong>{fmtCur((parseFloat(String(it.qty||"").replace(",","."))||0) * parseMoney(it.cost))}</strong></div>
+                        <button onClick={()=>removePurchaseItemRow(idx)} style={{ ...btn("#ef4444"), padding:"7px 10px", fontSize:"12px" }}>Remover</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={addPurchaseItemRow} style={{ ...btn("#64748b"), width:"100%", padding:"9px", fontSize:"13px" }}>+ Adicionar outro item</button>
+                  {purchaseItemsTotal()>0 && (
+                    <div style={{ marginTop:"10px", background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px", display:"flex", justifyContent:"space-between" }}>
+                      <strong>Total dos itens</strong><strong style={{ color:"#16a34a" }}>{fmtCur(purchaseItemsTotal())}</strong>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -2915,7 +2927,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fincompra2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-fincompra3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
