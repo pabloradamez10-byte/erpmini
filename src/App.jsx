@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "RECEBER-ETAPA14-20260614-2010";
+const APP_VERSION = "CREDIARIO-ETAPA15-20260614-2110";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -225,11 +225,10 @@ const genBarcode = () => String(Math.floor(1000000000000 + Math.random() * 90000
 
 const PAYMENT_METHODS = [
   { key:"dinheiro", label:"Dinheiro", icon:"Dinheiro", color:"#16a34a", light:"#f0fdf4" },
-  { key:"credito",  label:"Credito",  icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
-  { key:"credito_parcelado", label:"Cred. Parcelado", icon:"Parcelado", color:"#0ea5e9", light:"#f0f9ff" },
-  { key:"debito",   label:"Debito",   icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
-  { key:"pix",      label:"PIX",      icon:"PIX", color:"#0891b2", light:"#ecfeff" },
-  { key:"fiado",    label:"Fiado",    icon:"🤝", color:"#f59e0b", light:"#fffbeb" },
+  { key:"pix",      label:"PIX", icon:"PIX", color:"#0891b2", light:"#ecfeff" },
+  { key:"debito",   label:"Cartao Debito", icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
+  { key:"credito",  label:"Cartao Credito", icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
+  { key:"crediario", label:"Crediario", icon:"Crediario", color:"#f59e0b", light:"#fffbeb" },
 ];
 
 const initialProducts = [
@@ -254,6 +253,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const [installmentClientId, setInstallmentClientId] = useState("");
   const [installmentClientName, setInstallmentClientName] = useState("");
   const [installmentCount, setInstallmentCount] = useState("2");
+  const [installmentStartOption, setInstallmentStartOption] = useState("today");
   const [installmentFirstDueDate, setInstallmentFirstDueDate] = useState("");
 
   const paidSoFar = mixedPayments.reduce((s,p) => s+p.amount, 0);
@@ -262,6 +262,11 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   const mInfo     = (k) => PAYMENT_METHODS.find(m=>m.key===k);
   const isReceive = mode==="receiveFiado";
   const todayISO = () => new Date().toISOString().slice(0,10);
+  const addDaysISO = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate()+days);
+    return d.toISOString().slice(0,10);
+  };
   const isPastDate = (dateStr) => dateStr && dateStr < todayISO();
 
   const handleMethod = (key) => {
@@ -269,11 +274,12 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
     if (isReceive) { setStep("receive_amount"); setAmountPaid(total.toFixed(2)); return; }
     if (key==="dinheiro") { setStep("dinheiro"); setAmountPaid(""); }
     else if (key==="fiado") { setStep("fiado"); setFiadoClientId(clients[0]?.id ? String(clients[0].id) : ""); setFiadoDueDate(""); }
-    else if (key==="credito_parcelado") {
+    else if (key==="crediario") {
       setStep("parcelado");
       setInstallmentClientId(clients[0]?.id ? String(clients[0].id) : "");
       setInstallmentClientName("");
-      setInstallmentCount("2");
+      setInstallmentCount("1");
+      setInstallmentStartOption("today");
       setInstallmentFirstDueDate(todayISO());
     }
     else if (key==="misto") { setStep("mixed"); setMixedPayments([]); setMixedMethod(null); setMixedAmount(""); }
@@ -308,17 +314,17 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
   };
 
   const confirmInstallments = () => {
-    const n = Math.max(2, Math.min(12, parseInt(installmentCount,10)||2));
+    const n = Math.max(1, Math.min(12, parseInt(installmentCount,10)||1));
     const selectedClient = clients.find(c=>String(c.id)===String(installmentClientId));
     const clientName = (selectedClient?.name || installmentClientName || "").trim();
     if (!clientName) return;
     if (!installmentFirstDueDate || isPastDate(installmentFirstDueDate)) return;
     onConfirm({
-      payments:[{ method:"credito_parcelado", amount:total, installments:n }],
+      payments:[{ method:"crediario", amount:total, installments:n }],
       total,
       change:0,
       receivablePlan:{
-        type:"credito_parcelado",
+        type:"crediario",
         clientId:selectedClient?.id || null,
         clientName,
         installments:n,
@@ -363,7 +369,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
           <>
             <div style={{ fontSize:"12px", fontWeight:"700", color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:"12px" }}>Forma de Pagamento</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"10px" }}>
-              {PAYMENT_METHODS.filter(m=>!isReceive || m.key!=="fiado").map(m=>(
+              {PAYMENT_METHODS.filter(m=>!isReceive || m.key!=="crediario").map(m=>(
                 <button key={m.key} onClick={()=>handleMethod(m.key)}
                   style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"18px 10px", borderRadius:"14px", border:`2px solid ${m.color}33`, background:m.light, cursor:"pointer", gap:"6px" }}>
                   <span style={{ fontSize:"28px" }}>{m.icon}</span>
@@ -413,9 +419,9 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
         {step==="parcelado" && (
           <>
             <div style={{ textAlign:"center", marginBottom:"16px" }}>
-              <div style={{ fontSize:"40px" }}>Parcelado</div>
-              <div style={{ fontWeight:"700", fontSize:"16px" }}>Credito parcelado</div>
-              <div style={{ fontSize:"13px", color:"#64748b" }}>Gera automaticamente contas a receber</div>
+              <div style={{ fontSize:"40px" }}>Crediario</div>
+              <div style={{ fontWeight:"700", fontSize:"16px" }}>Venda para receber depois</div>
+              <div style={{ fontSize:"13px", color:"#64748b" }}>1x hoje, 1x futuro ou parcelado</div>
             </div>
 
             {clients.length>0 ? (
@@ -440,20 +446,34 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                 <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Parcelas</label>
                 <select value={installmentCount} onChange={e=>setInstallmentCount(e.target.value)}
                   style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box" }}>
-                  {[2,3,4,5,6,7,8,9,10,11,12].map(n=><option key={n} value={n}>{n}x de {fmtCur(total/n)}</option>)}
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n=><option key={n} value={n}>{n}x de {fmtCur(total/n)}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>1º vencimento</label>
-                <input type="date" min={todayISO()} value={installmentFirstDueDate} onChange={e=>setInstallmentFirstDueDate(e.target.value)}
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Quando receber a 1ª parcela?</label>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", marginBottom:"8px" }}>
+                  <button type="button" onClick={()=>{setInstallmentStartOption("today");setInstallmentFirstDueDate(todayISO());}}
+                    style={{ padding:"10px", border:"none", borderRadius:"10px", background:installmentStartOption==="today"?"#16a34a":"#f1f5f9", color:installmentStartOption==="today"?"#fff":"#64748b", fontWeight:"900" }}>
+                    Hoje
+                  </button>
+                  <button type="button" onClick={()=>{setInstallmentStartOption("30days");setInstallmentFirstDueDate(addDaysISO(30));}}
+                    style={{ padding:"10px", border:"none", borderRadius:"10px", background:installmentStartOption==="30days"?"#0ea5e9":"#f1f5f9", color:installmentStartOption==="30days"?"#fff":"#64748b", fontWeight:"900" }}>
+                    30 dias
+                  </button>
+                </div>
+                <input type="date" min={todayISO()} value={installmentFirstDueDate} onChange={e=>{setInstallmentStartOption("custom");setInstallmentFirstDueDate(e.target.value);}}
                   style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", fontSize:"16px", boxSizing:"border-box" }} />
               </div>
             </div>
 
             <div style={{ background:"#f0f9ff", border:"1.5px solid #7dd3fc", borderRadius:"12px", padding:"12px", marginBottom:"14px" }}>
-              <div style={{ fontWeight:"900", color:"#0369a1", marginBottom:"6px" }}>Resumo do parcelamento</div>
-              <div style={{ fontSize:"13px", color:"#075985" }}>{installmentCount} parcela(s) de {fmtCur(total/(parseInt(installmentCount,10)||2))}</div>
-              <div style={{ fontSize:"12px", color:"#64748b" }}>As parcelas entrarao em Caixa / Financeiro / A receber.</div>
+              <div style={{ fontWeight:"900", color:"#0369a1", marginBottom:"6px" }}>Resumo do crediario</div>
+              <div style={{ fontSize:"13px", color:"#075985" }}>{installmentCount} vez(es) de {fmtCur(total/(parseInt(installmentCount,10)||2))}</div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>
+                1ª parcela: {installmentFirstDueDate ? new Date(installmentFirstDueDate+"T00:00:00").toLocaleDateString("pt-BR") : "-"}.
+                {installmentStartOption==="today" ? " Recebe hoje." : installmentStartOption==="30days" ? " Primeira em 30 dias." : " Data personalizada."}
+              </div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>O recebimento entrara em Caixa / Financeiro / A receber.</div>
             </div>
 
             <div style={{ display:"flex", gap:"10px" }}>
@@ -461,7 +481,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                 style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Voltar</button>
               <button onClick={confirmInstallments}
                 style={{ flex:1, padding:"14px", background:"#0ea5e9", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"800", fontSize:"15px" }}>
-                Confirmar parcelado
+                Confirmar crediario
               </button>
             </div>
           </>
@@ -618,7 +638,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                   <span style={{ fontWeight:"800", fontSize:"18px", color:"#d97706" }}>{fmtCur(remaining)}</span>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
-                  {PAYMENT_METHODS.filter(m=>!isReceive || m.key!=="fiado").map(m=>(
+                  {PAYMENT_METHODS.filter(m=>m.key!=="crediario").map(m=>(
                     <button key={m.key} onClick={()=>setMixedMethod(m.key)}
                       style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"10px 4px", borderRadius:"10px", border:`2px solid ${mixedMethod===m.key?m.color:m.color+"33"}`, background:mixedMethod===m.key?m.light:"#fff", cursor:"pointer", gap:"4px" }}>
                       <span style={{ fontSize:"20px" }}>{m.icon}</span>
@@ -1039,7 +1059,7 @@ export default function ERP() {
     sales.forEach(s => {
       if (isSameDay(s.date, key)) {
         (s.payments || []).forEach(p => {
-          if (p.method !== "fiado" && p.method !== "credito_parcelado") list.push({ ...p, origin:"Venda", saleId:s.id, date:s.date, clientName:s.fiado?.clientName || "" });
+          if (p.method !== "fiado" && p.method !== "credito_parcelado" && p.method !== "crediario") list.push({ ...p, origin:"Venda", saleId:s.id, date:s.date, clientName:s.fiado?.clientName || "" });
         });
       }
       if (s.fiado && s.fiado.payments) {
@@ -1272,13 +1292,13 @@ export default function ERP() {
         clientName:receivablePlan.clientName,
         clientId:receivablePlan.clientId,
         document:`Venda #${sale.id}`,
-        description:"Credito parcelado",
+        description:"Crediario",
         amount:t,
         dueDate:receivablePlan.firstDueDate,
-        category:"Venda parcelada",
+        category:"Crediario",
         installments:receivablePlan.installments,
         saleId:sale.id,
-        source:"credito_parcelado"
+        source:"crediario"
       });
     }
     setSales(prev=>[sale,...prev]);
@@ -2591,7 +2611,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-rec1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-cred1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
