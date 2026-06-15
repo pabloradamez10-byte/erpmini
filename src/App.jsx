@@ -27,6 +27,30 @@ const CLOUD_KEYS = [
 let cloudUserId = null;
 let cloudSaveTimer = null;
 let cloudApplyingRemote = false;
+const CLOUD_LAST_USER_KEY = "erpmini_last_cloud_user";
+
+function clearCloudLocalKeys() {
+  cloudApplyingRemote = true;
+  try {
+    CLOUD_KEYS.forEach((key) => localStorage.removeItem(key));
+  } finally {
+    cloudApplyingRemote = false;
+  }
+}
+
+function markCurrentCloudUser(userId) {
+  try {
+    localStorage.setItem(CLOUD_LAST_USER_KEY, userId || "");
+  } catch {}
+}
+
+function getLastCloudUser() {
+  try {
+    return localStorage.getItem(CLOUD_LAST_USER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
 
 function readLocalJsonSafe(key) {
   try {
@@ -71,7 +95,14 @@ function scheduleCloudSave() {
 async function downloadCloudSnapshot(userId) {
   if (!userId) return { ok: false, message: "Usuario nao identificado." };
 
+  const lastUser = getLastCloudUser();
+  const changedUser = lastUser && lastUser !== userId;
+
   cloudUserId = userId;
+
+  if (changedUser) {
+    clearCloudLocalKeys();
+  }
 
   const { data, error } = await supabase
     .from(CLOUD_TABLE)
@@ -85,110 +116,26 @@ async function downloadCloudSnapshot(userId) {
   }
 
   if (!data?.data) {
+    clearCloudLocalKeys();
+    markCurrentCloudUser(userId);
     await uploadCloudSnapshotNow();
-    return { ok: true, message: "Primeiro backup enviado para nuvem." };
+    return { ok: true, message: "Usuario novo iniciado sem dados." };
   }
 
   cloudApplyingRemote = true;
   try {
+    CLOUD_KEYS.forEach((key) => localStorage.removeItem(key));
     CLOUD_KEYS.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(data.data, key) && data.data[key] !== null) {
         localStorage.setItem(key, JSON.stringify(data.data[key]));
       }
     });
+    markCurrentCloudUser(userId);
   } finally {
     cloudApplyingRemote = false;
   }
 
   return { ok: true, message: "Dados carregados da nuvem." };
-}
-
-const AuthContext = createContext(null);
-
-function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setUser(data.session?.user || null);
-      setAuthLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      setAuthLoading(false);
-    });
-
-    return () => {
-      mounted = false;
-      listener?.subscription?.unsubscribe();
-    };
-  }, []);
-
-  const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password });
-  const signUp = (email, password) => supabase.auth.signUp({ email, password });
-  const signOut = () => supabase.auth.signOut();
-
-  return (
-    <AuthContext.Provider value={{ user, authLoading, signIn, signUp, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-function useAuth() {
-  return useContext(AuthContext);
-}
-
-function AuthScreen() {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setMsg("");
-    setBusy(true);
-    const result = mode === "login"
-      ? await signIn(email.trim(), password)
-      : await signUp(email.trim(), password);
-    setBusy(false);
-    if (result.error) return setMsg(result.error.message);
-    if (mode === "signup") {
-      setMsg("Cadastro criado. Agora clique em Entrar.");
-      setMode("login");
-      setPassword("");
-    }
-  };
-
-  return (
-    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
-      <form onSubmit={submit} style={{ width:"100%", maxWidth:"380px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)" }}>
-        <div style={{ textAlign:"center", marginBottom:"18px" }}>
-          <div style={{ fontSize:"30px", fontWeight:"900", color:"#0f172a" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
-          <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"700" }}>Gestao Inteligente</div>
-        </div>
-        <div style={{ display:"flex", background:"#f1f5f9", borderRadius:"14px", padding:"5px", marginBottom:"16px" }}>
-          <button type="button" onClick={()=>{setMode("login");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="login"?"#e94560":"transparent", color:mode==="login"?"#fff":"#64748b" }}>Entrar</button>
-          <button type="button" onClick={()=>{setMode("signup");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="signup"?"#e94560":"transparent", color:mode==="signup"?"#fff":"#64748b" }}>Cadastro</button>
-        </div>
-        <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>E-mail</label>
-        <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
-        <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
-        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
-        {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
-        <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
-          {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar acesso"}
-        </button>
-      </form>
-    </div>
-  );
 }
 
 function AuthGate() {
@@ -265,7 +212,7 @@ function AuthGate() {
 }
 
 
-const APP_VERSION = "CLOUD-SYNC-ETAPA20-20260615-1735";
+const APP_VERSION = "CLOUD-SYNC-ETAPA20-FIX-USER-20260615-1858";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -3195,7 +3142,7 @@ function ERPInner() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-cloud1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-cloud2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
