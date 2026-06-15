@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CARTAO-CREDITO-ETAPA16-20260614-2135";
+const APP_VERSION = "CAIXA-PRO-ETAPA17-20260614-2210";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -811,6 +811,10 @@ export default function ERP() {
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
   const [cashClosures, setCashClosures] = useState(()=>loadLS("erpmini_cash_closures", []));
+  const [cashOps, setCashOps] = useState(()=>loadLS("erpmini_cash_ops", []));
+  const [cashOpeningValue, setCashOpeningValue] = useState("");
+  const [cashRealValue, setCashRealValue] = useState("");
+  const [cashOpForm, setCashOpForm] = useState({ type:"sangria", amount:"", note:"" });
   const [payables, setPayables] = useState(()=>loadLS("erpmini_payables", []));
   const [receivables, setReceivables] = useState(()=>loadLS("erpmini_receivables", []));
   const [financeiroView, setFinanceiroView] = useState("pagar");
@@ -866,6 +870,7 @@ export default function ERP() {
   useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
   useEffect(()=>{ saveLS("erpmini_clients", clients); }, [clients]);
   useEffect(()=>{ saveLS("erpmini_cash_closures", cashClosures); }, [cashClosures]);
+  useEffect(()=>{ saveLS("erpmini_cash_ops", cashOps); }, [cashOps]);
   useEffect(()=>{ saveLS("erpmini_payables", payables); }, [payables]);
   useEffect(()=>{ saveLS("erpmini_receivables", receivables); }, [receivables]);
   useEffect(()=>{ saveLS("erpmini_storename", storeName); }, [storeName]);
@@ -890,6 +895,7 @@ export default function ERP() {
       sales,
       clients,
       cashClosures,
+      cashOps,
       payables,
       receivables,
       storeName,
@@ -941,6 +947,7 @@ export default function ERP() {
     setSales(Array.isArray(d.sales) ? d.sales : []);
     setClients(Array.isArray(d.clients) ? d.clients : []);
     setCashClosures(Array.isArray(d.cashClosures) ? d.cashClosures : []);
+    setCashOps(Array.isArray(d.cashOps) ? d.cashOps : []);
     setPayables(Array.isArray(d.payables) ? d.payables : []);
     setReceivables(Array.isArray(d.receivables) ? d.receivables : []);
     setStoreName(d.storeName || payload.storeName || "Minha Loja");
@@ -950,6 +957,7 @@ export default function ERP() {
     saveLS("erpmini_sales", Array.isArray(d.sales) ? d.sales : []);
     saveLS("erpmini_clients", Array.isArray(d.clients) ? d.clients : []);
     saveLS("erpmini_cash_closures", Array.isArray(d.cashClosures) ? d.cashClosures : []);
+    saveLS("erpmini_cash_ops", Array.isArray(d.cashOps) ? d.cashOps : []);
     saveLS("erpmini_payables", Array.isArray(d.payables) ? d.payables : []);
     saveLS("erpmini_receivables", Array.isArray(d.receivables) ? d.receivables : []);
     saveLS("erpmini_storename", d.storeName || payload.storeName || "Minha Loja");
@@ -1003,8 +1011,8 @@ export default function ERP() {
   }, []);
 
   const clearAllData = () => {
-    ["erpmini_products","erpmini_sales","erpmini_clients","erpmini_cash_closures","erpmini_payables","erpmini_receivables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
-    setProducts(initialProducts); setSales([]); setClients([]); setCashClosures([]); setPayables([]); setReceivables([]); setStoreName("Minha Loja"); setCart([]);
+    ["erpmini_products","erpmini_sales","erpmini_clients","erpmini_cash_closures","erpmini_cash_ops","erpmini_payables","erpmini_receivables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
+    setProducts(initialProducts); setSales([]); setClients([]); setCashClosures([]); setCashOps([]); setPayables([]); setReceivables([]); setStoreName("Minha Loja"); setCart([]);
     saleCounter.current = 1000; setShowClearConfirm(false);
     notify("Dados resetados!");
   };
@@ -1118,15 +1126,70 @@ export default function ERP() {
     paymentsOfDay(key).forEach(p => { base[p.method] = (base[p.method] || 0) + (parseFloat(p.amount)||0); });
     return base;
   };
+  const cashOpsOfDay = (key=dayKey()) => cashOps.filter(o=>isSameDay(o.date,key));
+  const cashOpeningOfDay = (key=dayKey()) => cashOpsOfDay(key).find(o=>o.type==="abertura");
+  const cashOpsTotals = (key=dayKey()) => {
+    const ops = cashOpsOfDay(key);
+    return {
+      abertura: ops.filter(o=>o.type==="abertura").reduce((s,o)=>s+(parseFloat(o.amount)||0),0),
+      reforco: ops.filter(o=>o.type==="reforco").reduce((s,o)=>s+(parseFloat(o.amount)||0),0),
+      sangria: ops.filter(o=>o.type==="sangria").reduce((s,o)=>s+(parseFloat(o.amount)||0),0),
+      ops
+    };
+  };
+  const expectedCashBalance = (key=dayKey()) => {
+    const byMethod = paymentSummary(key);
+    const ops = cashOpsTotals(key);
+    return ops.abertura + (parseFloat(byMethod.dinheiro)||0) + ops.reforco - ops.sangria;
+  };
+  const openCash = () => {
+    const value = parseMoney(cashOpeningValue);
+    if (cashOpeningOfDay()) { notify("Caixa de hoje ja foi aberto.", "error"); return; }
+    if (value < 0) { notify("Valor de abertura invalido.", "error"); return; }
+    setCashOps(prev=>[{ id:Date.now(), type:"abertura", amount:value, note:"Abertura de caixa", date:new Date().toISOString() }, ...prev]);
+    setCashOpeningValue("");
+    notify("Caixa aberto com sucesso!");
+  };
+  const addCashOperation = () => {
+    const amount = parseMoney(cashOpForm.amount);
+    if (!cashOpeningOfDay()) { notify("Abra o caixa antes de registrar movimentacoes.", "error"); return; }
+    if (amount<=0) { notify("Informe um valor valido.", "error"); return; }
+    setCashOps(prev=>[{ id:Date.now(), type:cashOpForm.type, amount, note:cashOpForm.note || (cashOpForm.type==="sangria"?"Sangria":"Reforco"), date:new Date().toISOString() }, ...prev]);
+    setCashOpForm({ type:"sangria", amount:"", note:"" });
+    notify(cashOpForm.type==="sangria" ? "Sangria registrada!" : "Reforco registrado!");
+  };
   const closeCash = () => {
     const key = dayKey();
+    if (!cashOpeningOfDay(key)) { notify("Abra o caixa antes de fechar.", "error"); return; }
     const byMethod = paymentSummary(key);
     const entradas = Object.values(byMethod).reduce((a,b)=>a+b,0);
     const vendasHoje = sales.filter(s=>isSameDay(s.date,key)).reduce((sum,s)=>sum+s.total,0);
     const fiadoHoje = sales.filter(s=>isSameDay(s.date,key) && s.fiado).reduce((sum,s)=>sum+s.total,0);
-    const closure = { id:Date.now(), date:new Date().toISOString(), day:key, byMethod, entradas, vendasHoje, fiadoHoje, fiadoAberto:fiadoTotal, salesCount:sales.filter(s=>isSameDay(s.date,key)).length };
+    const ops = cashOpsTotals(key);
+    const expected = expectedCashBalance(key);
+    const real = cashRealValue === "" ? expected : parseMoney(cashRealValue);
+    const difference = real - expected;
+    const closure = {
+      id:Date.now(),
+      date:new Date().toISOString(),
+      day:key,
+      byMethod,
+      entradas,
+      vendasHoje,
+      fiadoHoje,
+      fiadoAberto:fiadoTotal,
+      salesCount:sales.filter(s=>isSameDay(s.date,key)).length,
+      abertura:ops.abertura,
+      reforco:ops.reforco,
+      sangria:ops.sangria,
+      saldoEsperado:expected,
+      saldoInformado:real,
+      diferenca:difference,
+      status:Math.abs(difference)<0.01 ? "OK" : "DIFERENCA"
+    };
     setCashClosures(prev=>[closure,...prev]);
-    notify("Caixa fechado com sucesso!");
+    setCashRealValue("");
+    notify(Math.abs(difference)<0.01 ? "Caixa fechado com sucesso!" : "Caixa fechado com diferenca.");
   };
 
   const monthKey = (d=new Date()) => new Date(d).toISOString().slice(0,7);
@@ -1919,35 +1982,73 @@ export default function ERP() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💰 Fechamento de caixa</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💰 Caixa profissional</div>
+
+          {!cashOpeningOfDay() ? (
+            <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+              <div style={{ fontWeight:"900", color:"#9a3412", marginBottom:"6px" }}>Caixa ainda nao aberto hoje</div>
+              <div style={{ fontSize:"12px", color:"#9a3412", marginBottom:"10px" }}>Informe quanto tem de dinheiro no caixa para troco.</div>
+              <div style={{ display:"flex", gap:"8px" }}>
+                <input style={{ ...inp, flex:1, margin:0 }} inputMode="decimal" placeholder="Saldo inicial" value={cashOpeningValue} onChange={e=>setCashOpeningValue(e.target.value)} />
+                <button style={{ ...btn("#16a34a"), padding:"12px 14px" }} onClick={openCash}>Abrir</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+              <div style={{ fontWeight:"900", color:"#166534" }}>Caixa aberto</div>
+              <div style={{ fontSize:"12px", color:"#166534" }}>Abertura: {fmtCur(cashOpsTotals().abertura)}</div>
+            </div>
+          )}
+
           <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
-            <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"8px" }}>Resumo das entradas recebidas hoje</div>
-            {[
-              ["Dinheiro", byMethod.dinheiro, "#16a34a"],
-              ["PIX", byMethod.pix, "#0891b2"],
-              ["Debito", byMethod.debito, "#7c3aed"],
-              ["Credito", byMethod.credito, "#2563eb"],
-            ].map(([label,value,color])=>(
-              <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid #e2e8f0" }}>
-                <span style={{ fontWeight:"800", color:"#334155" }}>{label}</span>
-                <span style={{ fontWeight:"900", color }}>{fmtCur(value)}</span>
+            <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"10px" }}>Resumo das entradas recebidas hoje</div>
+            {["dinheiro","pix","debito","credito"].map(k=>(
+              <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #e2e8f0" }}>
+                <strong style={{ color:"#334155", textTransform:"capitalize" }}>{mLabel(k)}</strong>
+                <strong style={{ color:mColor(k) }}>{fmtCur(byMethod[k]||0)}</strong>
               </div>
             ))}
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0 0" }}>
-              <span style={{ fontWeight:"900", color:"#1a1a2e" }}>Total de entradas</span>
-              <span style={{ fontWeight:"900", color:"#16a34a", fontSize:"18px" }}>{fmtCur(entradas)}</span>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", fontSize:"16px" }}>
+              <strong>Total de entradas</strong><strong style={{ color:"#16a34a" }}>{fmtCur(entradas)}</strong>
             </div>
           </div>
 
-          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"12px" }}>
-            <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontSize:"11px", color:"#9a3412", fontWeight:"800" }}>Fiado em aberto total</div>
-              <div style={{ fontSize:"18px", fontWeight:"900", color:"#ea580c" }}>{fmtCur(fiadoTotal)}</div>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
+            <div style={{ background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#166534", fontWeight:"800" }}>Abertura</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#16a34a" }}>{fmtCur(cashOpsTotals().abertura)}</div>
             </div>
             <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Transacoes hoje</div>
-              <div style={{ fontSize:"18px", fontWeight:"900", color:"#2563eb" }}>{vendasHojeList.length}</div>
+              <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Reforcos</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#2563eb" }}>{fmtCur(cashOpsTotals().reforco)}</div>
             </div>
+            <div style={{ background:"#fef2f2", border:"1.5px solid #fecaca", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#991b1b", fontWeight:"800" }}>Sangrias</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#dc2626" }}>{fmtCur(cashOpsTotals().sangria)}</div>
+            </div>
+            <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#334155", fontWeight:"800" }}>Esperado</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:"#1a1a2e" }}>{fmtCur(expectedCashBalance())}</div>
+            </div>
+          </div>
+
+          <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
+            <div style={{ fontWeight:"900", color:"#334155", marginBottom:"8px" }}>Sangria / Reforco</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
+              <button onClick={()=>setCashOpForm({...cashOpForm,type:"sangria"})} style={{ ...btn(cashOpForm.type==="sangria"?"#dc2626":"#94a3b8"), padding:"10px", fontSize:"13px" }}>Sangria</button>
+              <button onClick={()=>setCashOpForm({...cashOpForm,type:"reforco"})} style={{ ...btn(cashOpForm.type==="reforco"?"#2563eb":"#94a3b8"), padding:"10px", fontSize:"13px" }}>Reforco</button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
+              <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Valor" value={cashOpForm.amount} onChange={e=>setCashOpForm({...cashOpForm,amount:e.target.value})} />
+              <input style={{ ...inp, margin:0 }} placeholder="Observacao" value={cashOpForm.note} onChange={e=>setCashOpForm({...cashOpForm,note:e.target.value})} />
+            </div>
+            <button style={{ ...btn("#64748b"), width:"100%", padding:"10px", fontSize:"13px" }} onClick={addCashOperation}>Registrar movimentacao</button>
+          </div>
+
+          <div style={{ background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
+            <div style={{ fontWeight:"900", color:"#334155", marginBottom:"8px" }}>Conferencia do fechamento</div>
+            <input style={{ ...inp, marginBottom:"8px" }} inputMode="decimal" placeholder={`Dinheiro contado no caixa (${fmtCur(expectedCashBalance())})`} value={cashRealValue} onChange={e=>setCashRealValue(e.target.value)} />
+            <div style={{ fontSize:"12px", color:"#64748b" }}>Deixe em branco para fechar com o saldo esperado.</div>
           </div>
 
           <button style={{ ...btn("#16a34a"), width:"100%" }} onClick={closeCash}>✅ Fechar caixa de hoje</button>
@@ -1955,15 +2056,15 @@ export default function ERP() {
 
         <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}>📋 Movimentacoes de hoje</div>
-          {ultimosPagamentos.length===0 ? (
-            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma entrada recebida hoje.</div>
-          ) : ultimosPagamentos.map((p,i)=>(
+          {[...cashOpsOfDay().filter(o=>o.type!=="abertura").map(o=>({ ...o, isCashOp:true, method:o.type==="sangria"?"sangria":"reforco", origin:o.type==="sangria"?"Sangria":"Reforco", amount:o.amount, saleId:"CAIXA", clientName:o.note||"", date:o.date })), ...ultimosPagamentos].length===0 ? (
+            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma movimentacao hoje.</div>
+          ) : [...cashOpsOfDay().filter(o=>o.type!=="abertura").map(o=>({ ...o, isCashOp:true, method:o.type==="sangria"?"sangria":"reforco", origin:o.type==="sangria"?"Sangria":"Reforco", amount:o.amount, saleId:"CAIXA", clientName:o.note||"", date:o.date })), ...ultimosPagamentos].map((p,i)=>(
             <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
               <div>
                 <div style={{ fontWeight:"800", color:"#1a1a2e" }}>{mLabel(p.method)} - {p.origin}</div>
                 <div style={{ fontSize:"12px", color:"#64748b" }}>#{p.saleId} {p.clientName ? `- ${p.clientName}` : ""} | {fmtDate(p.date)}</div>
               </div>
-              <div style={{ fontWeight:"900", color:mColor(p.method), whiteSpace:"nowrap" }}>{fmtCur(parseFloat(p.amount)||0)}</div>
+              <div style={{ fontWeight:"900", color:p.method==="sangria"?"#dc2626":p.method==="reforco"?"#2563eb":mColor(p.method), whiteSpace:"nowrap" }}>{p.method==="sangria"?"- ":""}{fmtCur(parseFloat(p.amount)||0)}</div>
             </div>
           ))}
         </div>
@@ -2654,7 +2755,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-card1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixapro1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
