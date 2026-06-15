@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const APP_VERSION = "CAIXA-PRO-ETAPA17-20260614-2210";
+const APP_VERSION = "CAIXA-PRO-ETAPA17-FECHADO-20260614-2235";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1128,6 +1128,8 @@ export default function ERP() {
   };
   const cashOpsOfDay = (key=dayKey()) => cashOps.filter(o=>isSameDay(o.date,key));
   const cashOpeningOfDay = (key=dayKey()) => cashOpsOfDay(key).find(o=>o.type==="abertura");
+  const cashClosureOfDay = (key=dayKey()) => cashClosures.find(c=>c.day===key);
+  const isCashClosedToday = () => !!cashClosureOfDay(dayKey());
   const cashOpsTotals = (key=dayKey()) => {
     const ops = cashOpsOfDay(key);
     return {
@@ -1144,6 +1146,7 @@ export default function ERP() {
   };
   const openCash = () => {
     const value = parseMoney(cashOpeningValue);
+    if (isCashClosedToday()) { notify("Caixa de hoje ja foi fechado.", "error"); return; }
     if (cashOpeningOfDay()) { notify("Caixa de hoje ja foi aberto.", "error"); return; }
     if (value < 0) { notify("Valor de abertura invalido.", "error"); return; }
     setCashOps(prev=>[{ id:Date.now(), type:"abertura", amount:value, note:"Abertura de caixa", date:new Date().toISOString() }, ...prev]);
@@ -1152,6 +1155,7 @@ export default function ERP() {
   };
   const addCashOperation = () => {
     const amount = parseMoney(cashOpForm.amount);
+    if (isCashClosedToday()) { notify("Caixa de hoje ja foi fechado. Movimentacao bloqueada.", "error"); return; }
     if (!cashOpeningOfDay()) { notify("Abra o caixa antes de registrar movimentacoes.", "error"); return; }
     if (amount<=0) { notify("Informe um valor valido.", "error"); return; }
     setCashOps(prev=>[{ id:Date.now(), type:cashOpForm.type, amount, note:cashOpForm.note || (cashOpForm.type==="sangria"?"Sangria":"Reforco"), date:new Date().toISOString() }, ...prev]);
@@ -1160,6 +1164,7 @@ export default function ERP() {
   };
   const closeCash = () => {
     const key = dayKey();
+    if (cashClosureOfDay(key)) { notify("Caixa de hoje ja foi fechado.", "error"); return; }
     if (!cashOpeningOfDay(key)) { notify("Abra o caixa antes de fechar.", "error"); return; }
     const byMethod = paymentSummary(key);
     const entradas = Object.values(byMethod).reduce((a,b)=>a+b,0);
@@ -1984,7 +1989,15 @@ export default function ERP() {
         <div style={card}>
           <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>💰 Caixa profissional</div>
 
-          {!cashOpeningOfDay() ? (
+          {isCashClosedToday() ? (
+            <div style={{ background:"#f1f5f9", border:"1.5px solid #cbd5e1", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+              <div style={{ fontWeight:"900", color:"#334155" }}>Caixa fechado hoje</div>
+              <div style={{ fontSize:"12px", color:"#475569" }}>
+                Fechado em: {fmtDate(cashClosureOfDay()?.date)} | Diferença: 
+                <strong style={{ color:Math.abs(cashClosureOfDay()?.diferenca||0)<0.01?"#16a34a":"#dc2626" }}> {fmtCur(cashClosureOfDay()?.diferenca||0)}</strong>
+              </div>
+            </div>
+          ) : !cashOpeningOfDay() ? (
             <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
               <div style={{ fontWeight:"900", color:"#9a3412", marginBottom:"6px" }}>Caixa ainda nao aberto hoje</div>
               <div style={{ fontSize:"12px", color:"#9a3412", marginBottom:"10px" }}>Informe quanto tem de dinheiro no caixa para troco.</div>
@@ -2051,7 +2064,9 @@ export default function ERP() {
             <div style={{ fontSize:"12px", color:"#64748b" }}>Deixe em branco para fechar com o saldo esperado.</div>
           </div>
 
-          <button style={{ ...btn("#16a34a"), width:"100%" }} onClick={closeCash}>✅ Fechar caixa de hoje</button>
+          <button style={{ ...btn(isCashClosedToday()?"#94a3b8":"#16a34a"), width:"100%", opacity:isCashClosedToday()?0.65:1 }} onClick={closeCash}>
+            {isCashClosedToday() ? "✅ Caixa ja fechado hoje" : "✅ Fechar caixa de hoje"}
+          </button>
         </div>
 
         <div style={card}>
@@ -2389,26 +2404,48 @@ export default function ERP() {
 
     const HistoricoCaixa = () => (
       <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>🧾 Historico de fechamentos</div>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"6px" }}>🧾 Historico de fechamentos</div>
+        <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"12px" }}>Registro fechado e nao editavel, para conferencia e confianca.</div>
         {cashClosures.length===0 ? (
           <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum fechamento registrado.</div>
-        ) : cashClosures.map(c=>(
-          <div key={c.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", marginBottom:"6px" }}>
-              <div>
-                <div style={{ fontWeight:"900" }}>{fmtDate(c.date)}</div>
-                <div style={{ fontSize:"12px", color:"#64748b" }}>{c.salesCount} transacoes | Fiado aberto: {fmtCur(c.fiadoAberto||0)}</div>
+        ) : cashClosures.map(c=>{
+          const diff = parseFloat(c.diferenca)||0;
+          const hasDiff = Math.abs(diff) >= 0.01;
+          return (
+            <div key={c.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", marginBottom:"8px" }}>
+                <div>
+                  <div style={{ fontWeight:"900" }}>{fmtDate(c.date)}</div>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>{c.salesCount} transacoes | Registro bloqueado</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
+                  <div style={{ fontSize:"11px", color:hasDiff?"#dc2626":"#16a34a", fontWeight:"900" }}>
+                    {hasDiff ? `Diferença ${fmtCur(diff)}` : "Sem diferença"}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
+
+              <div style={{ background:hasDiff?"#fef2f2":"#f0fdf4", border:`1.5px solid ${hasDiff?"#fecaca":"#bbf7d0"}`, borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", fontSize:"12px" }}>
+                  <div>Saldo esperado: <strong>{fmtCur(c.saldoEsperado ?? c.entradas)}</strong></div>
+                  <div>Saldo contado: <strong>{fmtCur(c.saldoInformado ?? c.entradas)}</strong></div>
+                  <div>Abertura: <strong>{fmtCur(c.abertura||0)}</strong></div>
+                  <div>Sangria: <strong>{fmtCur(c.sangria||0)}</strong></div>
+                  <div>Reforço: <strong>{fmtCur(c.reforco||0)}</strong></div>
+                  <div>Diferença: <strong style={{ color:hasDiff?"#dc2626":"#16a34a" }}>{fmtCur(diff)}</strong></div>
+                </div>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", fontSize:"12px", color:"#64748b" }}>
+                <div>Dinheiro: <strong>{fmtCur(c.byMethod?.dinheiro||0)}</strong></div>
+                <div>PIX: <strong>{fmtCur(c.byMethod?.pix||0)}</strong></div>
+                <div>Debito: <strong>{fmtCur(c.byMethod?.debito||0)}</strong></div>
+                <div>Credito: <strong>{fmtCur(c.byMethod?.credito||0)}</strong></div>
+              </div>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", fontSize:"12px", color:"#64748b" }}>
-              <div>Dinheiro: <strong>{fmtCur(c.byMethod?.dinheiro||0)}</strong></div>
-              <div>PIX: <strong>{fmtCur(c.byMethod?.pix||0)}</strong></div>
-              <div>Debito: <strong>{fmtCur(c.byMethod?.debito||0)}</strong></div>
-              <div>Credito: <strong>{fmtCur(c.byMethod?.credito||0)}</strong></div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
 
@@ -2755,7 +2792,7 @@ export default function ERP() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixapro1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-caixapro2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
