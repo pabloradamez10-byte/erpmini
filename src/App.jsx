@@ -7,6 +7,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_PAIUP7LETrzQfZLMWcpsfw_8v8IeXTx";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+async function createPendingLicenseForCurrentUser(email) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  if (!cleanEmail) return { ok: false, message: "E-mail invalido." };
+
+  const { error } = await supabase
+    .from("erpmini_licenses")
+    .insert([
+      {
+        email: cleanEmail,
+        status: "pendente",
+        expires_at: null,
+        plan: "mensal",
+        notes: "Cadastro criado pelo cliente. Aguardando aprovacao.",
+        updated_at: new Date().toISOString()
+      }
+    ]);
+
+  if (error) {
+    const msg = String(error.message || "").toLowerCase();
+    if (msg.includes("duplicate") || msg.includes("already exists")) {
+      return { ok: true, message: "Solicitacao ja existente." };
+    }
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true, message: "Solicitacao criada." };
+}
+
+
 const CLOUD_TABLE = "erpmini_cloud_data";
 const CLOUD_KEYS = [
   "erpmini_activation_key",
@@ -135,11 +164,29 @@ async function checkLicenseByEmail(email) {
       };
     }
 
-    if ((data.status || "").toLowerCase() !== "ativo") {
+    const licenseStatus = (data.status || "").toLowerCase();
+
+    if (licenseStatus === "pendente") {
+      return {
+        ok: false,
+        title: "Cadastro aguardando aprovacao",
+        message: "Sua conta foi criada. Aguarde o administrador liberar seu acesso.",
+      };
+    }
+
+    if (licenseStatus !== "ativo") {
       return {
         ok: false,
         title: "Licenca bloqueada",
         message: "Sua licenca esta bloqueada. Regularize o pagamento para liberar o acesso.",
+      };
+    }
+
+    if (!data.expires_at) {
+      return {
+        ok: false,
+        title: "Licenca sem vencimento",
+        message: "Sua licenca ainda nao possui data de vencimento. Fale com o suporte.",
       };
     }
 
@@ -237,16 +284,35 @@ function AuthScreen() {
     e.preventDefault();
     setMsg("");
     setBusy(true);
-    const result = mode === "login"
-      ? await signIn(email.trim(), password)
-      : await signUp(email.trim(), password);
-    setBusy(false);
-    if (result.error) return setMsg(result.error.message);
-    if (mode === "signup") {
-      setMsg("Cadastro criado. Agora clique em Entrar.");
-      setMode("login");
-      setPassword("");
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (mode === "login") {
+      const result = await signIn(cleanEmail, password);
+      setBusy(false);
+      if (result.error) return setMsg(result.error.message);
+      return;
     }
+
+    const result = await signUp(cleanEmail, password);
+
+    if (result.error) {
+      setBusy(false);
+      return setMsg(result.error.message);
+    }
+
+    const pending = await createPendingLicenseForCurrentUser(cleanEmail);
+
+    setBusy(false);
+
+    if (!pending.ok) {
+      setMsg("Conta criada, mas nao foi possivel criar a solicitacao de acesso. Fale com o suporte.");
+      return;
+    }
+
+    setMsg("Conta criada. Agora aguarde o administrador liberar seu acesso.");
+    setMode("login");
+    setPassword("");
   };
 
   return (
@@ -258,15 +324,15 @@ function AuthScreen() {
         </div>
         <div style={{ display:"flex", background:"#f1f5f9", borderRadius:"14px", padding:"5px", marginBottom:"16px" }}>
           <button type="button" onClick={()=>{setMode("login");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="login"?"#e94560":"transparent", color:mode==="login"?"#fff":"#64748b" }}>Entrar</button>
-          <button type="button" onClick={()=>{setMode("signup");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="signup"?"#e94560":"transparent", color:mode==="signup"?"#fff":"#64748b" }}>Cadastro</button>
+          <button type="button" onClick={()=>{setMode("signup");setMsg("");}} style={{ flex:1, padding:"10px", border:"none", borderRadius:"10px", fontWeight:"900", background:mode==="signup"?"#e94560":"transparent", color:mode==="signup"?"#fff":"#64748b" }}>Criar conta</button>
         </div>
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>E-mail</label>
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
-        <input type="" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
         <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
-          {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar acesso"}
+          {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar conta e solicitar acesso"}
         </button>
       </form>
     </div>
@@ -368,7 +434,7 @@ function AuthGate() {
 }
 
 
-const APP_VERSION = "ADMIN-LICENCAS-ETAPA23-20260616-0508";
+const APP_VERSION = "CADASTRO-PENDENTE-ETAPA24-20260616-0528";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -3550,7 +3616,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
