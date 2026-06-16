@@ -2326,7 +2326,98 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
 
   // --- Dashboard tab ----------------------------------------------------------
-  const DashboardTab = () => (
+  const DashboardTab = () => {
+    const starterMode = normalizePlan(currentPlan) === "starter" && !isPlatformAdmin;
+
+    if (starterMode) {
+      return (
+        <div>
+          {(lowStockProducts.length>0 || overdueFiado.length>0) && (
+            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px", border:"1.5px solid #fee2e2" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"10px" }}>
+                <div>
+                  <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Alertas importantes</div>
+                  <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Veja o que precisa de atenção agora.</div>
+                </div>
+                <div style={{ background:"#ef4444", color:"#fff", borderRadius:"999px", minWidth:"34px", height:"34px", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>
+                  {lowStockProducts.length + overdueFiado.length}
+                </div>
+              </div>
+
+              {lowStockProducts.length>0 && (
+                <div style={{ background:"#fef2f2", border:"1.5px solid #fecaca", borderRadius:"14px", padding:"12px", marginBottom:"8px" }}>
+                  <div style={{ fontWeight:"900", color:"#991b1b" }}>{lowStockProducts.length} produto(s) com estoque baixo</div>
+                  <div style={{ color:"#991b1b", fontSize:"13px", fontWeight:"700" }}>Produtos com 5 unidades ou menos.</div>
+                  <button onClick={()=>setTab("estoque")} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver estoque</button>
+                </div>
+              )}
+
+              {overdueFiado.length>0 && (
+                <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
+                  <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
+                  <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Clientes com pagamento em atraso.</div>
+                  <button onClick={()=>setTab("fiado")} style={{ ...btn("#f97316"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver clientes</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ background:"linear-gradient(135deg,#0f172a,#1e293b)", color:"#fff", borderRadius:"20px", padding:"18px", marginBottom:"14px", boxShadow:"0 8px 24px rgba(15,23,42,.16)" }}>
+            <div style={{ fontSize:"13px", color:"#cbd5e1", fontWeight:"800" }}>Plano atual</div>
+            <div style={{ fontSize:"28px", fontWeight:"900", marginTop:"2px" }}>Starter grátis</div>
+            <div style={{ color:"#cbd5e1", fontSize:"13px", fontWeight:"700", marginTop:"6px" }}>
+              Liberado para PDV, estoque, clientes e configurações.
+            </div>
+          </div>
+
+          <PlanUsageCard plan={currentPlan} products={products} clients={clients} sales={sales} />
+
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
+            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
+              <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Vendas registradas hoje</div>
+              <div style={{ fontSize:"30px", fontWeight:"900", color:"#16a34a", marginTop:"4px" }}>{salesOfToday.length}</div>
+              <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Quantidade de vendas feitas no dia.</div>
+            </div>
+
+            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
+              <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Produtos cadastrados</div>
+              <div style={{ fontSize:"30px", fontWeight:"900", color:"#2563eb", marginTop:"4px" }}>{products.length}</div>
+              <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Limite do Starter: 30 produtos.</div>
+            </div>
+
+            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
+              <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Clientes cadastrados</div>
+              <div style={{ fontSize:"30px", fontWeight:"900", color:"#7c3aed", marginTop:"4px" }}>{clients.length}</div>
+              <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Limite do Starter: 20 clientes.</div>
+            </div>
+          </div>
+
+          <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
+            <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"8px" }}>Resumo do Starter</div>
+            <div style={{ display:"grid", gap:"9px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido hoje</span>
+                <strong style={{ color:"#16a34a" }}>{fmtCur(salesTodayTotal)}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido no mês</span>
+                <strong style={{ color:"#2563eb" }}>{fmtCur(salesMonthTotal)}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Fiado em aberto</span>
+                <strong style={{ color:"#f97316" }}>{fmtCur(fiadoTotal)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"16px", padding:"14px", color:"#1d4ed8", fontWeight:"800", fontSize:"13px", lineHeight:1.45 }}>
+            Recursos como Caixa profissional, Relatórios, Vendas avançadas e Fiscal ficam disponíveis nos planos pagos.
+          </div>
+        </div>
+      );
+    }
+
+    return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
         {[
@@ -2357,7 +2448,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
         {[
-          ["", salesOfToday.length, "#e94560"],
+          ["Vendas registradas hoje", salesOfToday.length, "#e94560"],
           ["Clientes", clients.length, "#6366f1"],
           ["Estoque baixo", lowStockProducts.length, "#ef4444"],
           ["Fiados vencidos", overdueFiado.length, "#f97316"],
@@ -2420,39 +2511,65 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         </div>
       )}
 
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"14px" }}>
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Top clientes</div>
-          {topClients.length===0 ? (
-            <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum cliente com compras ainda.</div>
-          ) : topClients.map((c,i)=>(
-            <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
-              <div>
-                <div style={{ fontWeight:"900" }}>{i+1}. {c.name}</div>
-                <div style={{ fontSize:"12px", color:"#64748b" }}>Aberto: {fmtCur(c.openBalance)}</div>
-              </div>
-              <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.totalBought)}</div>
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}> Top clientes</div>
+        {topClients.length===0 ? <div style={{ color:"#94a3b8", fontSize:"14px" }}>Sem vendas ainda.</div> : topClients.map((c,i)=>(
+          <div key={c.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+            <div>
+              <div style={{ fontWeight:"900" }}>{i+1}. {c.name}</div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>Aberto: {fmtCur(c.open)}</div>
             </div>
-          ))}
-        </div>
+            <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.total)}</div>
+          </div>
+        ))}
+      </div>
 
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Produtos mais vendidos</div>
-          {productRanking.length===0 ? (
-            <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum produto vendido ainda.</div>
-          ) : productRanking.map((p,i)=>(
-            <div key={p.id} style={{ padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px" }}>
-                <div style={{ fontWeight:"900" }}>{i+1}. {p.name}</div>
-                <div style={{ fontWeight:"900", color:"#2563eb" }}>{p.sold} un.</div>
-              </div>
-              <div style={{ height:"8px", background:"#e2e8f0", borderRadius:"16px", overflow:"hidden", marginTop:"6px" }}>
-                <div style={{ height:"100%", width:`${Math.min(100, Math.max(8, (p.sold/(productRanking[0]?.sold||1))*100))}%`, background:"#2563eb", borderRadius:"999px" }} />
-              </div>
-              <div style={{ fontSize:"12px", color:"#64748b", marginTop:"4px" }}>Total: {fmtCur(p.total)}</div>
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}> Top produtos</div>
+        {topProducts.length===0 ? <div style={{ color:"#94a3b8", fontSize:"14px" }}>Sem vendas ainda.</div> : topProducts.map((p,i)=>(
+          <div key={p.name} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <strong>{i+1}. {p.name}</strong>
+              <strong style={{ color:"#2563eb" }}>{p.qty} un.</strong>
+            </div>
+            <div style={{ fontSize:"12px", color:"#64748b" }}>Total: {fmtCur(p.total)}</div>
+            <div style={{ height:"6px", background:"#e2e8f0", borderRadius:"4px", marginTop:"6px" }}>
+              <div style={{ width:`${Math.min(100,(p.qty/(topProducts[0]?.qty||1))*100)}%`, background:"#2563eb", height:"100%", borderRadius:"4px" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Resumo financeiro do mes</div>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"10px" }}>
+          {[
+            ["Entradas mes", fmtCur(salesMonthTotal), "#16a34a"],
+            ["A pagar mes", fmtCur(payablesMonthTotal), "#e94560"],
+            ["Pago mes", fmtCur(payablesPaidMonthTotal), "#2563eb"],
+            ["Previsto", fmtCur(salesMonthTotal + receivablesDueMonthTotal), "#16a34a"],
+          ].map(([l,v,c])=>(
+            <div key={l} style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px" }}>
+              <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+              <div style={{ fontSize:"17px", fontWeight:"900", color:c }}>{v}</div>
             </div>
           ))}
         </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Fiados em aberto</div>
+        {openFiadoSales.length===0 ? (
+          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum fiado em aberto.</div>
+        ) : openFiadoSales.slice(0,5).map(s=>(
+          <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+            <div>
+              <div style={{ fontWeight:"900" }}>#{s.id} - {s.fiado.clientName}</div>
+              <div style={{ fontSize:"12px", color:"#64748b" }}>Vence: {s.fiado.dueDate} | Compra: {fmtCur(s.total)}</div>
+            </div>
+            <div style={{ fontWeight:"900", color:"#e94560" }}>{fmtCur(fiadoOpenAmount(s))}</div>
+          </div>
+        ))}
       </div>
 
       <div style={card}>
@@ -2470,10 +2587,12 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         ))}
       </div>
     </div>
-  );
+    );
+  };
 
   // --- PDV tab ---------------------------------------------------------------
-  const PDVTab = () => (
+
+const PDVTab = () => (
     <div>
       {/* Barcode scanner */}
       <div style={{ ...card, display:"flex", alignItems:"center", gap:"10px",
@@ -4057,7 +4176,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
