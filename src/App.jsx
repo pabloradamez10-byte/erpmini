@@ -801,6 +801,24 @@ const initialProducts = [
   { id:3, name:"Produto C", price:8.0,   stock:100, category:"Geral", barcode:"7891234560003" },
 ];
 
+
+const parseMoney = (value) => {
+  if (value === null || value === undefined) return 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  const normalized = raw
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}(,|$))/g, "")
+    .replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fmtPercent = (value) => {
+  const n = Number(value || 0);
+  return `${n.toFixed(1).replace(".", ",")}%`;
+};
+
 const fmtCur  = (v) => v.toLocaleString("pt-BR",{ style:"currency", currency:"BRL" });
 const fmtDate = (d) => new Date(d).toLocaleString("pt-BR",{ day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
@@ -2168,10 +2186,10 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     const barcode = newProduct.barcode || genBarcode();
     if (!editingId && products.find(p=>p.barcode===barcode)) return notify("Codigo de barras ja cadastrado!","error");
     if (editingId) {
-      setProducts(prev=>prev.map(p=>p.id===editingId?{...p,...newProduct,barcode,price:parseFloat(newProduct.price),cost:parseFloat(String(newProduct.cost||"0").replace(",","."))||0,stock:parseInt(newProduct.stock)}:p));
+      setProducts(prev=>prev.map(p=>p.id===editingId?{...p,...newProduct,barcode,price:parseMoney(newProduct.price),cost:parseMoney(newProduct.cost),stock:parseInt(newProduct.stock)||0}:p));
       setEditingId(null); notify("Produto atualizado!");
     } else {
-      setProducts(prev=>[...prev,{id:Date.now(),...newProduct,barcode,price:parseFloat(newProduct.price),cost:parseFloat(String(newProduct.cost||"0").replace(",","."))||0,stock:parseInt(newProduct.stock)}]);
+      setProducts(prev=>[...prev,{id:Date.now(),...newProduct,barcode,price:parseMoney(newProduct.price),cost:parseMoney(newProduct.cost),stock:parseInt(newProduct.stock)||0}]);
       notify("Produto cadastrado!");
     }
     setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});
@@ -2662,71 +2680,139 @@ const PDVTab = () => (
   // --- Estoque tab ------------------------------------------------------------
   const EstoqueTab = () => (
     <div>
-      <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>{editingId?"Editar Editar Produto":"+ Novo Produto"}</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
-          {[["Nome do Produto","text","name","Ex: Camiseta Azul M"],["Custo (R$)","number","cost","0.00"],["Venda (R$)","number","price","0.00"],["Estoque","number","stock","0"],["Categoria","text","category","Geral"]].map(([lbl,type,key,ph])=>(
-            <div key={key}>
-              <label style={{ fontSize:"12px", fontWeight:"600", color:"#64748b", marginBottom:"4px", display:"block" }}>{lbl}</label>
-              <input style={inp} type={type} value={newProduct[key]} placeholder={ph} onChange={e=>setNewProduct({...newProduct,[key]:e.target.value})} />
-            </div>
-          ))}
+      <div style={{ ...card, borderRadius:"20px", padding:"18px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"14px" }}>
+          <div style={{ width:"42px", height:"42px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px", fontWeight:"900" }}>📦</div>
           <div>
-            <label style={{ fontSize:"12px", fontWeight:"600", color:"#64748b", marginBottom:"4px", display:"block" }}>Codigo de Barras</label>
-            <div style={{ display:"flex", gap:"8px" }}>
-              <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automatico se vazio"
-                onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
-              <button style={btnSm("#6366f1")} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}> Gerar</button>
+            <div style={{ fontWeight:"900", fontSize:"21px", color:"#0f172a" }}>{editingId ? "Editar Produto" : "Novo Produto"}</div>
+            <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Preencha os dados para cadastrar ou atualizar o produto.</div>
+          </div>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"12px" }}>
+          <div>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Nome do Produto</label>
+            <input style={inp} type="text" value={newProduct.name} placeholder="Ex: Rosa vermelha" onChange={e=>setNewProduct({...newProduct,name:e.target.value})} />
+          </div>
+
+          <div>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Categoria</label>
+            <input style={inp} type="text" value={newProduct.category} placeholder="Geral" onChange={e=>setNewProduct({...newProduct,category:e.target.value})} />
+          </div>
+
+          <div>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Custo (R$)</label>
+            <input style={inp} inputMode="decimal" value={newProduct.cost} placeholder="0,00" onChange={e=>setNewProduct({...newProduct,cost:e.target.value})} />
+          </div>
+
+          <div>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Venda (R$)</label>
+            <input style={inp} inputMode="decimal" value={newProduct.price} placeholder="0,00" onChange={e=>setNewProduct({...newProduct,price:e.target.value})} />
+          </div>
+
+          <div>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Estoque</label>
+            <input style={inp} inputMode="numeric" value={newProduct.stock} placeholder="0" onChange={e=>setNewProduct({...newProduct,stock:e.target.value.replace(/[^0-9]/g,"")})} />
+          </div>
+
+          <div>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Código de Barras</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:"8px" }}>
+              <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automático se vazio" onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
+              <button style={{ ...btnSm("#6366f1"), minWidth:"82px", fontSize:"13px" }} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>Gerar</button>
             </div>
-            {newProduct.barcode&&(
-              <div style={{ marginTop:"8px", background:"#f8fafc", borderRadius:"8px", padding:"8px", textAlign:"center", overflowX:"auto" }}>
-                <BarcodeImage value={newProduct.barcode} />
-              </div>
-            )}
           </div>
-          <div style={{ display:"flex", gap:"8px" }}>
-            <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"Salvar alteracoes":""}</button>
-            {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});}}>x</button>}
+        </div>
+
+        {newProduct.barcode&&(
+          <div style={{ marginTop:"12px", background:"#f8fafc", borderRadius:"14px", padding:"12px", textAlign:"center", overflowX:"auto" }}>
+            <BarcodeImage value={newProduct.barcode} />
           </div>
+        )}
+
+        <div style={{ display:"flex", gap:"8px", marginTop:"14px" }}>
+          <button style={{ ...btn("#e94560"), flex:1, borderRadius:"14px", padding:"14px", fontSize:"16px" }} onClick={saveProduct}>
+            {editingId ? "💾 Salvar Alterações" : "💾 Cadastrar Produto"}
+          </button>
+          {editingId&&<button style={{ ...btn("#64748b"), borderRadius:"14px" }} onClick={()=>{setEditingId(null);setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});}}>Cancelar</button>}
         </div>
       </div>
 
-      <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}> Estoque Produtos ({products.length})</div>
-        {products.map(p=>(
-          <div key={p.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"10px", marginBottom:"8px" }}>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:"800", fontSize:"15px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
-                {p.barcode&&<div style={{ fontSize:"11px", color:"#94a3b8", fontFamily:"monospace", marginTop:"3px" }}>{p.barcode}</div>}
+      <div style={{ ...card, borderRadius:"20px", padding:"18px" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"14px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+            <div style={{ width:"38px", height:"38px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"20px" }}>📦</div>
+            <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Estoque de Produtos ({products.length})</div>
+          </div>
+          <input
+            style={{ ...inp, maxWidth:isMobile?"170px":"260px", padding:"9px 11px" }}
+            placeholder="Pesquisar..."
+            value={searchProd}
+            onChange={e=>setSearchProd(e.target.value)}
+          />
+        </div>
+
+        {filteredProducts.length===0 ? (
+          <div style={{ color:"#94a3b8", fontWeight:"800", padding:"12px" }}>Nenhum produto encontrado.</div>
+        ) : filteredProducts.map(p=>{
+          const cost = parseMoney(p.cost || p.lastCost || 0);
+          const price = parseMoney(p.price || 0);
+          const profit = price - cost;
+          const margin = price > 0 ? (profit / price) * 100 : 0;
+
+          return (
+          <div key={p.id} style={{ padding:"14px", border:"1px solid #e2e8f0", borderRadius:"18px", marginBottom:"12px", background:"#fff" }}>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1.4fr 1fr", gap:"12px", alignItems:"center" }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                  <div style={{ width:"44px", height:"44px", borderRadius:"50%", background:"#ffe4e6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px" }}>📦</div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
+                    {p.barcode&&<div style={{ fontSize:"12px", color:"#64748b", fontFamily:"monospace", marginTop:"2px" }}>Código: {p.barcode}</div>}
+                  </div>
+                </div>
+
+                <div style={{ display:"flex", gap:"8px", alignItems:"center", flexWrap:"wrap", marginTop:"10px" }}>
+                  <span style={tag("#6366f1")}>{p.category || "Geral"}</span>
+                  <span style={tag(p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444")}>{p.stock} un. em estoque</span>
+                </div>
               </div>
-              <div style={{ textAlign:"right", whiteSpace:"nowrap" }}>
-                <div style={{ fontWeight:"900", color:"#e94560", fontSize:"16px" }}><div style={{fontSize:"14px",fontWeight:"800",opacity:.85,marginBottom:"6px"}}>Total de entradas</div>{fmtCur(p.price)}</div>
-                <div style={{ fontWeight:"800", color:"#16a34a", fontSize:"11px" }}>Lucro {fmtCur((parseFloat(p.price)||0)-(parseFloat(p.cost||p.lastCost||0)||0))}</div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", borderLeft:isMobile?"none":"1px solid #e2e8f0", paddingLeft:isMobile?"0":"14px" }}>
+                <div>
+                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Custo</div>
+                  <div style={{ fontWeight:"900", color:"#0f172a" }}>{fmtCur(cost)}</div>
+                </div>
+                <div>
+                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Margem</div>
+                  <div style={{ fontWeight:"900", color:margin>=0?"#16a34a":"#dc2626" }}>{fmtPercent(margin)}</div>
+                </div>
+                <div>
+                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Venda</div>
+                  <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(price)}</div>
+                </div>
+                <div>
+                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Lucro</div>
+                  <div style={{ fontWeight:"900", color:profit>=0?"#16a34a":"#dc2626" }}>{fmtCur(profit)}</div>
+                </div>
               </div>
             </div>
 
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
-              <div style={{ display:"flex", gap:"6px", alignItems:"center", flexWrap:"wrap" }}>
-                <span style={tag("#6366f1")}>{p.category}</span>
-                <span style={tag(p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444")}>{p.stock} un.</span>
-              </div>
-
-              <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", justifyContent:"flex-end" }}>
-                <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}> Codigo</button>
-                <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}> Etiqueta</button>
-                <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}> Editar</button>
-                <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}> Excluir</button>
-              </div>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginTop:"14px" }}>
+              <button title="Ver código" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>setShowBarcodeModal(p)}>▥ Código</button>
+              <button title="Imprimir etiqueta" style={{ ...btnSm("#f0fdf4"), color:"#16a34a", border:"1px solid #bbf7d0", padding:"10px", fontSize:"13px" }} onClick={()=>printProductLabels(p)}>🏷 Etiqueta</button>
+              <button title="Editar" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>editProduct(p)}>✎ Editar</button>
+              <button title="Excluir" style={{ ...btnSm("#fff1f2"), color:"#e11d48", border:"1px solid #fecdd3", padding:"10px", fontSize:"13px" }} onClick={()=>deleteProduct(p.id)}>🗑 Excluir</button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 
-  // --- Vendas tab -------------------------------------------------------------
-  const VendasTab = () => (
+  // --- Vendas tab ------------------------------------------------------------
+const VendasTab = () => (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
         {[
@@ -4176,7 +4262,7 @@ const PDVTab = () => (
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-est1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
