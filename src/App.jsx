@@ -165,7 +165,7 @@ async function checkLicenseByEmail(email) {
   try {
     const { data, error } = await supabase
       .from("erpmini_licenses")
-      .select("email, status, expires_at")
+      .select("email, status, expires_at, plan")
       .eq("email", normalizedEmail)
       .maybeSingle();
 
@@ -453,6 +453,95 @@ function AuthGate() {
   }
 
   return <ERPInner onLogout={handleSignOut} cloudStatus="Nuvem sincronizada" licenseInfo={licenseInfo} user={user} />;
+}
+
+
+
+const PLAN_LIMITS = {
+  starter: { products: 30, clients: 20, salesMonth: 50 },
+  pro: { products: Infinity, clients: Infinity, salesMonth: Infinity },
+  premium: { products: Infinity, clients: Infinity, salesMonth: Infinity },
+  mensal: { products: Infinity, clients: Infinity, salesMonth: Infinity },
+};
+
+const normalizePlan = (plan) => {
+  const p = String(plan || "starter").toLowerCase();
+  if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
+  if (p === "mensal") return "pro";
+  if (p === "starter" || p === "pro" || p === "premium") return p;
+  return "starter";
+};
+
+const currentMonthKey = () => new Date().toISOString().slice(0, 7);
+
+const countSalesThisMonth = (sales = []) => {
+  const key = currentMonthKey();
+  return (sales || []).filter((s) => {
+    const d = String(s.date || s.createdAt || s.created_at || s.data || "");
+    return d.slice(0, 7) === key;
+  }).length;
+};
+
+const isLimitReached = (type, plan, counts) => {
+  const p = normalizePlan(plan);
+  const limits = PLAN_LIMITS[p] || PLAN_LIMITS.starter;
+  if (type === "products") return counts.products >= limits.products;
+  if (type === "clients") return counts.clients >= limits.clients;
+  if (type === "salesMonth") return counts.salesMonth >= limits.salesMonth;
+  return false;
+};
+
+const planLimitMessage = (type, plan) => {
+  const p = normalizePlan(plan);
+  const limits = PLAN_LIMITS[p] || PLAN_LIMITS.starter;
+  if (type === "products") return `Voce atingiu o limite de ${limits.products} produtos do plano Starter.`;
+  if (type === "clients") return `Voce atingiu o limite de ${limits.clients} clientes do plano Starter.`;
+  if (type === "salesMonth") return `Voce atingiu o limite de ${limits.salesMonth} vendas mensais do plano Starter.`;
+  return "Limite do plano atingido.";
+};
+
+function PlanUsageCard({ plan, products = [], clients = [], sales = [] }) {
+  const p = normalizePlan(plan);
+  const limits = PLAN_LIMITS[p] || PLAN_LIMITS.starter;
+  const counts = {
+    products: (products || []).length,
+    clients: (clients || []).length,
+    salesMonth: countSalesThisMonth(sales || []),
+  };
+
+  if (p !== "starter") {
+    return (
+      <div style={{ background:"#f0fdf4", border:"1.5px solid #bbf7d0", borderRadius:"16px", padding:"14px", marginBottom:"12px" }}>
+        <div style={{ fontWeight:"900", color:"#166534" }}>Plano {p.toUpperCase()}</div>
+        <div style={{ color:"#166534", fontSize:"13px", fontWeight:"700" }}>Produtos, clientes e vendas liberados.</div>
+      </div>
+    );
+  }
+
+  const row = (label, used, max) => {
+    const pct = Math.min(100, Math.round((used / max) * 100));
+    const danger = pct >= 90;
+    return (
+      <div style={{ marginTop:"10px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", fontWeight:"900", color:danger?"#991b1b":"#334155", fontSize:"13px" }}>
+          <span>{label}</span><span>{used}/{max}</span>
+        </div>
+        <div style={{ height:"9px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden", marginTop:"5px" }}>
+          <div style={{ width:`${pct}%`, height:"100%", background:danger?"#dc2626":"#16a34a" }} />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"16px", padding:"14px", marginBottom:"12px" }}>
+      <div style={{ fontWeight:"900", color:"#9a3412" }}>Plano Starter</div>
+      <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Limites do plano gratuito.</div>
+      {row("Produtos", counts.products, limits.products)}
+      {row("Clientes", counts.clients, limits.clients)}
+      {row("Vendas no mês", counts.salesMonth, limits.salesMonth)}
+    </div>
+  );
 }
 
 
@@ -1265,6 +1354,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const isMobile = useIsMobile();
   const currentUserEmail = (user?.email || "").trim().toLowerCase();
   const isPlatformAdmin = currentUserEmail === "pabloradamez10@gmail.com";
+  const currentPlan = normalizePlan(licenseInfo?.license?.plan || licenseInfo?.plan || "starter");
   const [tab, setTab]             = useState("");
   const [caixaView, setCaixaView] = useState("resumo");
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
@@ -1292,6 +1382,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [showReceipt, setShowReceipt]   = useState(false);
   const [newProduct, setNewProduct]     = useState({ name:"", cost:"", price:"", stock:"", category:"Geral", barcode:"" });
   const [editingId, setEditingId]       = useState(null);
+  const planCounts = { products: products.length, clients: clients.length, salesMonth: countSalesThisMonth(sales) };
   const [searchProd, setSearchProd]     = useState("");
   const [notification, setNotification] = useState(null);
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -1975,6 +2066,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   };
 
   const handleCheckoutConfirm = ({ payments, total:t, change, fiado, receivablePlan }) => {
+    if (isLimitReached("salesMonth", currentPlan, planCounts)) return notify(planLimitMessage("salesMonth", currentPlan), "error");
     const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null, receivablePlan:receivablePlan || null };
     setProducts(prev=>prev.map(p=>{ const item=cart.find(i=>i.id===p.id); return item?{...p,stock:p.stock-item.qty}:p; }));
     if (receivablePlan) {
@@ -1999,6 +2091,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
   const saveClient = () => {
     if (!newClient.name) return notify("Informe o nome do cliente!","error");
+    if (isLimitReached("clients", currentPlan, planCounts)) return notify(planLimitMessage("clients", currentPlan), "error");
     const client = { id:Date.now(), name:newClient.name.trim(), phone:newClient.phone.trim(), limit:parseFloat(newClient.limit)||0, active:true };
     setClients(prev=>[client,...prev]);
     setNewClient({ name:"", phone:"", limit:"" });
@@ -2047,6 +2140,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
   const saveProduct = () => {
     if (!newProduct.name||!newProduct.price||!newProduct.stock) return notify("Preencha todos os campos!","error");
+    if (!editingId && isLimitReached("products", currentPlan, planCounts)) return notify(planLimitMessage("products", currentPlan), "error");
     const barcode = newProduct.barcode || genBarcode();
     if (!editingId && products.find(p=>p.barcode===barcode)) return notify("Codigo de barras ja cadastrado!","error");
     if (editingId) {
@@ -3744,6 +3838,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>Config Configuracoes</div>
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
         <input style={{ ...inp, marginBottom:"14px" }} value={storeName} onChange={e=>setStoreName(e.target.value)} placeholder="Minha Loja" />
+        <PlanUsageCard plan={currentPlan} products={products} clients={clients} sales={sales} />
         <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"12px 14px", marginBottom:"12px" }}>
           <div style={{ fontWeight:"900", fontSize:"14px", color:"#334155", marginBottom:"8px" }}>Status do sistema</div>
           <div style={{ display:"grid", gap:"6px", fontSize:"13px", color:"#64748b" }}>
@@ -3874,7 +3969,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-erp3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
