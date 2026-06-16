@@ -468,6 +468,18 @@ const PLAN_LIMITS = {
   mensal: { products: Infinity, clients: Infinity, salesMonth: Infinity },
 };
 
+
+const allowedTabsForPlan = (plan, isAdmin=false) => {
+  if (isAdmin) return ["inicio","pdv","estoque","vendas","caixa","cliente","fiscal","config"];
+  const p = normalizePlan(plan);
+  if (p === "starter") return ["inicio","pdv","estoque","cliente","config"];
+  if (p === "pro") return ["inicio","pdv","estoque","vendas","caixa","cliente","config"];
+  if (p === "premium") return ["inicio","pdv","estoque","vendas","caixa","cliente","fiscal","config"];
+  return ["inicio","pdv","estoque","cliente","config"];
+};
+
+const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
+
 const normalizePlan = (plan) => {
   const p = String(plan || "starter").toLowerCase();
   if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
@@ -1606,6 +1618,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   };
 
   useEffect(()=>{
+    const normalizedTab = tab === "" ? "inicio" : tab;
+    const accessKey = normalizedTab === "fiado" ? "cliente" : normalizedTab;
+    if (!hasPlanAccess(accessKey, currentPlan, isPlatformAdmin)) {
+      setTab("");
+    }
+  }, [tab, currentPlan, isPlatformAdmin]);
+
+  useEffect(()=>{
     if (tab==="pdv" && !isMobile && barcodeRef.current) barcodeRef.current.focus();
   },[tab, isMobile]);
 
@@ -2244,16 +2264,21 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const tag = (c) => ({ background:c, color:"#fff", borderRadius:"20px", padding:"3px 10px", fontSize:"11px", display:"inline-block" });
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
-  const NAV_ITEMS = [
+  const NAV_ITEMS_ALL = [
     { key:"", icon:"🏠", label:"Inicio"  },
-    { key:"pdv",     icon:"PDV", label:"PDV"     },
+    { key:"pdv",     icon:"🛒", label:"PDV"     },
     { key:"estoque", icon:"📦", label:"Estoque" },
     { key:"vendas",  icon:"📊", label:"Vendas"  },
-    { key:"caixa",   icon:"$", label:"Caixa"   },
+    { key:"caixa",   icon:"💵", label:"Caixa"   },
     { key:"fiado",   icon:"👥", label:"Cliente" },
     { key:"fiscal",  icon:"🧾", label:"Fiscal" },
     { key:"config",  icon:"⚙️", label:"Config"  },
   ];
+
+  const NAV_ITEMS = NAV_ITEMS_ALL.filter(({ key }) => {
+    const normalizedKey = key === "" ? "inicio" : key;
+    return hasPlanAccess(normalizedKey === "fiado" ? "cliente" : normalizedKey, currentPlan, isPlatformAdmin);
+  });
 
   // --- Cart Drawer (mobile) -------------------------------------------------
   const CartDrawer = () => (
@@ -4032,7 +4057,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -4059,12 +4084,12 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       {/* Main content */}
       <div style={{ padding:isMobile?"12px":"24px", maxWidth:"1200px", margin:"0 auto" }}>
         {tab==="" && DashboardTab()}
-        {tab==="pdv"     && PDVTab()}
-        {tab==="estoque" && EstoqueTab()}
-        {tab==="vendas"  && VendasTab()}
-        {tab==="caixa"   && CaixaTab()}
-        {tab==="fiado"   && FiadoTab()}
-        {tab==="fiscal"  && FiscalTab()}
+        {tab==="pdv"     && hasPlanAccess("pdv", currentPlan, isPlatformAdmin) && PDVTab()}
+        {tab==="estoque" && hasPlanAccess("estoque", currentPlan, isPlatformAdmin) && EstoqueTab()}
+        {tab==="vendas"  && hasPlanAccess("vendas", currentPlan, isPlatformAdmin) && VendasTab()}
+        {tab==="caixa"   && hasPlanAccess("caixa", currentPlan, isPlatformAdmin) && CaixaTab()}
+        {tab==="fiado"   && hasPlanAccess("cliente", currentPlan, isPlatformAdmin) && FiadoTab()}
+        {tab==="fiscal"  && hasPlanAccess("fiscal", currentPlan, isPlatformAdmin) && FiscalTab()}
         {tab==="config"  && ConfigTab()}
       </div>
 
