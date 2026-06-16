@@ -2345,266 +2345,96 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
   // --- Dashboard tab ----------------------------------------------------------
   const DashboardTab = () => {
-    const starterMode = normalizePlan(currentPlan) === "starter" && !isPlatformAdmin;
+    const p = normalizePlan(currentPlan);
+    const isStarter = p === "starter" && !isPlatformAdmin;
+    const planName = isPlatformAdmin ? "Administrador" : (p === "starter" ? "Starter grátis" : p === "pro" ? "Pro mensal" : "Premium");
 
-    if (starterMode) {
-      return (
-        <div>
-          {(lowStockProducts.length>0 || overdueFiado.length>0) && (
-            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px", border:"1.5px solid #fee2e2" }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"10px" }}>
-                <div>
-                  <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Alertas importantes</div>
-                  <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Veja o que precisa de atenção agora.</div>
-                </div>
-                <div style={{ background:"#ef4444", color:"#fff", borderRadius:"999px", minWidth:"34px", height:"34px", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>
-                  {lowStockProducts.length + overdueFiado.length}
-                </div>
+    return (
+      <div>
+        {(lowStockProducts.length>0 || overdueFiado.length>0) && (
+          <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px", border:"1.5px solid #fee2e2" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"10px" }}>
+              <div>
+                <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Alertas importantes</div>
+                <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Veja o que precisa de atenção agora.</div>
               </div>
-
-              {lowStockProducts.length>0 && (
-                <div style={{ background:"#fef2f2", border:"1.5px solid #fecaca", borderRadius:"14px", padding:"12px", marginBottom:"8px" }}>
-                  <div style={{ fontWeight:"900", color:"#991b1b" }}>{lowStockProducts.length} produto(s) com estoque baixo</div>
-                  <div style={{ color:"#991b1b", fontSize:"13px", fontWeight:"700" }}>Produtos com 5 unidades ou menos.</div>
-                  <button onClick={()=>setTab("estoque")} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver estoque</button>
-                </div>
-              )}
-
-              {overdueFiado.length>0 && (
-                <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
-                  <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
-                  <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Clientes com pagamento em atraso.</div>
-                  <button onClick={()=>setTab("fiado")} style={{ ...btn("#f97316"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver clientes</button>
-                </div>
-              )}
+              <div style={{ background:"#ef4444", color:"#fff", borderRadius:"999px", minWidth:"34px", height:"34px", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>
+                {lowStockProducts.length + overdueFiado.length}
+              </div>
             </div>
-          )}
 
-          <div style={{ background:"linear-gradient(135deg,#0f172a,#1e293b)", color:"#fff", borderRadius:"20px", padding:"18px", marginBottom:"14px", boxShadow:"0 8px 24px rgba(15,23,42,.16)" }}>
-            <div style={{ fontSize:"13px", color:"#cbd5e1", fontWeight:"800" }}>Plano atual</div>
-            <div style={{ fontSize:"28px", fontWeight:"900", marginTop:"2px" }}>Starter grátis</div>
-            <div style={{ color:"#cbd5e1", fontSize:"13px", fontWeight:"700", marginTop:"6px" }}>
-              Liberado para PDV, estoque, clientes e configurações.
-            </div>
+            {lowStockProducts.length>0 && (
+              <div style={{ background:"#fef2f2", border:"1.5px solid #fecaca", borderRadius:"14px", padding:"12px", marginBottom:"8px" }}>
+                <div style={{ fontWeight:"900", color:"#991b1b" }}>{lowStockProducts.length} produto(s) com estoque baixo</div>
+                <div style={{ color:"#991b1b", fontSize:"13px", fontWeight:"700" }}>Produtos com 5 unidades ou menos.</div>
+                <button onClick={()=>setTab("estoque")} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver estoque</button>
+              </div>
+            )}
+
+            {overdueFiado.length>0 && (
+              <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
+                <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
+                <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Clientes com pagamento em atraso.</div>
+                <button onClick={()=>setTab("fiado")} style={{ ...btn("#f97316"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver clientes</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ background:"linear-gradient(135deg,#0f172a,#1e293b)", color:"#fff", borderRadius:"20px", padding:"18px", marginBottom:"14px", boxShadow:"0 8px 24px rgba(15,23,42,.16)" }}>
+          <div style={{ fontSize:"13px", color:"#cbd5e1", fontWeight:"800" }}>Plano atual</div>
+          <div style={{ fontSize:"28px", fontWeight:"900", marginTop:"2px" }}>{planName}</div>
+          <div style={{ color:"#cbd5e1", fontSize:"13px", fontWeight:"700", marginTop:"6px" }}>
+            {isStarter ? "Liberado para PDV, estoque, clientes e configurações." : "Acesso liberado conforme seu plano."}
+          </div>
+        </div>
+
+        <PlanUsageCard plan={currentPlan} products={products} clients={clients} sales={sales} />
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
+          <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
+            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Vendas registradas hoje</div>
+            <div style={{ fontSize:"30px", fontWeight:"900", color:"#16a34a", marginTop:"4px" }}>{salesOfToday.length}</div>
+            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Quantidade de vendas feitas no dia.</div>
           </div>
 
-          <PlanUsageCard plan={currentPlan} products={products} clients={clients} sales={sales} />
-
-          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
-            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
-              <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Vendas registradas hoje</div>
-              <div style={{ fontSize:"30px", fontWeight:"900", color:"#16a34a", marginTop:"4px" }}>{salesOfToday.length}</div>
-              <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Quantidade de vendas feitas no dia.</div>
-            </div>
-
-            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
-              <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Produtos cadastrados</div>
-              <div style={{ fontSize:"30px", fontWeight:"900", color:"#2563eb", marginTop:"4px" }}>{products.length}</div>
-              <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Limite do Starter: 30 produtos.</div>
-            </div>
-
-            <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
-              <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Clientes cadastrados</div>
-              <div style={{ fontSize:"30px", fontWeight:"900", color:"#7c3aed", marginTop:"4px" }}>{clients.length}</div>
-              <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Limite do Starter: 20 clientes.</div>
-            </div>
+          <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
+            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Produtos cadastrados</div>
+            <div style={{ fontSize:"30px", fontWeight:"900", color:"#2563eb", marginTop:"4px" }}>{products.length}</div>
+            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>{isStarter ? "Limite do Starter: 30 produtos." : "Produtos do seu estoque."}</div>
           </div>
 
-          <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
-            <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"8px" }}>Resumo do Starter</div>
-            <div style={{ display:"grid", gap:"9px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
-                <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido hoje</span>
-                <strong style={{ color:"#16a34a" }}>{fmtCur(salesTodayTotal)}</strong>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
-                <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido no mês</span>
-                <strong style={{ color:"#2563eb" }}>{fmtCur(salesMonthTotal)}</strong>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between" }}>
-                <span style={{ color:"#64748b", fontWeight:"800" }}>Fiado em aberto</span>
-                <strong style={{ color:"#f97316" }}>{fmtCur(fiadoTotal)}</strong>
-              </div>
+          <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
+            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Clientes cadastrados</div>
+            <div style={{ fontSize:"30px", fontWeight:"900", color:"#7c3aed", marginTop:"4px" }}>{clients.length}</div>
+            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>{isStarter ? "Limite do Starter: 20 clientes." : "Clientes cadastrados no sistema."}</div>
+          </div>
+        </div>
+
+        <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
+          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"8px" }}>Resumo rápido</div>
+          <div style={{ display:"grid", gap:"9px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido hoje</span>
+              <strong style={{ color:"#16a34a" }}>{fmtCur(salesTodayTotal)}</strong>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido no mês</span>
+              <strong style={{ color:"#2563eb" }}>{fmtCur(salesMonthTotal)}</strong>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between" }}>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Fiado em aberto</span>
+              <strong style={{ color:"#f97316" }}>{fmtCur(fiadoTotal)}</strong>
             </div>
           </div>
+        </div>
 
+        {isStarter && (
           <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"16px", padding:"14px", color:"#1d4ed8", fontWeight:"800", fontSize:"13px", lineHeight:1.45 }}>
             Recursos como Caixa profissional, Relatórios, Vendas avançadas e Fiscal ficam disponíveis nos planos pagos.
           </div>
-        </div>
-      );
-    }
-
-    return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
-        {[
-          ["Vendas hoje", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
-          ["Vendas do mes", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
-          ["Ticket medio hoje", fmtCur(ticketToday), "linear-gradient(135deg,#6366f1,#4338ca)"],
-          ["Cliente aberto", fmtCur(fiadoTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
-        ].map(([l,v,c],i)=>(
-          <div key={i} style={{ background:c, borderRadius:"14px", padding:"15px", color:"#fff" }}>
-            <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
-            <div style={{ fontSize:isMobile?"18px":"22px", fontWeight:"900" }}>{v}</div>
-          </div>
-        ))}
+        )}
       </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
-        {[
-          ["Lucro hoje", fmtCur(profitTodayTotal), "#16a34a"],
-          ["Lucro mes", fmtCur(profitMonthTotal), "#2563eb"],
-          ["Margem mes", `${marginMonthPercent.toFixed(1)}%`, "#7c3aed"],
-        ].map(([l,v,c],i)=>(
-          <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
-            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
-            <div style={{ fontSize:"24px", fontWeight:"900", color:c }}>{v}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
-        {[
-          ["Vendas registradas hoje", salesOfToday.length, "#e94560"],
-          ["Clientes", clients.length, "#6366f1"],
-          ["Estoque baixo", lowStockProducts.length, "#ef4444"],
-          ["Fiados vencidos", overdueFiado.length, "#f97316"],
-          ["Pagar hoje", payablesDueToday.length, "#f59e0b"],
-          ["Pagar vencidas", payablesOverdue.length, "#dc2626"],
-          ["Receber hoje", receivablesDueToday.length, "#16a34a"],
-          ["Receber atrasadas", receivablesOverdue.length, "#e94560"],
-        ].map(([l,v,c],i)=>(
-          <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
-            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
-            <div style={{ fontSize:"24px", fontWeight:"900", color:c }}>{v}</div>
-          </div>
-        ))}
-      </div>
-
-      {(overdueFiado.length>0 || lowStockProducts.length>0 || payablesDueToday.length>0 || payablesOverdue.length>0 || receivablesDueToday.length>0 || receivablesOverdue.length>0) && (
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}> Alertas</div>
-          {overdueFiado.length>0 && (
-            <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
-              <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
-              <div style={{ fontSize:"12px", color:"#9a3412" }}>Acesse a aba Fiado para cobrar os clientes.</div>
-            </div>
-          )}
-          {payablesOverdue.length>0 && (
-            <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
-              <div style={{ fontWeight:"900", color:"#991b1b" }}>{payablesOverdue.length} conta(s) vencida(s)</div>
-              <div style={{ fontSize:"12px", color:"#991b1b", marginBottom:"8px" }}>Total vencido: {fmtCur(payablesOverdueTotal)}.</div>
-              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); }} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px" }}>Ver contas em aberto</button>
-            </div>
-          )}
-          {payablesDueToday.length>0 && (
-            <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
-              <div style={{ fontWeight:"900", color:"#9a3412" }}>{payablesDueToday.length} conta(s) vencem hoje</div>
-              <div style={{ fontSize:"12px", color:"#9a3412", marginBottom:"8px" }}>Total para pagar hoje: {fmtCur(payablesDueTodayTotal)}.</div>
-              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); }} style={{ ...btn("#f59e0b"), padding:"9px 12px", fontSize:"13px" }}>Ver contas de hoje</button>
-            </div>
-          )}
-          {receivablesOverdue.length>0 && (
-            <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
-              <div style={{ fontWeight:"900", color:"#991b1b" }}>{receivablesOverdue.length} conta(s) a receber atrasada(s)</div>
-              <div style={{ fontSize:"12px", color:"#991b1b", marginBottom:"8px" }}>Total atrasado: {fmtCur(receivablesOverdueTotal)}.</div>
-              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); setFinanceiroView("receber"); }} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px" }}>Ver contas a receber</button>
-            </div>
-          )}
-          {receivablesDueToday.length>0 && (
-            <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
-              <div style={{ fontWeight:"900", color:"#166534" }}>{receivablesDueToday.length} conta(s) a receber hoje</div>
-              <div style={{ fontSize:"12px", color:"#166534", marginBottom:"8px" }}>Total previsto hoje: {fmtCur(receivablesDueTodayTotal)}.</div>
-              <button onClick={()=>{ setTab("caixa"); setCaixaView("financeiro"); setFinanceiroView("receber"); }} style={{ ...btn("#16a34a"), padding:"9px 12px", fontSize:"13px" }}>Ver recebimentos</button>
-            </div>
-          )}
-          {lowStockProducts.length>0 && (
-            <div style={{ background:"#fef2f2", border:"1.5px solid #fca5a5", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontWeight:"900", color:"#991b1b" }}>{lowStockProducts.length} produto(s) com estoque baixo</div>
-              <div style={{ fontSize:"12px", color:"#991b1b", marginBottom:"8px" }}>Produtos com 5 unidades ou menos.</div>
-              <button onClick={()=>setTab("estoque")} style={{ ...btn("#dc2626"), padding:"9px 12px", fontSize:"13px" }}>Ver estoque baixo</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}> Top clientes</div>
-        {topClients.length===0 ? <div style={{ color:"#94a3b8", fontSize:"14px" }}>Sem vendas ainda.</div> : topClients.map((c,i)=>(
-          <div key={c.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
-            <div>
-              <div style={{ fontWeight:"900" }}>{i+1}. {c.name}</div>
-              <div style={{ fontSize:"12px", color:"#64748b" }}>Aberto: {fmtCur(c.open)}</div>
-            </div>
-            <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.total)}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}> Top produtos</div>
-        {topProducts.length===0 ? <div style={{ color:"#94a3b8", fontSize:"14px" }}>Sem vendas ainda.</div> : topProducts.map((p,i)=>(
-          <div key={p.name} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <strong>{i+1}. {p.name}</strong>
-              <strong style={{ color:"#2563eb" }}>{p.qty} un.</strong>
-            </div>
-            <div style={{ fontSize:"12px", color:"#64748b" }}>Total: {fmtCur(p.total)}</div>
-            <div style={{ height:"6px", background:"#e2e8f0", borderRadius:"4px", marginTop:"6px" }}>
-              <div style={{ width:`${Math.min(100,(p.qty/(topProducts[0]?.qty||1))*100)}%`, background:"#2563eb", height:"100%", borderRadius:"4px" }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Resumo financeiro do mes</div>
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"10px" }}>
-          {[
-            ["Entradas mes", fmtCur(salesMonthTotal), "#16a34a"],
-            ["A pagar mes", fmtCur(payablesMonthTotal), "#e94560"],
-            ["Pago mes", fmtCur(payablesPaidMonthTotal), "#2563eb"],
-            ["Previsto", fmtCur(salesMonthTotal + receivablesDueMonthTotal), "#16a34a"],
-          ].map(([l,v,c])=>(
-            <div key={l} style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px" }}>
-              <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"800" }}>{l}</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:c }}>{v}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Fiados em aberto</div>
-        {openFiadoSales.length===0 ? (
-          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum fiado em aberto.</div>
-        ) : openFiadoSales.slice(0,5).map(s=>(
-          <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
-            <div>
-              <div style={{ fontWeight:"900" }}>#{s.id} - {s.fiado.clientName}</div>
-              <div style={{ fontSize:"12px", color:"#64748b" }}>Vence: {s.fiado.dueDate} | Compra: {fmtCur(s.total)}</div>
-            </div>
-            <div style={{ fontWeight:"900", color:"#e94560" }}>{fmtCur(fiadoOpenAmount(s))}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Ultimas vendas</div>
-        {sales.slice(0,5).length===0 ? (
-          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda registrada.</div>
-        ) : sales.slice(0,5).map(s=>(
-          <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
-            <div>
-              <div style={{ fontWeight:"900" }}>Venda #{s.id}</div>
-              <div style={{ fontSize:"12px", color:"#64748b" }}>{fmtDate(s.date)} {s.fiado ? `- Fiado: ${s.fiado.clientName}` : ""}</div>
-            </div>
-            <div style={{ fontWeight:"900", color:"#e94560" }}>{fmtCur(s.total)}</div>
-          </div>
-        ))}
-      </div>
-    </div>
     );
   };
 
@@ -4262,7 +4092,7 @@ const VendasTab = () => (
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-est1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-est2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
