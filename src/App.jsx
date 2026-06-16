@@ -364,11 +364,11 @@ function AuthGate() {
     );
   }
 
-  return <ERPInner onLogout={handleSignOut} cloudStatus="Nuvem sincronizada" licenseInfo={licenseInfo} />;
+  return <ERPInner onLogout={handleSignOut} cloudStatus="Nuvem sincronizada" licenseInfo={licenseInfo} user={user} />;
 }
 
 
-const APP_VERSION = "LICENSE-CONTROL-ETAPA21-20260615-2025";
+const APP_VERSION = "ADMIN-LICENCAS-ETAPA23-20260616-0508";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1173,8 +1173,10 @@ function ReceiptModal({ sale, storeName, onClose }) {
 }
 
 // --- MAIN --------------------------------------------------------------------
-function ERPInner({ onLogout, cloudStatus, licenseInfo } = {}) {
+function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const isMobile = useIsMobile();
+  const currentUserEmail = (user?.email || "").trim().toLowerCase();
+  const isPlatformAdmin = currentUserEmail === "pabloradamez10@gmail.com";
   const [tab, setTab]             = useState("");
   const [caixaView, setCaixaView] = useState("resumo");
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
@@ -3202,9 +3204,218 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo } = {}) {
     );
   };
 
+
+  const AdminLicensesPanel = () => {
+    const [licenses, setLicenses] = useState([]);
+    const [adminLoading, setAdminLoading] = useState(false);
+    const [adminMsg, setAdminMsg] = useState("");
+    const [newEmail, setNewEmail] = useState("");
+    const [newExpires, setNewExpires] = useState(() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 1);
+      return d.toISOString().slice(0, 10);
+    });
+    const [newPlan, setNewPlan] = useState("mensal");
+    const [newNotes, setNewNotes] = useState("");
+
+    const loadLicenses = useCallback(async () => {
+      if (!isPlatformAdmin) return;
+      setAdminLoading(true);
+      setAdminMsg("");
+      const { data, error } = await supabase
+        .from("erpmini_licenses")
+        .select("email,status,expires_at,plan,notes,created_at,updated_at")
+        .order("expires_at", { ascending: true });
+      setAdminLoading(false);
+      if (error) {
+        setAdminMsg("Erro ao carregar licencas: " + error.message);
+        return;
+      }
+      setLicenses(data || []);
+    }, [isPlatformAdmin]);
+
+    useEffect(() => {
+      loadLicenses();
+    }, [loadLicenses]);
+
+    const saveLicense = async (payload) => {
+      setAdminLoading(true);
+      setAdminMsg("");
+      const { error } = await supabase
+        .from("erpmini_licenses")
+        .upsert({ ...payload, updated_at: new Date().toISOString() }, { onConflict: "email" });
+      setAdminLoading(false);
+      if (error) {
+        setAdminMsg("Erro ao salvar licenca: " + error.message);
+        return false;
+      }
+      setAdminMsg("Licenca salva com sucesso.");
+      await loadLicenses();
+      return true;
+    };
+
+    const createLicense = async () => {
+      const email = newEmail.trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        setAdminMsg("Informe um e-mail valido.");
+        return;
+      }
+      if (!newExpires) {
+        setAdminMsg("Informe a data de vencimento.");
+        return;
+      }
+      const ok = await saveLicense({
+        email,
+        status: "ativo",
+        expires_at: newExpires,
+        plan: newPlan || "mensal",
+        notes: newNotes || null,
+      });
+      if (ok) {
+        setNewEmail("");
+        setNewNotes("");
+      }
+    };
+
+    const setStatus = async (lic, status) => {
+      await saveLicense({
+        email: lic.email,
+        status,
+        expires_at: lic.expires_at,
+        plan: lic.plan || "mensal",
+        notes: lic.notes || null,
+      });
+    };
+
+    const extendLicense = async (lic, months = 1) => {
+      const base = new Date((lic.expires_at || new Date().toISOString().slice(0,10)) + "T00:00:00");
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const startDate = base < today ? today : base;
+      startDate.setMonth(startDate.getMonth() + months);
+      await saveLicense({
+        email: lic.email,
+        status: "ativo",
+        expires_at: startDate.toISOString().slice(0, 10),
+        plan: lic.plan || "mensal",
+        notes: lic.notes || null,
+      });
+    };
+
+    const changeExpires = async (lic, value) => {
+      if (!value) return;
+      await saveLicense({
+        email: lic.email,
+        status: lic.status || "ativo",
+        expires_at: value,
+        plan: lic.plan || "mensal",
+        notes: lic.notes || null,
+      });
+    };
+
+    const todayStr = new Date().toISOString().slice(0,10);
+    const activeCount = licenses.filter(l => (l.status || "").toLowerCase() === "ativo" && l.expires_at >= todayStr).length;
+    const blockedCount = licenses.filter(l => (l.status || "").toLowerCase() !== "ativo" || l.expires_at < todayStr).length;
+
+    return (
+      <div style={card}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
+          <div>
+            <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Admin Licencas</div>
+            <div style={{ fontSize:"12px", color:"#64748b" }}>Visivel somente para Pablo.</div>
+          </div>
+          <button style={{ ...btn("#2563eb"), padding:"9px 12px", fontSize:"12px" }} onClick={loadLicenses} disabled={adminLoading}>
+            Atualizar
+          </button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr", gap:"8px", marginBottom:"12px" }}>
+          <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:"12px", padding:"10px" }}>
+            <div style={{ fontSize:"11px", color:"#166534", fontWeight:"800" }}>Ativas</div>
+            <div style={{ fontSize:"22px", fontWeight:"900", color:"#16a34a" }}>{activeCount}</div>
+          </div>
+          <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"12px", padding:"10px" }}>
+            <div style={{ fontSize:"11px", color:"#9a3412", fontWeight:"800" }}>Bloqueadas/vencidas</div>
+            <div style={{ fontSize:"22px", fontWeight:"900", color:"#f97316" }}>{blockedCount}</div>
+          </div>
+          {!isMobile && <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:"12px", padding:"10px" }}>
+            <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Total</div>
+            <div style={{ fontSize:"22px", fontWeight:"900", color:"#2563eb" }}>{licenses.length}</div>
+          </div>}
+        </div>
+
+        <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+          <div style={{ fontWeight:"900", fontSize:"14px", marginBottom:"8px", color:"#334155" }}>Liberar novo acesso</div>
+          <input style={{ ...inp, marginBottom:"8px" }} value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="email@cliente.com" />
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
+            <input style={inp} type="date" value={newExpires} onChange={e=>setNewExpires(e.target.value)} />
+            <select style={inp} value={newPlan} onChange={e=>setNewPlan(e.target.value)}>
+              <option value="mensal">Mensal</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="anual">Anual</option>
+              <option value="teste">Teste</option>
+            </select>
+          </div>
+          <input style={{ ...inp, marginBottom:"8px" }} value={newNotes} onChange={e=>setNewNotes(e.target.value)} placeholder="Observacao opcional" />
+          <button style={{ ...btn("#16a34a"), width:"100%" }} onClick={createLicense} disabled={adminLoading}>
+            Liberar acesso
+          </button>
+        </div>
+
+        {adminMsg && (
+          <div style={{ background:adminMsg.startsWith("Erro")?"#fef2f2":"#f0fdf4", border:`1.5px solid ${adminMsg.startsWith("Erro")?"#fecaca":"#bbf7d0"}`, color:adminMsg.startsWith("Erro")?"#991b1b":"#166534", borderRadius:"12px", padding:"10px", fontSize:"13px", fontWeight:"800", marginBottom:"12px" }}>
+            {adminMsg}
+          </div>
+        )}
+
+        <div style={{ display:"grid", gap:"10px" }}>
+          {adminLoading && licenses.length === 0 ? (
+            <div style={{ color:"#64748b", fontSize:"13px" }}>Carregando licencas...</div>
+          ) : licenses.length === 0 ? (
+            <div style={{ color:"#64748b", fontSize:"13px" }}>Nenhuma licenca cadastrada.</div>
+          ) : licenses.map((lic) => {
+            const isExpired = lic.expires_at < todayStr;
+            const isActive = (lic.status || "").toLowerCase() === "ativo" && !isExpired;
+            return (
+              <div key={lic.email} style={{ border:"1.5px solid #e2e8f0", borderRadius:"14px", padding:"12px", background:"#fff" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:"8px", alignItems:"flex-start", marginBottom:"8px" }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{lic.email}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>Plano: {lic.plan || "mensal"}</div>
+                  </div>
+                  <span style={{ borderRadius:"999px", padding:"5px 9px", fontSize:"11px", fontWeight:"900", color:isActive?"#166534":"#991b1b", background:isActive?"#dcfce7":"#fee2e2", whiteSpace:"nowrap" }}>
+                    {isActive ? "Ativo" : isExpired ? "Vencido" : "Bloqueado"}
+                  </span>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", alignItems:"center", marginBottom:"8px" }}>
+                  <label style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>
+                    Vencimento
+                    <input style={{ ...inp, marginTop:"4px" }} type="date" value={lic.expires_at || ""} onChange={e=>changeExpires(lic, e.target.value)} />
+                  </label>
+                  <div style={{ fontSize:"12px", color:"#64748b" }}>
+                    Observacao: {lic.notes || "-"}
+                  </div>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"6px" }}>
+                  <button style={{ ...btn("#16a34a"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"ativo")}>Liberar</button>
+                  <button style={{ ...btn("#ef4444"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"bloqueado")}>Bloquear</button>
+                  <button style={{ ...btn("#2563eb"), padding:"9px", fontSize:"12px" }} onClick={()=>extendLicense(lic,1)}>+1 mes</button>
+                  <button style={{ ...btn("#7c3aed"), padding:"9px", fontSize:"12px" }} onClick={()=>extendLicense(lic,12)}>+1 ano</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   // --- Config tab -------------------------------------------------------------
   const ConfigTab = () => (
     <div>
+      {isPlatformAdmin && <AdminLicensesPanel />}
       <div style={card}>
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>Config Configuracoes</div>
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
@@ -3339,7 +3550,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-lic4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
