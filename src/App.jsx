@@ -171,7 +171,7 @@ function SupabaseLicenseBlockedScreen({ info, onLogout }) {
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
       <div style={{ width:"100%", maxWidth:"420px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)", textAlign:"center" }}>
         <div style={{ fontSize:"30px", fontWeight:"900", color:"#0f172a", marginBottom:"6px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
-        <div style={{ fontSize:"42px", margin:"14px 0" }}>ðŸ”’</div>
+        <div style={{ fontSize:"42px", margin:"14px 0" }}></div>
         <h2 style={{ margin:"0 0 10px", color:"#0f172a" }}>{info?.title || "Acesso bloqueado"}</h2>
         <p style={{ color:"#64748b", fontWeight:"700", lineHeight:1.4 }}>{info?.message || "Sua licenca nao esta liberada."}</p>
         <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"14px", padding:"12px", color:"#9a3412", fontWeight:"800", fontSize:"13px", margin:"18px 0" }}>
@@ -263,7 +263,7 @@ function AuthScreen() {
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>E-mail</label>
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
-        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        <input type="" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
         <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
           {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar acesso"}
@@ -757,7 +757,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
 
         {step==="choose" && (
           <>
-            <div style={{ fontSize:"12px", fontWeight:"700", color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:"12px" }}>Forma de Pagamento</div>
+            <div style={{ fontSize:"12px", fontWeight:"700", color:"#94a3b8", textTransform:"", letterSpacing:"0.5px", marginBottom:"12px" }}>Forma de Pagamento</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"10px" }}>
               {PAYMENT_METHODS.filter(m=>!isReceive || m.key!=="crediario").map(m=>(
                 <button key={m.key} onClick={()=>handleMethod(m.key)}
@@ -876,7 +876,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                 </select>
               </div>
               <div>
-                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Quando receber a 1Âª parcela?</label>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Quando receber a 1ª parcela?</label>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", marginBottom:"8px" }}>
                   <button type="button" onClick={()=>{setInstallmentStartOption("today");setInstallmentFirstDueDate(todayISO());}}
                     style={{ padding:"10px", border:"none", borderRadius:"10px", background:installmentStartOption==="today"?"#16a34a":"#f1f5f9", color:installmentStartOption==="today"?"#fff":"#64748b", fontWeight:"900" }}>
@@ -896,7 +896,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
               <div style={{ fontWeight:"900", color:"#0369a1", marginBottom:"6px" }}>Resumo do crediario</div>
               <div style={{ fontSize:"13px", color:"#075985" }}>{installmentCount} vez(es) de {fmtCur(total/(parseInt(installmentCount,10)||2))}</div>
               <div style={{ fontSize:"12px", color:"#64748b" }}>
-                1Âª parcela: {installmentFirstDueDate ? new Date(installmentFirstDueDate+"T00:00:00").toLocaleDateString("pt-BR") : "-"}.
+                1ª parcela: {installmentFirstDueDate ? new Date(installmentFirstDueDate+"T00:00:00").toLocaleDateString("pt-BR") : "-"}.
                 {installmentStartOption==="today" ? " Recebe hoje." : installmentStartOption==="30days" ? " Primeira em 30 dias." : " Data personalizada."}
               </div>
               <div style={{ fontSize:"12px", color:"#64748b" }}>O recebimento entrara em Caixa / Financeiro / A receber.</div>
@@ -917,7 +917,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
         {step==="fiado" && (
           <>
             <div style={{ textAlign:"center", marginBottom:"16px" }}>
-              <div style={{ fontSize:"40px" }}>ðŸ¤</div>
+              <div style={{ fontSize:"40px" }}></div>
               <div style={{ fontWeight:"700", fontSize:"16px" }}>Venda no Fiado</div>
               <div style={{ fontSize:"13px", color:"#64748b" }}>Selecione o cliente para vincular a divida</div>
             </div>
@@ -1037,7 +1037,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>â¬…ï¸ Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}> Voltar</button>
               <button onClick={confirmDinheiro} disabled={(parseFloat(amountPaid)||0)<total}
                 style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px", opacity:(parseFloat(amountPaid)||0)<total?0.4:1 }}>
                 OK Confirmar
@@ -1088,7 +1088,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
             )}
             <div style={{ display:"flex", gap:"10px" }}>
               <button onClick={()=>{setStep("choose");setSelectedMethod(null);setMixedPayments([]);}}
-                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}>â¬…ï¸ Voltar</button>
+                style={{ padding:"14px 18px", background:"#f1f5f9", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700" }}> Voltar</button>
               {step==="mixed_done" && (
                 <button onClick={confirmMixed}
                   style={{ flex:1, padding:"14px", background:"#16a34a", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>
@@ -1132,16 +1132,16 @@ function ReceiptModal({ sale, storeName, onClose }) {
           <button onClick={onClose} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>x</button>
         </div>
 
-        <div ref={receiptRef} style={{ background:"#fafafa", border:"1px dashed #ccc", borderRadius:"12px", padding:"20px", fontFamily:"'Courier New',monospace", fontSize:"13px", lineHeight:1.7 }}>
+        <div ref={receiptRef} style={{ background:"#fafafa", border:"", borderRadius:"12px", padding:"20px", fontFamily:"'Courier New',monospace", fontSize:"13px", lineHeight:1.7 }}>
           <div style={{ textAlign:"center", marginBottom:"8px" }}>
             <div style={{ fontWeight:"800", fontSize:"18px" }}>{storeName||"ERPmini"}</div>
             <div style={{ fontSize:"11px", color:"#777" }}>Comprovante de Pagamento</div>
           </div>
-          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <hr style={{ border:"none", borderTop:"", margin:"8px 0" }} />
           <div style={{ display:"flex", justifyContent:"space-between" }}><span>Pedido</span><span style={{ fontWeight:"700" }}>#{sale.id}</span></div>
           <div style={{ display:"flex", justifyContent:"space-between" }}><span>Data</span><span>{fmtDate(sale.date)}</span></div>
-          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
-          <div style={{ fontWeight:"700", fontSize:"11px", textTransform:"uppercase", marginBottom:"4px" }}>Itens</div>
+          <hr style={{ border:"none", borderTop:"", margin:"8px 0" }} />
+          <div style={{ fontWeight:"700", fontSize:"11px", textTransform:"", marginBottom:"4px" }}>Itens</div>
           {sale.items.map(item=>(
             <div key={item.id} style={{ marginBottom:"4px" }}>
               <div style={{ fontSize:"13px", fontWeight:"600" }}>{item.name}</div>
@@ -1151,12 +1151,12 @@ function ReceiptModal({ sale, storeName, onClose }) {
               </div>
             </div>
           ))}
-          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <hr style={{ border:"none", borderTop:"", margin:"8px 0" }} />
           <div style={{ display:"flex", justifyContent:"space-between", fontWeight:"800", fontSize:"16px", margin:"4px 0" }}>
             <span>TOTAL</span><span>{fmtCur(sale.total)}</span>
           </div>
-          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
-          <div style={{ fontWeight:"700", fontSize:"11px", textTransform:"uppercase", marginBottom:"6px" }}>Pagamento</div>
+          <hr style={{ border:"none", borderTop:"", margin:"8px 0" }} />
+          <div style={{ fontWeight:"700", fontSize:"11px", textTransform:"", marginBottom:"6px" }}>Pagamento</div>
           {sale.payments.map((p,i)=>(
             <div key={i} style={{ display:"flex", justifyContent:"space-between", marginBottom:"3px" }}>
               <span>{mIcon(p.method)} {mLabel(p.method)}</span>
@@ -1171,7 +1171,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
               </div>
             </>
           )}
-          <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }} />
+          <hr style={{ border:"none", borderTop:"", margin:"8px 0" }} />
           <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! <br/>Volte sempre.</div>
         </div>
 
@@ -1187,7 +1187,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
 // --- MAIN --------------------------------------------------------------------
 function ERPInner() {
   const isMobile = useIsMobile();
-  const [tab, setTab]             = useState("dashboard");
+  const [tab, setTab]             = useState("");
   const [caixaView, setCaixaView] = useState("resumo");
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
   const [cart, setCart]           = useState([]);
@@ -2039,13 +2039,13 @@ function ERPInner() {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
-    { key:"dashboard", icon:"ðŸ ", label:"Inicio"  },
-    { key:"pdv",     icon:"ðŸ›’", label:"PDV"     },
-    { key:"estoque", icon:"ðŸ“¦", label:"Estoque" },
-    { key:"vendas",  icon:"ðŸ“Š", label:"Vendas"  },
-    { key:"caixa",   icon:"ðŸ’°", label:"Caixa"   },
-    { key:"fiado",   icon:"ðŸ‘¥", label:"Cliente" },
-    { key:"config",  icon:"âš™ï¸", label:"Config"  },
+    { key:"", icon:"", label:"Inicio"  },
+    { key:"pdv",     icon:"", label:"PDV"     },
+    { key:"estoque", icon:"", label:"Estoque" },
+    { key:"",  icon:"", label:""  },
+    { key:"caixa",   icon:"", label:"Caixa"   },
+    { key:"fiado",   icon:"", label:"Cliente" },
+    { key:"config",  icon:"", label:"Config"  },
   ];
 
   // --- Cart Drawer (mobile) -------------------------------------------------
@@ -2054,7 +2054,7 @@ function ERPInner() {
       <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"20px 16px 32px", width:"100%", maxHeight:"80vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
         <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 16px" }} />
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
-          <div style={{ fontWeight:"800", fontSize:"17px" }}>ðŸ›’ PDV Carrinho ({cartCount})</div>
+          <div style={{ fontWeight:"800", fontSize:"17px" }}> PDV Carrinho ({cartCount})</div>
           <button onClick={()=>setShowCart(false)} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer" }}>x</button>
         </div>
         {cart.length===0
@@ -2098,8 +2098,8 @@ function ERPInner() {
     <div>
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
         {[
-          ["Vendas hoje", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
-          ["Vendas do mes", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
+          ["", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
+          ["", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
           ["Ticket medio hoje", fmtCur(ticketToday), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ["Cliente aberto", fmtCur(fiadoTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
         ].map(([l,v,c],i)=>(
@@ -2112,7 +2112,7 @@ function ERPInner() {
 
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
         {[
-          ["Vendas hoje", salesOfToday.length, "#e94560"],
+          ["", salesOfToday.length, "#e94560"],
           ["Clientes", clients.length, "#6366f1"],
           ["Estoque baixo", lowStockProducts.length, "#ef4444"],
           ["Fiados vencidos", overdueFiado.length, "#f97316"],
@@ -2130,7 +2130,7 @@ function ERPInner() {
 
       {(overdueFiado.length>0 || lowStockProducts.length>0 || payablesDueToday.length>0 || payablesOverdue.length>0 || receivablesDueToday.length>0 || receivablesOverdue.length>0) && (
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}>ðŸš¨ Alertas</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"10px" }}> Alertas</div>
           {overdueFiado.length>0 && (
             <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
               <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
@@ -2177,7 +2177,7 @@ function ERPInner() {
 
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"14px" }}>
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ† Top clientes</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Top clientes</div>
           {topClients.length===0 ? (
             <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum cliente com compras ainda.</div>
           ) : topClients.map((c,i)=>(
@@ -2192,7 +2192,7 @@ function ERPInner() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ”¥ Produtos mais vendidos</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Produtos mais vendidos</div>
           {productRanking.length===0 ? (
             <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum produto vendido ainda.</div>
           ) : productRanking.map((p,i)=>(
@@ -2211,7 +2211,7 @@ function ERPInner() {
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ“‹ Ultimas vendas</div>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Ultimas vendas</div>
         {sales.slice(0,5).length===0 ? (
           <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda registrada.</div>
         ) : sales.slice(0,5).map(s=>(
@@ -2244,7 +2244,7 @@ function ERPInner() {
       </div>
 
       {/* Search */}
-      <input style={{ ...inp, marginBottom:"12px" }} placeholder="ðŸ” Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
+      <input style={{ ...inp, marginBottom:"12px" }} placeholder=" Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
 
       {/* Product grid */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"10px" }}>
@@ -2312,7 +2312,7 @@ function ERPInner() {
             <div style={{ display:"flex", gap:"8px" }}>
               <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automatico se vazio"
                 onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
-              <button style={btnSm("#6366f1")} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>ðŸŽ² Gerar</button>
+              <button style={btnSm("#6366f1")} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}> Gerar</button>
             </div>
             {newProduct.barcode&&(
               <div style={{ marginTop:"8px", background:"#f8fafc", borderRadius:"8px", padding:"8px", textAlign:"center", overflowX:"auto" }}>
@@ -2321,14 +2321,14 @@ function ERPInner() {
             )}
           </div>
           <div style={{ display:"flex", gap:"8px" }}>
-            <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"Salvar alteracoes":"+ Cadastrar"}</button>
+            <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"Salvar alteracoes":""}</button>
             {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});}}>x</button>}
           </div>
         </div>
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>ðŸ“¦ Estoque Produtos ({products.length})</div>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}> Estoque Produtos ({products.length})</div>
         {products.map(p=>(
           <div key={p.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"10px", marginBottom:"8px" }}>
@@ -2346,10 +2346,10 @@ function ERPInner() {
               </div>
 
               <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", justifyContent:"flex-end" }}>
-                <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}>ðŸ”³ Codigo</button>
-                <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}>ðŸ·ï¸ Etiqueta</button>
-                <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}>âœï¸ Editar</button>
-                <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}>ðŸ—‘ï¸ Excluir</button>
+                <button title="Ver codigo" style={btnSm("#0ea5e9")} onClick={()=>setShowBarcodeModal(p)}> Codigo</button>
+                <button title="Imprimir etiqueta" style={btnSm("#16a34a")} onClick={()=>printProductLabels(p)}> Etiqueta</button>
+                <button title="Editar" style={btnSm("#3b82f6")} onClick={()=>editProduct(p)}> Editar</button>
+                <button title="Excluir" style={btnSm("#ef4444")} onClick={()=>deleteProduct(p.id)}> Excluir</button>
               </div>
             </div>
           </div>
@@ -2374,7 +2374,7 @@ function ERPInner() {
         ))}
       </div>
       <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>ðŸ“‹ Historico</div>
+        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}> Historico</div>
         {sales.length===0
           ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Nenhuma venda ainda</p>
           : sales.map(sale=>(
@@ -2391,7 +2391,7 @@ function ERPInner() {
                 </div>
               </div>
               <div style={{ fontWeight:"800", fontSize:"14px", whiteSpace:"nowrap" }}>{fmtCur(sale.total)}</div>
-              <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>ðŸ§¾ Recibo</button>
+              <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}> Recibo</button>
             </div>
           ))
         }
@@ -2446,8 +2446,8 @@ function ERPInner() {
       <>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
           {[
-            ["Entradas hoje", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
-            ["Vendas hoje", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
+            ["", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
+            ["", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
             ["Crediario vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
             ["Recebido crediario", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ].map(([l,v,c],i)=>(
@@ -2459,7 +2459,7 @@ function ERPInner() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ’° Caixa profissional</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Caixa profissional</div>
 
           {!cashOpeningOfDay() ? (
             <div style={{ background:lastCashClosureOfDay()?"#f1f5f9":"#fff7ed", border:`1.5px solid ${lastCashClosureOfDay()?"#cbd5e1":"#fdba74"}`, borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
@@ -2468,7 +2468,7 @@ function ERPInner() {
               </div>
               {lastCashClosureOfDay() && (
                 <div style={{ fontSize:"12px", color:"#475569", marginBottom:"8px" }}>
-                  Ultimo fechamento: {fmtDate(lastCashClosureOfDay()?.date)} | DiferenÃ§a:
+                  Ultimo fechamento: {fmtDate(lastCashClosureOfDay()?.date)} | Diferença:
                   <strong style={{ color:Math.abs(lastCashClosureOfDay()?.diferenca||0)<0.01?"#16a34a":"#dc2626" }}> {fmtCur(lastCashClosureOfDay()?.diferenca||0)}</strong>
                 </div>
               )}
@@ -2537,12 +2537,12 @@ function ERPInner() {
           </div>
 
           <button style={{ ...btn(cashOpeningOfDay()?"#16a34a":"#94a3b8"), width:"100%", opacity:cashOpeningOfDay()?1:0.65 }} onClick={closeCash}>
-            {cashOpeningOfDay() ? "âœ… Fechar turno atual" : "âœ… Abra um turno para fechar"}
+            {cashOpeningOfDay() ? " Fechar turno atual" : " Abra um turno para fechar"}
           </button>
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}>ðŸ“‹ Movimentacoes de hoje</div>
+          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}> Movimentacoes de hoje</div>
           {[...cashOpsOfDay().filter(o=>o.type!=="abertura").map(o=>({ ...o, isCashOp:true, method:o.type==="sangria"?"sangria":"reforco", origin:o.type==="sangria"?"Sangria":"Reforco", amount:o.amount, saleId:"CAIXA", clientName:o.note||"", date:o.date })), ...ultimosPagamentos].length===0 ? (
             <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma movimentacao hoje.</div>
           ) : [...cashOpsOfDay().filter(o=>o.type!=="abertura").map(o=>({ ...o, isCashOp:true, method:o.type==="sangria"?"sangria":"reforco", origin:o.type==="sangria"?"Sangria":"Reforco", amount:o.amount, saleId:"CAIXA", clientName:o.note||"", date:o.date })), ...ultimosPagamentos].map((p,i)=>(
@@ -2575,7 +2575,7 @@ function ERPInner() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ’° Resumo financeiro previsto</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Resumo financeiro previsto</div>
           <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px" }}>
             <div style={{ background:"#f0fdf4", borderRadius:"12px", padding:"10px" }}><div style={{ fontSize:"11px", color:"#166534", fontWeight:"900" }}>A receber 30 dias</div><div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(receivablesNext30Total)}</div></div>
             <div style={{ background:"#fef2f2", borderRadius:"12px", padding:"10px" }}><div style={{ fontSize:"11px", color:"#991b1b", fontWeight:"900" }}>A pagar 7 dias</div><div style={{ fontWeight:"900", color:"#dc2626" }}>{fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0))}</div></div>
@@ -2585,7 +2585,7 @@ function ERPInner() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ“Š Relatorio por pagamento hoje</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Relatorio por pagamento hoje</div>
           {[
             ["Dinheiro", byMethod.dinheiro, "#16a34a"],
             ["PIX", byMethod.pix, "#0891b2"],
@@ -2609,7 +2609,7 @@ function ERPInner() {
 
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"14px" }}>
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ† Top clientes</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Top clientes</div>
             {topClientesCaixa.length===0 ? <div style={{ color:"#94a3b8" }}>Sem dados ainda.</div> :
               topClientesCaixa.map((c,i)=>(
                 <div key={c.id} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
@@ -2624,7 +2624,7 @@ function ERPInner() {
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ”¥ Top produtos</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Top produtos</div>
             {topProdutosCaixa.length===0 ? <div style={{ color:"#94a3b8" }}>Sem produtos vendidos ainda.</div> :
               topProdutosCaixa.map((p,i)=>(
                 <div key={p.id} style={{ padding:"9px 0", borderBottom:"1px solid #f1f5f9" }}>
@@ -2640,10 +2640,10 @@ function ERPInner() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ’¼ Resumo financeiro do mes</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Resumo financeiro do mes</div>
           <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px" }}>
             {[
-              ["Entradas mes", salesMonthTotal, "#16a34a"],
+              ["", salesMonthTotal, "#16a34a"],
               ["A pagar mes", payablesMonthTotal, "#e94560"],
               ["Pago mes", payablesPaidMonthTotal, "#2563eb"],
               ["Previsto", expectedMonthBalance, expectedMonthBalance>=0?"#16a34a":"#dc2626"],
@@ -2657,7 +2657,7 @@ function ERPInner() {
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ¤ Fiados em aberto</div>
+          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Fiados em aberto</div>
           {fiadoAbertoLista.length===0 ? (
             <div style={{ color:"#94a3b8" }}>Nenhum fiado em aberto.</div>
           ) : fiadoAbertoLista.slice(0,10).map(s=>(
@@ -2692,7 +2692,7 @@ function ERPInner() {
             {[
               ["A pagar aberto", fmtCur(payablesOpenTotal), "linear-gradient(135deg,#e94560,#c0392b)"],
               ["Vence hoje", fmtCur(payablesDueTodayTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
-              ["Vencidas", fmtCur(payablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
+              ["", fmtCur(payablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
               ["Prox. 7 dias", fmtCur(payablesNext7.reduce((s,p)=>s+payableAmount(p),0)), "linear-gradient(135deg,#6366f1,#4338ca)"],
             ].map(([l,v,c],i)=>(
               <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
@@ -2703,7 +2703,7 @@ function ERPInner() {
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>âž• Nova conta a pagar</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Nova conta a pagar</div>
             <input style={{ ...inp, marginBottom:"8px" }} placeholder="Fornecedor" value={newPayable.supplier} onChange={e=>setNewPayable({...newPayable,supplier:e.target.value})} />
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
               <input style={{ ...inp, marginBottom:"8px" }} placeholder="NF / boleto / documento" value={newPayable.document} onChange={e=>setNewPayable({...newPayable,document:e.target.value})} />
@@ -2720,7 +2720,7 @@ function ERPInner() {
             <input style={{ ...inp, marginBottom:"10px" }} placeholder="Descricao / observacao" value={newPayable.description} onChange={e=>setNewPayable({...newPayable,description:e.target.value})} />
 
             <div style={{ background:String(newPayable.document||"").trim()?"#f8fafc":"#fff7ed", border:`1.5px solid ${String(newPayable.document||"").trim()?"#e2e8f0":"#fdba74"}`, borderRadius:"14px", padding:"12px", marginBottom:"10px" }}>
-              <div style={{ fontWeight:"900", color:"#334155", marginBottom:"6px" }}>ðŸ“¦ Itens comprados / entrada no estoque</div>
+              <div style={{ fontWeight:"900", color:"#334155", marginBottom:"6px" }}> Itens comprados / entrada no estoque</div>
               {!String(newPayable.document||"").trim() ? (
                 <div>
                   <div style={{ fontSize:"13px", color:"#9a3412", fontWeight:"800", marginBottom:"4px" }}>Informe a NF / boleto / documento primeiro.</div>
@@ -2763,7 +2763,7 @@ function ERPInner() {
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ“Œ Contas em aberto</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Contas em aberto</div>
             {contasAbertasOrdenadas.length===0 ? (
               <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma conta em aberto.</div>
             ) : contasAbertasOrdenadas.map(p=>(
@@ -2800,7 +2800,7 @@ function ERPInner() {
             {[
               ["A receber aberto", fmtCur(receivablesOpenTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
               ["Receber hoje", fmtCur(receivablesDueTodayTotal), "linear-gradient(135deg,#22c55e,#16a34a)"],
-              ["Atrasadas", fmtCur(receivablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
+              ["", fmtCur(receivablesOverdueTotal), "linear-gradient(135deg,#dc2626,#991b1b)"],
               ["Prox. 30 dias", fmtCur(receivablesNext30Total), "linear-gradient(135deg,#0ea5e9,#2563eb)"],
             ].map(([l,v,c],i)=>(
               <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
@@ -2811,7 +2811,7 @@ function ERPInner() {
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>âž• Nova conta a receber</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Nova conta a receber</div>
             <input style={{ ...inp, marginBottom:"8px" }} placeholder="Cliente" value={newReceivable.clientName} onChange={e=>setNewReceivable({...newReceivable,clientName:e.target.value})} />
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
               <input style={{ ...inp, marginBottom:"8px" }} placeholder="Documento / referencia" value={newReceivable.document} onChange={e=>setNewReceivable({...newReceivable,document:e.target.value})} />
@@ -2833,7 +2833,7 @@ function ERPInner() {
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ“Œ Contas a receber em aberto</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Contas a receber em aberto</div>
             {receberAbertasOrdenadas.length===0 ? (
               <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma conta a receber em aberto.</div>
             ) : receberAbertasOrdenadas.map(r=>(
@@ -2860,7 +2860,7 @@ function ERPInner() {
           </div>
 
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>âœ… Recebidas recentes</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Recebidas recentes</div>
             {paidReceivables.slice(0,5).length===0 ? (
               <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum recebimento quitado.</div>
             ) : paidReceivables.slice(0,5).map(r=>(
@@ -2892,7 +2892,7 @@ function ERPInner() {
             ))}
           </div>
           <div style={card}>
-            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}>ðŸ“Š Fluxo de caixa previsto</div>
+            <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Fluxo de caixa previsto</div>
             <div style={{ background:"#f0fdf4", borderRadius:"12px", padding:"12px", marginBottom:"8px", display:"flex", justifyContent:"space-between" }}>
               <strong>Entradas previstas 30 dias</strong><strong style={{ color:"#16a34a" }}>{fmtCur(receivablesNext30Total)}</strong>
             </div>
@@ -2922,7 +2922,7 @@ function ERPInner() {
 
     const HistoricoCaixa = () => (
       <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"6px" }}>ðŸ§¾ Historico de fechamentos</div>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"6px" }}> Historico de fechamentos</div>
         <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"12px" }}>Registro fechado e nao editavel, para conferencia e confianca.</div>
         {cashClosures.length===0 ? (
           <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhum fechamento registrado.</div>
@@ -2939,7 +2939,7 @@ function ERPInner() {
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
                   <div style={{ fontSize:"11px", color:hasDiff?"#dc2626":"#16a34a", fontWeight:"900" }}>
-                    {hasDiff ? `DiferenÃ§a ${fmtCur(diff)}` : "Sem diferenÃ§a"}
+                    {hasDiff ? `Diferença ${fmtCur(diff)}` : "Sem diferença"}
                   </div>
                 </div>
               </div>
@@ -2950,8 +2950,8 @@ function ERPInner() {
                   <div>Saldo contado: <strong>{fmtCur(c.saldoInformado ?? c.entradas)}</strong></div>
                   <div>Abertura: <strong>{fmtCur(c.abertura||0)}</strong></div>
                   <div>Sangria: <strong>{fmtCur(c.sangria||0)}</strong></div>
-                  <div>ReforÃ§o: <strong>{fmtCur(c.reforco||0)}</strong></div>
-                  <div>DiferenÃ§a: <strong style={{ color:hasDiff?"#dc2626":"#16a34a" }}>{fmtCur(diff)}</strong></div>
+                  <div>Reforço: <strong>{fmtCur(c.reforco||0)}</strong></div>
+                  <div>Diferença: <strong style={{ color:hasDiff?"#dc2626":"#16a34a" }}>{fmtCur(diff)}</strong></div>
                 </div>
               </div>
 
@@ -2999,15 +2999,15 @@ function ERPInner() {
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}>ðŸ¤ Novo Cliente</div>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}> Novo Cliente</div>
         <input style={{ ...inp, marginBottom:"8px" }} placeholder="Nome do cliente" value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} />
         <input style={{ ...inp, marginBottom:"8px" }} placeholder="WhatsApp" value={newClient.phone} onChange={e=>setNewClient({...newClient,phone:e.target.value})} />
         <input style={{ ...inp, marginBottom:"12px" }} type="number" placeholder="Limite de credito opcional" value={newClient.limit} onChange={e=>setNewClient({...newClient,limit:e.target.value})} />
-        <button style={{ ...btn(), width:"100%" }} onClick={saveClient}>âž• Cadastrar Cliente</button>
+        <button style={{ ...btn(), width:"100%" }} onClick={saveClient}> Cadastrar Cliente</button>
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}>ðŸ“‹ Clientes e saldos</div>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}> Clientes e saldos</div>
         {clients.length===0 ? (
           <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhum cliente cadastrado.</div>
         ) : clients.map(c=>{
@@ -3037,7 +3037,7 @@ function ERPInner() {
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}>ðŸ’³ Vendas fiado em aberto</div>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}> Vendas fiado em aberto</div>
         {fiadoSales.length===0 ? (
           <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda fiada em aberto.</div>
         ) : fiadoSales.map(s=>{
@@ -3210,7 +3210,7 @@ function ERPInner() {
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"8px" }}>ðŸ’¾ Backup e restauracao</div>
+        <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"8px" }}> Backup e restauracao</div>
         <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
           <div style={{ fontWeight:"800", color:"#1d4ed8", marginBottom:"4px" }}>Backup automatico diario ativo</div>
           <div style={{ fontSize:"12px", color:"#2563eb" }}>
@@ -3234,16 +3234,16 @@ function ERPInner() {
         />
 
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
-          <button style={{ ...btn("#16a34a"), padding:"11px", fontSize:"13px" }} onClick={()=>createBackup("manual", true)}>ðŸ“¤ Fazer backup agora</button>
-          <button style={{ ...btn("#2563eb"), padding:"11px", fontSize:"13px" }} onClick={restoreLatestBackup}>ðŸ“¥ Restaurar ultimo backup</button>
+          <button style={{ ...btn("#16a34a"), padding:"11px", fontSize:"13px" }} onClick={()=>createBackup("manual", true)}> Fazer backup agora</button>
+          <button style={{ ...btn("#2563eb"), padding:"11px", fontSize:"13px" }} onClick={restoreLatestBackup}> Restaurar ultimo backup</button>
         </div>
 
         <button style={{ ...btn("#64748b"), width:"100%", padding:"11px", fontSize:"13px", marginBottom:"8px" }} onClick={()=>backupImportRef.current?.click()}>
-          ðŸ“‚ Importar backup mais recente
+           Importar backup mais recente
         </button>
 
         <details style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
-          <summary style={{ fontWeight:"900", color:"#334155", cursor:"pointer" }}>ðŸ” Area ADM - versoes anteriores</summary>
+          <summary style={{ fontWeight:"900", color:"#334155", cursor:"pointer" }}> Area ADM - versoes anteriores</summary>
           <div style={{ fontSize:"12px", color:"#64748b", margin:"8px 0" }}>
             Somente o ADM consegue restaurar backups antigos. Senha solicitada na hora da restauracao.
           </div>
@@ -3310,7 +3310,7 @@ function ERPInner() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-lic2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-lic3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -3336,10 +3336,10 @@ function ERPInner() {
 
       {/* Main content */}
       <div style={{ padding:isMobile?"12px":"24px", maxWidth:"1200px", margin:"0 auto" }}>
-        {tab==="dashboard" && DashboardTab()}
+        {tab==="" && DashboardTab()}
         {tab==="pdv"     && PDVTab()}
         {tab==="estoque" && EstoqueTab()}
-        {tab==="vendas"  && VendasTab()}
+        {tab===""  && VendasTab()}
         {tab==="caixa"   && CaixaTab()}
         {tab==="fiado"   && FiadoTab()}
         {tab==="config"  && ConfigTab()}
