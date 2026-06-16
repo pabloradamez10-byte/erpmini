@@ -364,19 +364,7 @@ function AuthGate() {
     );
   }
 
-  return (
-    <>
-      <div style={{ position:"fixed", top:"10px", right:"10px", zIndex:9999, display:"flex", gap:"8px", alignItems:"center" }}>
-        <span style={{ borderRadius:"999px", background:"#16a34a", color:"#fff", padding:"8px 11px", fontWeight:"900", fontSize:"12px", boxShadow:"0 6px 20px rgba(0,0,0,0.25)" }}>
-          Nuvem OK
-        </span>
-        <button onClick={handleSignOut} style={{ border:"none", borderRadius:"999px", background:"#0f172a", color:"#fff", padding:"9px 13px", fontWeight:"900", boxShadow:"0 6px 20px rgba(0,0,0,0.25)" }}>
-          Sair
-        </button>
-      </div>
-      <ERPInner />
-    </>
-  );
+  return <ERPInner onLogout={handleSignOut} cloudStatus="Nuvem sincronizada" licenseInfo={licenseInfo} />;
 }
 
 
@@ -1185,7 +1173,7 @@ function ReceiptModal({ sale, storeName, onClose }) {
 }
 
 // --- MAIN --------------------------------------------------------------------
-function ERPInner() {
+function ERPInner({ onLogout, cloudStatus, licenseInfo } = {}) {
   const isMobile = useIsMobile();
   const [tab, setTab]             = useState("");
   const [caixaView, setCaixaView] = useState("resumo");
@@ -1203,7 +1191,7 @@ function ERPInner() {
   const [financeiroView, setFinanceiroView] = useState("pagar");
   const [newClient, setNewClient] = useState({ name:"", phone:"", limit:"" });
   const [newPayable, setNewPayable] = useState({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
-  const [purchaseItems, setPurchaseItems] = useState([{ productId:"", name:"", qty:"", cost:"" }]);
+  const [purchaseItems, setPurchaseItems] = useState([{ productId:"", name:"", qty:"", cost:"", salePrice:"" }]);
   const [newReceivable, setNewReceivable] = useState({ clientName:"", document:"", description:"", amount:"", dueDate:"", category:"Geral", installments:"1" });
   const [selectedReceivable, setSelectedReceivable] = useState(null);
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
@@ -1799,31 +1787,47 @@ function ERPInner() {
       productId: it.productId,
       name: String(it.name||"").trim(),
       qty: parseFloat(String(it.qty||"").replace(",",".")) || 0,
-      cost: parseMoney(it.cost)
+      cost: parseMoney(it.cost),
+      salePrice: parseMoney(it.salePrice)
     }))
     .filter(it=>it.name && it.qty>0);
   };
 
   const purchaseItemsTotal = () => cleanPurchaseItems().reduce((sum,it)=>sum+(it.qty*it.cost),0);
 
-  const addPurchaseItemRow = () => setPurchaseItems(prev=>[...prev,{ productId:"", name:"", qty:"", cost:"" }]);
-  const removePurchaseItemRow = (idx) => setPurchaseItems(prev=>prev.length<=1 ? [{ productId:"", name:"", qty:"", cost:"" }] : prev.filter((_,i)=>i!==idx));
+  const addPurchaseItemRow = () => setPurchaseItems(prev=>[...prev,{ productId:"", name:"", qty:"", cost:"", salePrice:"" }]);
+  const removePurchaseItemRow = (idx) => setPurchaseItems(prev=>prev.length<=1 ? [{ productId:"", name:"", qty:"", cost:"", salePrice:"" }] : prev.filter((_,i)=>i!==idx));
   const updatePurchaseItem = (idx, patch) => setPurchaseItems(prev=>prev.map((it,i)=>i===idx ? {...it,...patch} : it));
 
   const addPayable = () => {
     const items = cleanPurchaseItems();
     const calculatedTotal = purchaseItemsTotal();
-    const amount = calculatedTotal > 0 ? calculatedTotal : parseMoney(newPayable.amount);
-    if (!newPayable.supplier.trim() || amount<=0 || !newPayable.dueDate) {
-      notify("Informe fornecedor, valor e vencimento.", "error");
+    const informedAmount = parseMoney(newPayable.amount);
+
+    if (!newPayable.supplier.trim() || informedAmount<=0 || !newPayable.dueDate) {
+      notify("Informe fornecedor, valor da nota e vencimento.", "error");
       return;
     }
+
+    if (items.length > 0) {
+      const invalidItem = items.find(it => !it.name || it.qty <= 0 || it.cost <= 0 || it.salePrice <= 0);
+      if (invalidItem) {
+        notify("Cada item precisa ter nome, quantidade, custo e preco de venda.", "error");
+        return;
+      }
+
+      if (Math.abs(informedAmount - calculatedTotal) > 0.01) {
+        notify(`Valor da nota (${fmtCur(informedAmount)}) nao fecha com os itens (${fmtCur(calculatedTotal)}).`, "error");
+        return;
+      }
+    }
+
     const item = {
       id: Date.now(),
       supplier: newPayable.supplier.trim(),
       document: newPayable.document.trim(),
       description: newPayable.description.trim(),
-      amount,
+      amount: informedAmount,
       dueDate: newPayable.dueDate,
       category: newPayable.category.trim() || "Geral",
       purchaseItems: items,
@@ -1831,18 +1835,27 @@ function ERPInner() {
       paid:false,
       createdAt:new Date().toISOString()
     };
+
     if (items.length>0) {
       setProducts(prev=>{
         let updated = [...prev];
         items.forEach((it,idx)=>{
-          const existingIndex = updated.findIndex(p=>String(p.id)===String(it.productId) || p.name.toLowerCase()===it.name.toLowerCase());
+          const existingIndex = updated.findIndex(p=>String(p.id)===String(it.productId) || String(p.name||"").toLowerCase()===it.name.toLowerCase());
           if (existingIndex>=0) {
-            updated[existingIndex] = { ...updated[existingIndex], stock:(parseFloat(updated[existingIndex].stock)||0)+it.qty };
+            updated[existingIndex] = {
+              ...updated[existingIndex],
+              stock:(parseFloat(updated[existingIndex].stock)||0)+it.qty,
+              cost: it.cost,
+              lastCost: it.cost,
+              price: it.salePrice
+            };
           } else {
             updated.push({
               id: Date.now()+idx+1,
               name: it.name,
-              price: it.cost || 0,
+              price: it.salePrice,
+              cost: it.cost,
+              lastCost: it.cost,
               stock: it.qty,
               category: newPayable.category.trim() || "Geral",
               barcode: genBarcode()
@@ -1852,10 +1865,11 @@ function ERPInner() {
         return updated;
       });
     }
+
     setPayables(prev=>[item,...prev]);
     setNewPayable({ supplier:"", document:"", description:"", amount:"", dueDate:"", category:"Geral" });
-    setPurchaseItems([{ productId:"", name:"", qty:"", cost:"" }]);
-    notify(items.length>0 ? "Conta cadastrada e estoque atualizado!" : "Conta a pagar cadastrada!");
+    setPurchaseItems([{ productId:"", name:"", qty:"", cost:"", salePrice:"" }]);
+    notify(items.length>0 ? "Compra cadastrada, nota conferida e estoque atualizado!" : "Conta a pagar cadastrada!");
   };
   const markPayablePaid = (id) => {
     setPayables(prev=>prev.map(p=>p.id===id ? {...p, paid:true, paidDate:new Date().toISOString()} : p));
@@ -2042,7 +2056,7 @@ function ERPInner() {
     { key:"", icon:"", label:"Inicio"  },
     { key:"pdv",     icon:"", label:"PDV"     },
     { key:"estoque", icon:"", label:"Estoque" },
-    { key:"",  icon:"", label:""  },
+    { key:"vendas",  icon:"", label:"Vendas"  },
     { key:"caixa",   icon:"", label:"Caixa"   },
     { key:"fiado",   icon:"", label:"Cliente" },
     { key:"config",  icon:"", label:"Config"  },
@@ -2733,18 +2747,20 @@ function ERPInner() {
                     <div key={idx} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px", marginBottom:"8px" }}>
                       <select value={it.productId} onChange={e=>{
                         const prod = products.find(p=>String(p.id)===String(e.target.value));
-                        updatePurchaseItem(idx,{ productId:e.target.value, name:prod?.name || "", cost:it.cost || (prod?.price ? String(prod.price) : "") });
+                        updatePurchaseItem(idx,{ productId:e.target.value, name:prod?.name || "", cost:it.cost || (prod?.cost ? String(prod.cost) : ""), salePrice:it.salePrice || (prod?.price ? String(prod.price) : "") });
                       }} style={{ ...inp, marginBottom:"8px" }}>
                         <option value="">Novo item ou selecione produto existente</option>
                         {products.map(p=><option key={p.id} value={p.id}>{p.name} - estoque: {p.stock}</option>)}
                       </select>
                       <input style={{ ...inp, marginBottom:"8px" }} placeholder="Nome do item comprado" value={it.name} onChange={e=>updatePurchaseItem(idx,{ name:e.target.value, productId:"" })} />
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr", gap:"8px" }}>
                         <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Quantidade" value={it.qty} onChange={e=>updatePurchaseItem(idx,{ qty:e.target.value })} />
                         <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Custo unit." value={it.cost} onChange={e=>updatePurchaseItem(idx,{ cost:e.target.value })} />
+                        <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Venda unit." value={it.salePrice||""} onChange={e=>updatePurchaseItem(idx,{ salePrice:e.target.value })} />
                       </div>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"8px" }}>
-                        <div style={{ fontSize:"12px", color:"#64748b" }}>Subtotal: <strong>{fmtCur((parseFloat(String(it.qty||"").replace(",","."))||0) * parseMoney(it.cost))}</strong></div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"8px", gap:"8px", flexWrap:"wrap" }}>
+                        <div style={{ fontSize:"12px", color:"#64748b" }}>Subtotal custo: <strong>{fmtCur((parseFloat(String(it.qty||"").replace(",","."))||0) * parseMoney(it.cost))}</strong></div>
+                        <div style={{ fontSize:"12px", color:"#16a34a", fontWeight:"800" }}>Lucro un.: {fmtCur(Math.max(0, parseMoney(it.salePrice)-parseMoney(it.cost)))}</div>
                         <button onClick={()=>removePurchaseItemRow(idx)} style={{ ...btn("#ef4444"), padding:"7px 10px", fontSize:"12px" }}>Remover</button>
                       </div>
                     </div>
@@ -2753,6 +2769,11 @@ function ERPInner() {
                   {purchaseItemsTotal()>0 && (
                     <div style={{ marginTop:"10px", background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px", display:"flex", justifyContent:"space-between" }}>
                       <strong>Total dos itens</strong><strong style={{ color:"#16a34a" }}>{fmtCur(purchaseItemsTotal())}</strong>
+                    </div>
+                  )}
+                  {purchaseItemsTotal()>0 && parseMoney(newPayable.amount)>0 && (
+                    <div style={{ marginTop:"8px", background:Math.abs(parseMoney(newPayable.amount)-purchaseItemsTotal())<=0.01?"#ecfdf5":"#fff7ed", border:`1.5px solid ${Math.abs(parseMoney(newPayable.amount)-purchaseItemsTotal())<=0.01?"#bbf7d0":"#fdba74"}`, borderRadius:"12px", padding:"9px", fontSize:"12px", fontWeight:"800", color:Math.abs(parseMoney(newPayable.amount)-purchaseItemsTotal())<=0.01?"#166534":"#9a3412" }}>
+                      {Math.abs(parseMoney(newPayable.amount)-purchaseItemsTotal())<=0.01 ? "Nota conferida: valor fecha com os itens." : `Diferenca: ${fmtCur(parseMoney(newPayable.amount)-purchaseItemsTotal())}. Ajuste antes de salvar.`}
                     </div>
                   )}
                 </>
@@ -3188,6 +3209,14 @@ function ERPInner() {
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>Config Configuracoes</div>
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
         <input style={{ ...inp, marginBottom:"14px" }} value={storeName} onChange={e=>setStoreName(e.target.value)} placeholder="Minha Loja" />
+        <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"12px 14px", marginBottom:"12px" }}>
+          <div style={{ fontWeight:"900", fontSize:"14px", color:"#334155", marginBottom:"8px" }}>Status do sistema</div>
+          <div style={{ display:"grid", gap:"6px", fontSize:"13px", color:"#64748b" }}>
+            <div><strong>Nuvem:</strong> {cloudStatus || "Sincronizada"}</div>
+            <div><strong>Licenca:</strong> ativa {licenseInfo?.license?.expires_at ? `ate ${licenseInfo.license.expires_at}` : ""}</div>
+          </div>
+          {onLogout && <button style={{ ...btn("#0f172a"), width:"100%", marginTop:"12px" }} onClick={onLogout}>Sair da conta</button>}
+        </div>
         <div style={{ background:"#f0fdf4", border:"1.5px solid #22c55e", borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
           <span style={{ fontSize:"20px" }}>Salvo</span>
           <div>
@@ -3310,7 +3339,7 @@ function ERPInner() {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-lic3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-lic4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -3339,7 +3368,7 @@ function ERPInner() {
         {tab==="" && DashboardTab()}
         {tab==="pdv"     && PDVTab()}
         {tab==="estoque" && EstoqueTab()}
-        {tab===""  && VendasTab()}
+        {tab==="vendas"  && VendasTab()}
         {tab==="caixa"   && CaixaTab()}
         {tab==="fiado"   && FiadoTab()}
         {tab==="config"  && ConfigTab()}
