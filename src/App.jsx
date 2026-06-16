@@ -3458,10 +3458,39 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     };
 
     const todayStr = new Date().toISOString().slice(0,10);
-    const activeCount = licenses.filter(l => (l.status || "").toLowerCase() === "ativo" && l.expires_at >= todayStr).length;
+    const activeLicenses = licenses.filter(l => (l.status || "").toLowerCase() === "ativo" && l.expires_at >= todayStr);
+    const expiredLicenses = licenses.filter(l => l.expires_at && l.expires_at < todayStr);
+    const activeCount = activeLicenses.length;
     const blockedCount = licenses.filter(l => (l.status || "").toLowerCase() !== "ativo" || l.expires_at < todayStr).length;
     const pendingRequests = signupRequests.filter(r => (r.status || "").toLowerCase() === "pendente");
     const pendingCount = pendingRequests.length;
+
+    const todayDate = new Date(todayStr + "T00:00:00");
+    const inSevenDays = new Date(todayDate);
+    inSevenDays.setDate(inSevenDays.getDate() + 7);
+
+    const expiringSoon = activeLicenses.filter((lic) => {
+      if (!lic.expires_at) return false;
+      const exp = new Date(lic.expires_at + "T00:00:00");
+      return exp >= todayDate && exp <= inSevenDays;
+    });
+
+    const planPrices = {
+      mensal: 29.90,
+      trimestral: 79.90,
+      anual: 299.00,
+      teste: 0
+    };
+
+    const planMonthlyValue = (plan) => {
+      const p = String(plan || "mensal").toLowerCase();
+      if (p === "trimestral") return (planPrices.trimestral || 0) / 3;
+      if (p === "anual") return (planPrices.anual || 0) / 12;
+      return planPrices[p] ?? planPrices.mensal;
+    };
+
+    const mrrEstimate = activeLicenses.reduce((sum, lic) => sum + planMonthlyValue(lic.plan), 0);
+    const annualEstimate = mrrEstimate * 12;
 
     return (
       <div style={card}>
@@ -3488,6 +3517,54 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
             <div style={{ fontSize:"11px", color:pendingCount>0?"#991b1b":"#1d4ed8", fontWeight:"800" }}>Pendentes</div>
             <div style={{ fontSize:"22px", fontWeight:"900", color:pendingCount>0?"#dc2626":"#2563eb" }}>{pendingCount}</div>
           </div>
+        </div>
+
+        <div style={{ background:"#0f172a", border:"1.5px solid #1e293b", borderRadius:"16px", padding:"14px", marginBottom:"12px", color:"#fff" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"10px" }}>
+            <div>
+              <div style={{ fontWeight:"900", fontSize:"15px" }}>Dashboard Administrativo</div>
+              <div style={{ fontSize:"12px", color:"#cbd5e1" }}>Resumo comercial do ERPmini</div>
+            </div>
+            {pendingCount > 0 && (
+              <span style={{ borderRadius:"999px", background:"#dc2626", color:"#fff", fontWeight:"900", padding:"5px 9px", fontSize:"12px" }}>
+                {pendingCount} pendente(s)
+              </span>
+            )}
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4, 1fr)", gap:"8px" }}>
+            <div style={{ background:"#172554", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#bfdbfe", fontWeight:"800" }}>Receita mensal estimada</div>
+              <div style={{ fontSize:"18px", fontWeight:"900" }}>{fmtCur(mrrEstimate)}</div>
+            </div>
+            <div style={{ background:"#052e16", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#bbf7d0", fontWeight:"800" }}>Receita anual estimada</div>
+              <div style={{ fontSize:"18px", fontWeight:"900" }}>{fmtCur(annualEstimate)}</div>
+            </div>
+            <div style={{ background:"#431407", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#fed7aa", fontWeight:"800" }}>Vencem em 7 dias</div>
+              <div style={{ fontSize:"18px", fontWeight:"900" }}>{expiringSoon.length}</div>
+            </div>
+            <div style={{ background:"#450a0a", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#fecaca", fontWeight:"800" }}>Vencidas</div>
+              <div style={{ fontSize:"18px", fontWeight:"900" }}>{expiredLicenses.length}</div>
+            </div>
+          </div>
+
+          {(expiringSoon.length > 0 || expiredLicenses.length > 0) && (
+            <div style={{ marginTop:"10px", display:"grid", gap:"8px" }}>
+              {expiringSoon.slice(0,3).map((lic) => (
+                <div key={"soon-"+lic.email} style={{ background:"#fff7ed", color:"#9a3412", borderRadius:"10px", padding:"8px 10px", fontSize:"12px", fontWeight:"800" }}>
+                  Vence em breve: {lic.email} - {lic.expires_at}
+                </div>
+              ))}
+              {expiredLicenses.slice(0,3).map((lic) => (
+                <div key={"expired-"+lic.email} style={{ background:"#fef2f2", color:"#991b1b", borderRadius:"10px", padding:"8px 10px", fontSize:"12px", fontWeight:"800" }}>
+                  Licenca vencida: {lic.email} - {lic.expires_at}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ background:pendingCount>0?"#fff7ed":"#f8fafc", border:`1.5px solid ${pendingCount>0?"#fed7aa":"#e2e8f0"}`, borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
@@ -3722,7 +3799,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin5</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
