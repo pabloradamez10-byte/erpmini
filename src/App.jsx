@@ -1034,8 +1034,8 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                         <div style={{ fontWeight:"900", color:excede?"#ea580c":"#16a34a", fontSize:"13px" }}>{Math.round((saldoFinal/limite)*100)}%</div>
                       </div>
 
-                      <div style={{ height:"10px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden", marginBottom:"12px" }}>
-                        <div style={{ height:"100%", width:`${usadoPct}%`, background:excede?"#f97316":"#22c55e", borderRadius:"999px" }} />
+                      <div style={{ height:"10px", background:"#e2e8f0", borderRadius:"16px", overflow:"hidden", marginBottom:"12px" }}>
+                        <div style={{ height:"100%", width:`${usadoPct}%`, background:excede?"#f97316":"#22c55e", borderRadius:"16px" }} />
                       </div>
 
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:excede?"10px":"0" }}>
@@ -2147,14 +2147,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
-    { key:"", icon:"IN", label:"Inicio"  },
+    { key:"", icon:"🏠", label:"Inicio"  },
     { key:"pdv",     icon:"PDV", label:"PDV"     },
-    { key:"estoque", icon:"BOX", label:"Estoque" },
-    { key:"vendas",  icon:"VEN", label:"Vendas"  },
+    { key:"estoque", icon:"📦", label:"Estoque" },
+    { key:"vendas",  icon:"📊", label:"Vendas"  },
     { key:"caixa",   icon:"$", label:"Caixa"   },
-    { key:"fiado",   icon:"CLI", label:"Cliente" },
-    { key:"fiscal",  icon:"NF", label:"Fiscal" },
-    { key:"config",  icon:"CFG", label:"Config"  },
+    { key:"fiado",   icon:"👥", label:"Cliente" },
+    { key:"fiscal",  icon:"🧾", label:"Fiscal" },
+    { key:"config",  icon:"⚙️", label:"Config"  },
   ];
 
   // --- Cart Drawer (mobile) -------------------------------------------------
@@ -2323,7 +2323,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                 <div style={{ fontWeight:"900" }}>{i+1}. {p.name}</div>
                 <div style={{ fontWeight:"900", color:"#2563eb" }}>{p.sold} un.</div>
               </div>
-              <div style={{ height:"8px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden", marginTop:"6px" }}>
+              <div style={{ height:"8px", background:"#e2e8f0", borderRadius:"16px", overflow:"hidden", marginTop:"6px" }}>
                 <div style={{ height:"100%", width:`${Math.min(100, Math.max(8, (p.sold/(productRanking[0]?.sold||1))*100))}%`, background:"#2563eb", borderRadius:"999px" }} />
               </div>
               <div style={{ fontSize:"12px", color:"#64748b", marginTop:"4px" }}>Total: {fmtCur(p.total)}</div>
@@ -2459,7 +2459,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                 {p.barcode&&<div style={{ fontSize:"11px", color:"#94a3b8", fontFamily:"monospace", marginTop:"3px" }}>{p.barcode}</div>}
               </div>
               <div style={{ textAlign:"right", whiteSpace:"nowrap" }}>
-                <div style={{ fontWeight:"900", color:"#e94560", fontSize:"16px" }}>{fmtCur(p.price)}</div>
+                <div style={{ fontWeight:"900", color:"#e94560", fontSize:"16px" }}><div style={{fontSize:"14px",fontWeight:"800",opacity:.85,marginBottom:"6px"}}>Total de entradas</div>{fmtCur(p.price)}</div>
                 <div style={{ fontWeight:"800", color:"#16a34a", fontSize:"11px" }}>Lucro {fmtCur((parseFloat(p.price)||0)-(parseFloat(p.cost||p.lastCost||0)||0))}</div>
               </div>
             </div>
@@ -2515,7 +2515,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                   ))}
                 </div>
               </div>
-              <div style={{ fontWeight:"800", fontSize:"14px", whiteSpace:"nowrap" }}>{fmtCur(sale.total)}</div>
+              <div style={{ fontWeight:"800", fontSize:"14px", whiteSpace:"nowrap" }}><div style={{fontSize:"14px",fontWeight:"800",opacity:.85,marginBottom:"6px"}}>Saidas do dia</div>{fmtCur(sale.total)}</div>
               <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}> Recibo</button>
             </div>
           ))
@@ -2574,7 +2574,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
             ["", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
             ["", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
             ["Crediario vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
-            ["Recebido crediario", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
+            ["Recebido crediário", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ].map(([l,v,c],i)=>(
             <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
               <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
@@ -3874,7 +3874,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-erp2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-erp3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
