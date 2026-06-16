@@ -204,24 +204,28 @@ async function checkLicenseByEmail(email) {
       };
     }
 
-    if (!data.expires_at) {
-      return {
-        ok: false,
-        title: "Licenca sem vencimento",
-        message: "Sua licenca ainda nao possui data de vencimento. Fale com o suporte.",
-      };
-    }
+    const planName = normalizePlan(data.plan || "starter");
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expires = new Date(data.expires_at + "T00:00:00");
+    if (planName !== "starter") {
+      if (!data.expires_at) {
+        return {
+          ok: false,
+          title: "Licenca sem vencimento",
+          message: "Sua licenca ainda nao possui data de vencimento. Fale com o suporte.",
+        };
+      }
 
-    if (expires < today) {
-      return {
-        ok: false,
-        title: "Licenca vencida",
-        message: `Sua licenca venceu em ${data.expires_at}. Regularize o pagamento para liberar o acesso.`,
-      };
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expires = new Date(data.expires_at + "T00:00:00");
+
+      if (expires < today) {
+        return {
+          ok: false,
+          title: "Licenca vencida",
+          message: `Sua licenca venceu em ${data.expires_at}. Regularize o pagamento para liberar o acesso.`,
+        };
+      }
     }
 
     return { ok: true, license: data };
@@ -3473,15 +3477,15 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         setAdminMsg("Informe um e-mail valido.");
         return;
       }
-      if (!newExpires) {
-        setAdminMsg("Informe a data de vencimento.");
+      if (normalizePlan(newPlan) !== "starter" && !newExpires) {
+        setAdminMsg("Informe a data de vencimento para plano pago.");
         return;
       }
       const ok = await saveLicense({
         email,
         status: "ativo",
-        expires_at: newExpires,
-        plan: newPlan || "mensal",
+        expires_at: normalizePlan(newPlan) === "starter" ? null : newExpires,
+        plan: normalizePlan(newPlan || "starter"),
         notes: newNotes || null,
       });
       if (ok) {
@@ -3606,6 +3610,58 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
     const mrrEstimate = activeLicenses.reduce((sum, lic) => sum + planMonthlyValue(lic.plan), 0);
     const annualEstimate = mrrEstimate * 12;
+
+    const setLicensePlan = async (email, plan) => {
+      const cleanEmail = String(email || "").trim().toLowerCase();
+      if (!cleanEmail) return;
+
+      const p = normalizePlan(plan);
+      let expiresAt = null;
+
+      if (p === "pro") {
+        const d = new Date();
+        d.setMonth(d.getMonth() + 1);
+        expiresAt = d.toISOString().slice(0, 10);
+      }
+
+      if (p === "premium") {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 1);
+        expiresAt = d.toISOString().slice(0, 10);
+      }
+
+      setAdminLoading(true);
+      setAdminMsg("");
+
+      const { error } = await supabase
+        .from("erpmini_licenses")
+        .upsert({
+          email: cleanEmail,
+          status: "ativo",
+          plan: p,
+          expires_at: expiresAt,
+          notes: p === "starter" ? "Plano Starter gratuito sem vencimento." : `Plano ${p} liberado pelo painel Admin.`,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "email" });
+
+      if (error) {
+        setAdminMsg("Erro ao alterar plano: " + error.message);
+        setAdminLoading(false);
+        return;
+      }
+
+      setAdminMsg("Plano atualizado com sucesso.");
+      await loadLicenses();
+      setAdminLoading(false);
+    };
+
+    const planLabel = (plan) => {
+      const p = normalizePlan(plan);
+      if (p === "starter") return "Starter gratis";
+      if (p === "pro") return "Pro mensal";
+      if (p === "premium") return "Premium anual";
+      return p;
+    };
 
     return (
       <div style={card}>
@@ -3745,7 +3801,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                 <div style={{ display:"flex", justifyContent:"space-between", gap:"8px", alignItems:"flex-start", marginBottom:"8px" }}>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{lic.email}</div>
-                    <div style={{ fontSize:"12px", color:"#64748b" }}>Plano: {lic.plan || "mensal"}</div>
+                    <div style={{ fontSize:"12px", color:"#64748b" }}>Plano: {planLabel(lic.plan)}</div>
                   </div>
                   <span style={{ borderRadius:"999px", padding:"5px 9px", fontSize:"11px", fontWeight:"900", color:isActive?"#166534":"#991b1b", background:isActive?"#dcfce7":"#fee2e2", whiteSpace:"nowrap" }}>
                     {isActive ? "Ativo" : isExpired ? "Vencido" : "Bloqueado"}
@@ -3753,20 +3809,27 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                 </div>
 
                 <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", alignItems:"center", marginBottom:"8px" }}>
-                  <label style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>
-                    Vencimento
-                    <input style={{ ...inp, marginTop:"4px" }} type="date" value={lic.expires_at || ""} onChange={e=>changeExpires(lic, e.target.value)} />
-                  </label>
+                  {normalizePlan(lic.plan) === "starter" ? (
+                    <div style={{ fontSize:"12px", color:"#16a34a", fontWeight:"900", background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:"12px", padding:"10px" }}>
+                      Vencimento: sem vencimento no Starter gratis
+                    </div>
+                  ) : (
+                    <label style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>
+                      Vencimento
+                      <input style={{ ...inp, marginTop:"4px" }} type="date" value={lic.expires_at || ""} onChange={e=>changeExpires(lic, e.target.value)} />
+                    </label>
+                  )}
                   <div style={{ fontSize:"12px", color:"#64748b" }}>
                     Observacao: {lic.notes || "-"}
                   </div>
                 </div>
 
-                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"6px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)", gap:"6px" }}>
                   <button style={{ ...btn("#16a34a"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"ativo")}>Liberar</button>
                   <button style={{ ...btn("#ef4444"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"bloqueado")}>Bloquear</button>
-                  <button style={{ ...btn("#2563eb"), padding:"9px", fontSize:"12px" }} onClick={()=>extendLicense(lic,1)}>+1 mes</button>
-                  <button style={{ ...btn("#7c3aed"), padding:"9px", fontSize:"12px" }} onClick={()=>extendLicense(lic,12)}>+1 ano</button>
+                  <button style={{ ...btn("#64748b"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"starter")}>Starter gratis</button>
+                  <button style={{ ...btn("#2563eb"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"pro")}>Pro mensal</button>
+                  <button style={{ ...btn("#7c3aed"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"premium")}>Premium anual</button>
                 </div>
               </div>
             );
@@ -3969,7 +4032,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-plan2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
