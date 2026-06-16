@@ -1290,7 +1290,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [showFiadoReceive, setShowFiadoReceive] = useState(false);
   const [selectedFiadoSale, setSelectedFiadoSale] = useState(null);
   const [showReceipt, setShowReceipt]   = useState(false);
-  const [newProduct, setNewProduct]     = useState({ name:"", price:"", stock:"", category:"Geral", barcode:"" });
+  const [newProduct, setNewProduct]     = useState({ name:"", cost:"", price:"", stock:"", category:"Geral", barcode:"" });
   const [editingId, setEditingId]       = useState(null);
   const [searchProd, setSearchProd]     = useState("");
   const [notification, setNotification] = useState(null);
@@ -1717,6 +1717,10 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const salesOfMonth = sales.filter(s=>isSameMonth(s.date));
   const salesTodayTotal = salesOfToday.reduce((sum,s)=>sum+s.total,0);
   const salesMonthTotal = salesOfMonth.reduce((sum,s)=>sum+s.total,0);
+  const saleCostTotal = (sale) => (sale.items || []).reduce((sum,it)=>sum+((parseFloat(it.cost || it.lastCost || 0)||0)*(parseFloat(it.qty)||0)),0);
+  const profitTodayTotal = salesOfToday.reduce((sum,s)=>sum+(s.total - saleCostTotal(s)),0);
+  const profitMonthTotal = salesOfMonth.reduce((sum,s)=>sum+(s.total - saleCostTotal(s)),0);
+  const marginMonthPercent = salesMonthTotal ? (profitMonthTotal / salesMonthTotal) * 100 : 0;
   const ticketToday = salesOfToday.length ? salesTodayTotal/salesOfToday.length : 0;
   const overdueFiado = fiadoSales.filter(s=>s.fiado?.dueDate && s.fiado.dueDate < dayKey());
   const lowStockProducts = products.filter(p=>(parseFloat(p.stock)||0) <= 5);
@@ -2046,16 +2050,16 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     const barcode = newProduct.barcode || genBarcode();
     if (!editingId && products.find(p=>p.barcode===barcode)) return notify("Codigo de barras ja cadastrado!","error");
     if (editingId) {
-      setProducts(prev=>prev.map(p=>p.id===editingId?{...p,...newProduct,barcode,price:parseFloat(newProduct.price),stock:parseInt(newProduct.stock)}:p));
+      setProducts(prev=>prev.map(p=>p.id===editingId?{...p,...newProduct,barcode,price:parseFloat(newProduct.price),cost:parseFloat(String(newProduct.cost||"0").replace(",","."))||0,stock:parseInt(newProduct.stock)}:p));
       setEditingId(null); notify("Produto atualizado!");
     } else {
-      setProducts(prev=>[...prev,{id:Date.now(),...newProduct,barcode,price:parseFloat(newProduct.price),stock:parseInt(newProduct.stock)}]);
+      setProducts(prev=>[...prev,{id:Date.now(),...newProduct,barcode,price:parseFloat(newProduct.price),cost:parseFloat(String(newProduct.cost||"0").replace(",","."))||0,stock:parseInt(newProduct.stock)}]);
       notify("Produto cadastrado!");
     }
-    setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});
+    setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});
   };
 
-  const editProduct = (p) => { setNewProduct({name:p.name,price:p.price,stock:p.stock,category:p.category,barcode:p.barcode}); setEditingId(p.id); setTab("estoque"); };
+  const editProduct = (p) => { setNewProduct({name:p.name,cost:p.cost||p.lastCost||"",price:p.price,stock:p.stock,category:p.category,barcode:p.barcode}); setEditingId(p.id); setTab("estoque"); };
   const deleteProduct = (id) => { setProducts(prev=>prev.filter(p=>p.id!==id)); notify("Produto removido!"); };
   const filteredProducts = products.filter(p=>p.name.toLowerCase().includes(searchProd.toLowerCase())||(p.barcode&&p.barcode.includes(searchProd)));
   const totalSales = sales.reduce((s,v)=>s+v.total,0);
@@ -2143,13 +2147,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS = [
-    { key:"", icon:"", label:"Inicio"  },
-    { key:"pdv",     icon:"", label:"PDV"     },
-    { key:"estoque", icon:"", label:"Estoque" },
-    { key:"vendas",  icon:"", label:"Vendas"  },
-    { key:"caixa",   icon:"", label:"Caixa"   },
-    { key:"fiado",   icon:"", label:"Cliente" },
-    { key:"config",  icon:"", label:"Config"  },
+    { key:"", icon:"IN", label:"Inicio"  },
+    { key:"pdv",     icon:"PDV", label:"PDV"     },
+    { key:"estoque", icon:"BOX", label:"Estoque" },
+    { key:"vendas",  icon:"VEN", label:"Vendas"  },
+    { key:"caixa",   icon:"$", label:"Caixa"   },
+    { key:"fiado",   icon:"CLI", label:"Cliente" },
+    { key:"fiscal",  icon:"NF", label:"Fiscal" },
+    { key:"config",  icon:"CFG", label:"Config"  },
   ];
 
   // --- Cart Drawer (mobile) -------------------------------------------------
@@ -2202,14 +2207,27 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     <div>
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
         {[
-          ["", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
-          ["", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
+          ["Vendas hoje", fmtCur(salesTodayTotal), "linear-gradient(135deg,#16a34a,#15803d)"],
+          ["Vendas do mes", fmtCur(salesMonthTotal), "linear-gradient(135deg,#2563eb,#1d4ed8)"],
           ["Ticket medio hoje", fmtCur(ticketToday), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ["Cliente aberto", fmtCur(fiadoTotal), "linear-gradient(135deg,#f59e0b,#d97706)"],
         ].map(([l,v,c],i)=>(
           <div key={i} style={{ background:c, borderRadius:"14px", padding:"15px", color:"#fff" }}>
             <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
             <div style={{ fontSize:isMobile?"18px":"22px", fontWeight:"900" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
+        {[
+          ["Lucro hoje", fmtCur(profitTodayTotal), "#16a34a"],
+          ["Lucro mes", fmtCur(profitMonthTotal), "#2563eb"],
+          ["Margem mes", `${marginMonthPercent.toFixed(1)}%`, "#7c3aed"],
+        ].map(([l,v,c],i)=>(
+          <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+            <div style={{ fontSize:"24px", fontWeight:"900", color:c }}>{v}</div>
           </div>
         ))}
       </div>
@@ -2405,7 +2423,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={card}>
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>{editingId?"Editar Editar Produto":"+ Novo Produto"}</div>
         <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
-          {[["Nome do Produto","text","name","Ex: Camiseta Azul M"],["Preco (R$)","number","price","0.00"],["Estoque","number","stock","0"],["Categoria","text","category","Geral"]].map(([lbl,type,key,ph])=>(
+          {[["Nome do Produto","text","name","Ex: Camiseta Azul M"],["Custo (R$)","number","cost","0.00"],["Venda (R$)","number","price","0.00"],["Estoque","number","stock","0"],["Categoria","text","category","Geral"]].map(([lbl,type,key,ph])=>(
             <div key={key}>
               <label style={{ fontSize:"12px", fontWeight:"600", color:"#64748b", marginBottom:"4px", display:"block" }}>{lbl}</label>
               <input style={inp} type={type} value={newProduct[key]} placeholder={ph} onChange={e=>setNewProduct({...newProduct,[key]:e.target.value})} />
@@ -2426,7 +2444,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
           </div>
           <div style={{ display:"flex", gap:"8px" }}>
             <button style={{ ...btn(), flex:1 }} onClick={saveProduct}>{editingId?"Salvar alteracoes":""}</button>
-            {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",price:"",stock:"",category:"Geral",barcode:""});}}>x</button>}
+            {editingId&&<button style={btn("#64748b")} onClick={()=>{setEditingId(null);setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});}}>x</button>}
           </div>
         </div>
       </div>
@@ -2440,7 +2458,10 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                 <div style={{ fontWeight:"800", fontSize:"15px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
                 {p.barcode&&<div style={{ fontSize:"11px", color:"#94a3b8", fontFamily:"monospace", marginTop:"3px" }}>{p.barcode}</div>}
               </div>
-              <div style={{ fontWeight:"900", color:"#e94560", whiteSpace:"nowrap", fontSize:"16px", textAlign:"right" }}>{fmtCur(p.price)}</div>
+              <div style={{ textAlign:"right", whiteSpace:"nowrap" }}>
+                <div style={{ fontWeight:"900", color:"#e94560", fontSize:"16px" }}>{fmtCur(p.price)}</div>
+                <div style={{ fontWeight:"800", color:"#16a34a", fontSize:"11px" }}>Lucro {fmtCur((parseFloat(p.price)||0)-(parseFloat(p.cost||p.lastCost||0)||0))}</div>
+              </div>
             </div>
 
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
@@ -3661,6 +3682,60 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     );
   };
 
+  // --- Fiscal tab -------------------------------------------------------------
+  const FiscalTab = () => {
+    const fiscalDocs = sales.map(s=>({
+      id:s.id,
+      numero:`NFC-e ${String(s.id).padStart(6,"0")}`,
+      destinatario:s.fiado?.clientName || "Consumidor Final",
+      tipo:s.fiado?.clientName ? "NF-e" : "NFC-e",
+      valor:s.total,
+      status:s.statusFiscal || "Preparar"
+    })).slice(0,20);
+    const nfceCount = fiscalDocs.filter(d=>d.tipo==="NFC-e").length;
+    const nfeCount = fiscalDocs.filter(d=>d.tipo==="NF-e").length;
+    const canceladas = fiscalDocs.filter(d=>String(d.status).toLowerCase()==="cancelada").length;
+    return (
+      <div>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
+          {[
+            ["NFC-e preparadas", nfceCount, "#16a34a"],
+            ["NF-e preparadas", nfeCount, "#2563eb"],
+            ["Canceladas", canceladas, "#ef4444"],
+          ].map(([l,v,c],i)=>(
+            <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", gridColumn:i===2&&isMobile?"1 / -1":undefined }}>
+              <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
+              <div style={{ fontSize:"24px", fontWeight:"900", color:c }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={card}>
+          <div style={{ fontWeight:"900", fontSize:"18px", marginBottom:"6px" }}>Fiscal NFC-e / NF-e</div>
+          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>
+            Tela inicial para controle fiscal. Ainda nao transmite para SEFAZ.
+          </div>
+          <div style={{ background:"#fffbeb", border:"1.5px solid #fde68a", color:"#92400e", borderRadius:"12px", padding:"10px", fontSize:"12px", fontWeight:"800", marginBottom:"12px" }}>
+            Para emitir de verdade vamos precisar integrar API fiscal e certificado A1 do cliente.
+          </div>
+          {fiscalDocs.length===0 ? (
+            <p style={{ textAlign:"center", color:"#94a3b8", padding:"20px 0" }}>Nenhuma venda para preparar documento fiscal.</p>
+          ) : fiscalDocs.map(d=>(
+            <div key={d.id} style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:"10px", borderBottom:"1px solid #f1f5f9", padding:"10px 0" }}>
+              <div>
+                <div style={{ fontWeight:"900" }}>{d.numero} - {d.tipo}</div>
+                <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>{d.destinatario}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontWeight:"900" }}>{fmtCur(d.valor)}</div>
+                <span style={{ background:"#fef3c7", color:"#92400e", borderRadius:"999px", padding:"2px 8px", fontSize:"11px", fontWeight:"900" }}>{d.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // --- Config tab -------------------------------------------------------------
   const ConfigTab = () => (
     <div>
@@ -3799,7 +3874,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin5</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-erp1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -3831,6 +3906,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         {tab==="vendas"  && VendasTab()}
         {tab==="caixa"   && CaixaTab()}
         {tab==="fiado"   && FiadoTab()}
+        {tab==="fiscal"  && FiscalTab()}
         {tab==="config"  && ConfigTab()}
       </div>
 
@@ -3840,7 +3916,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
           {NAV_ITEMS.map(({key,icon,label})=>(
             <button key={key} onClick={()=>setTab(key)}
               style={{ flex:1, padding:"10px 4px", border:"none", background:"transparent", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:"2px" }}>
-              <span style={{ fontSize:"20px" }}>{icon}</span>
+              <span style={{ fontSize:"11px", fontWeight:"900", minWidth:"26px", height:"22px", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"center", background:tab===key?"#fee2e2":"#f1f5f9", color:tab===key?"#e94560":"#64748b" }}>{icon}</span>
               <span style={{ fontSize:"10px", fontWeight:tab===key?"700":"500", color:tab===key?"#e94560":"#94a3b8" }}>{label}</span>
               {tab===key&&<div style={{ width:"20px", height:"3px", background:"#e94560", borderRadius:"2px" }} />}
             </button>
