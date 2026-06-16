@@ -3295,6 +3295,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
   const AdminLicensesPanel = () => {
     const [licenses, setLicenses] = useState([]);
+    const [signupRequests, setSignupRequests] = useState([]);
     const [adminLoading, setAdminLoading] = useState(false);
     const [adminMsg, setAdminMsg] = useState("");
     const [newEmail, setNewEmail] = useState("");
@@ -3314,12 +3315,21 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         .from("erpmini_licenses")
         .select("email,status,expires_at,plan,notes,created_at,updated_at")
         .order("expires_at", { ascending: true });
+
+      let requests = [];
+      try {
+        requests = await fetchSignupRequests();
+      } catch (reqError) {
+        setAdminMsg("Licencas carregadas, mas nao foi possivel carregar solicitacoes pendentes: " + reqError.message);
+      }
+
       setAdminLoading(false);
       if (error) {
         setAdminMsg("Erro ao carregar licencas: " + error.message);
         return;
       }
       setLicenses(data || []);
+      setSignupRequests(requests || []);
     }, [isPlatformAdmin]);
 
     useEffect(() => {
@@ -3401,9 +3411,57 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       });
     };
 
+    const approveSignupRequest = async (email) => {
+      const cleanEmail = String(email || "").trim().toLowerCase();
+      if (!cleanEmail) return;
+
+      const expires = new Date();
+      expires.setMonth(expires.getMonth() + 1);
+      const expiresAt = expires.toISOString().slice(0, 10);
+
+      setAdminLoading(true);
+      setAdminMsg("");
+
+      const { error } = await supabase
+        .from("erpmini_licenses")
+        .upsert({
+          email: cleanEmail,
+          status: "ativo",
+          expires_at: expiresAt,
+          plan: "mensal",
+          notes: "Aprovado pelo painel Admin.",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "email" });
+
+      if (error) {
+        setAdminLoading(false);
+        setAdminMsg("Erro ao aprovar solicitacao: " + error.message);
+        return;
+      }
+
+      await markSignupRequestApproved(cleanEmail);
+      setAdminMsg("Acesso aprovado com sucesso.");
+      await loadLicenses();
+      setAdminLoading(false);
+    };
+
+    const rejectSignupRequest = async (email) => {
+      const cleanEmail = String(email || "").trim().toLowerCase();
+      if (!cleanEmail) return;
+
+      setAdminLoading(true);
+      setAdminMsg("");
+      await markSignupRequestRejected(cleanEmail);
+      setAdminMsg("Solicitacao recusada.");
+      await loadLicenses();
+      setAdminLoading(false);
+    };
+
     const todayStr = new Date().toISOString().slice(0,10);
     const activeCount = licenses.filter(l => (l.status || "").toLowerCase() === "ativo" && l.expires_at >= todayStr).length;
     const blockedCount = licenses.filter(l => (l.status || "").toLowerCase() !== "ativo" || l.expires_at < todayStr).length;
+    const pendingRequests = signupRequests.filter(r => (r.status || "").toLowerCase() === "pendente");
+    const pendingCount = pendingRequests.length;
 
     return (
       <div style={card}>
@@ -3426,10 +3484,36 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
             <div style={{ fontSize:"11px", color:"#9a3412", fontWeight:"800" }}>Bloqueadas/vencidas</div>
             <div style={{ fontSize:"22px", fontWeight:"900", color:"#f97316" }}>{blockedCount}</div>
           </div>
-          {!isMobile && <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:"12px", padding:"10px" }}>
-            <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Total</div>
-            <div style={{ fontSize:"22px", fontWeight:"900", color:"#2563eb" }}>{licenses.length}</div>
-          </div>}
+          <div style={{ background:pendingCount>0?"#fef2f2":"#eff6ff", border:`1px solid ${pendingCount>0?"#fecaca":"#bfdbfe"}`, borderRadius:"12px", padding:"10px" }}>
+            <div style={{ fontSize:"11px", color:pendingCount>0?"#991b1b":"#1d4ed8", fontWeight:"800" }}>Pendentes</div>
+            <div style={{ fontSize:"22px", fontWeight:"900", color:pendingCount>0?"#dc2626":"#2563eb" }}>{pendingCount}</div>
+          </div>
+        </div>
+
+        <div style={{ background:pendingCount>0?"#fff7ed":"#f8fafc", border:`1.5px solid ${pendingCount>0?"#fed7aa":"#e2e8f0"}`, borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"8px" }}>
+            <div style={{ fontWeight:"900", fontSize:"14px", color:"#334155" }}>Solicitacoes pendentes</div>
+            {pendingCount > 0 && <span style={{ borderRadius:"999px", background:"#dc2626", color:"#fff", fontWeight:"900", padding:"4px 9px", fontSize:"12px" }}>{pendingCount}</span>}
+          </div>
+
+          {pendingCount === 0 ? (
+            <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700" }}>Nenhum cadastro aguardando aprovacao.</div>
+          ) : (
+            <div style={{ display:"grid", gap:"10px" }}>
+              {pendingRequests.map((r) => (
+                <div key={r.email} style={{ background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
+                  <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{r.email}</div>
+                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700", marginBottom:"8px" }}>
+                    Aguardando aprovacao desde {r.created_at ? fmtDate(r.created_at) : "-"}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                    <button style={{ ...btn("#16a34a"), padding:"9px", fontSize:"12px" }} onClick={()=>approveSignupRequest(r.email)} disabled={adminLoading}>Aprovar</button>
+                    <button style={{ ...btn("#ef4444"), padding:"9px", fontSize:"12px" }} onClick={()=>rejectSignupRequest(r.email)} disabled={adminLoading}>Recusar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
@@ -3638,7 +3722,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
