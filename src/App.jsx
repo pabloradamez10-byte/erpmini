@@ -12,15 +12,11 @@ async function createPendingLicenseForCurrentUser(email) {
   if (!cleanEmail) return { ok: false, message: "E-mail invalido." };
 
   const { error } = await supabase
-    .from("erpmini_licenses")
+    .from("erpmini_signup_requests")
     .insert([
       {
         email: cleanEmail,
-        status: "pendente",
-        expires_at: null,
-        plan: "mensal",
-        notes: "Cadastro criado pelo cliente. Aguardando aprovacao.",
-        updated_at: new Date().toISOString()
+        status: "pendente"
       }
     ]);
 
@@ -33,6 +29,32 @@ async function createPendingLicenseForCurrentUser(email) {
   }
 
   return { ok: true, message: "Solicitacao criada." };
+}
+
+async function fetchSignupRequests() {
+  const { data, error } = await supabase
+    .from("erpmini_signup_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+  return data || [];
+}
+
+async function markSignupRequestApproved(email) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  await supabase
+    .from("erpmini_signup_requests")
+    .update({ status: "aprovado" })
+    .eq("email", cleanEmail);
+}
+
+async function markSignupRequestRejected(email) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  await supabase
+    .from("erpmini_signup_requests")
+    .update({ status: "recusado" })
+    .eq("email", cleanEmail);
 }
 
 
@@ -3616,7 +3638,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-admin3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
