@@ -1,15 +1,25 @@
-import React from 'react'
-import { createRoot } from 'react-dom/client'
-import ERP from './App.jsx'
-
-createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ERP />
-  </React.StrictMode>,
-)
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js");
-  });
+{
+  "name": "ERPmini - Gestão Inteligente",
+  "short_name": "ERPmini",
+  "description": "Sistema simples de vendas, estoque e clientes para pequenos negócios.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
