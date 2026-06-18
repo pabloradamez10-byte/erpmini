@@ -1480,6 +1480,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
   const [syncPending, setSyncPending] = useState(() => getOfflinePending());
   const [syncingNow, setSyncingNow] = useState(false);
+  const [showSyncBanner, setShowSyncBanner] = useState(false);
   const currentPlan = normalizePlan(licenseInfo?.license?.plan || licenseInfo?.plan || "starter");
   const [tab, setTab]             = useState("");
   const [caixaView, setCaixaView] = useState("resumo");
@@ -1547,33 +1548,66 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   }, [activationKey]);
 
   useEffect(()=>{
+    let bannerTimer = null;
+    let syncLock = false;
+
+    const openBanner = () => {
+      setShowSyncBanner(true);
+      clearTimeout(bannerTimer);
+      bannerTimer = setTimeout(() => setShowSyncBanner(false), 5000);
+    };
+
     const refreshStatus = () => {
       setIsOnline(navigator.onLine);
       setSyncPending(getOfflinePending());
+      if (!navigator.onLine || getOfflinePending()) openBanner();
     };
 
     const handleOnline = async () => {
       refreshStatus();
+      if (syncLock) return;
+
       if (getOfflinePending()) {
+        syncLock = true;
         setSyncingNow(true);
+        openBanner();
+
         const result = await uploadCloudSnapshotNow();
+
         setSyncingNow(false);
         setSyncPending(getOfflinePending());
-        if (result?.ok) notify("Dados offline sincronizados com a nuvem.");
+        syncLock = false;
+
+        if (result?.ok) {
+          setShowSyncBanner(true);
+          clearTimeout(bannerTimer);
+          bannerTimer = setTimeout(() => setShowSyncBanner(false), 3500);
+          notify("Dados offline sincronizados com a nuvem.");
+        }
       }
     };
 
-    const handleSyncState = () => setSyncPending(getOfflinePending());
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncPending(getOfflinePending());
+      openBanner();
+    };
+
+    const handleSyncState = () => {
+      setSyncPending(getOfflinePending());
+      if (getOfflinePending()) openBanner();
+    };
 
     window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", refreshStatus);
+    window.addEventListener("offline", handleOffline);
     window.addEventListener("erpmini-sync-state", handleSyncState);
 
     refreshStatus();
 
     return () => {
+      clearTimeout(bannerTimer);
       window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", refreshStatus);
+      window.removeEventListener("offline", handleOffline);
       window.removeEventListener("erpmini-sync-state", handleSyncState);
     };
   }, []);
@@ -4218,7 +4252,7 @@ const VendasTab = () => (
       )}
 
       {/* Offline / Sync status */}
-      {(!isOnline || syncPending || syncingNow) && (
+      {showSyncBanner && (!isOnline || syncPending || syncingNow) && (
         <div style={{
           position:"sticky",
           top:0,
@@ -4243,7 +4277,7 @@ const VendasTab = () => (
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:!isOnline?"rgba(249,115,22,0.22)":syncPending?"rgba(245,158,11,0.22)":"rgba(34,197,94,0.2)", color:!isOnline?"#fdba74":syncPending?"#fde68a":"#86efac", borderRadius:"20px", padding:"2px 8px" }}>{!isOnline ? "Offline" : syncPending ? "Pendente" : "Salvo"}</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
