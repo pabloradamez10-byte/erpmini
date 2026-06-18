@@ -245,13 +245,13 @@ function SupabaseLicenseBlockedScreen({ info, onLogout }) {
       <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0f172a,#111827)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", color:"#fff" }}>
         <div style={{ textAlign:"center" }}>
           <div style={{ width:"92px", height:"92px", borderRadius:"28px", background:"linear-gradient(135deg,#0f172a,#e94560)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 18px", boxShadow:"0 18px 45px rgba(0,0,0,.35)" }}>
-            <div style={{ fontSize:"40px" }}>ðŸª</div>
+            <div style={{ fontSize:"40px" }}>ERP</div>
           </div>
           <div style={{ fontSize:"42px", fontWeight:"900", letterSpacing:"-.04em" }}>
             ERP<span style={{ color:"#e94560" }}>mini</span>
           </div>
           <div style={{ marginTop:"8px", color:"#cbd5e1", fontWeight:"800", fontSize:"16px" }}>
-            Controle seu negÃ³cio na palma da mÃ£o
+            Controle seu negócio na palma da mão
           </div>
           <div style={{ margin:"28px auto 0", width:"130px", height:"6px", borderRadius:"999px", background:"rgba(255,255,255,.15)", overflow:"hidden" }}>
             <div style={{ width:"70%", height:"100%", background:"#e94560", borderRadius:"999px" }} />
@@ -576,7 +576,7 @@ function PlanUsageCard({ plan, products = [], clients = [], sales = [] }) {
       <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Limites do plano gratuito.</div>
       {row("Produtos", counts.products, limits.products)}
       {row("Clientes", counts.clients, limits.clients)}
-      {row("Vendas no mÃªs", counts.salesMonth, limits.salesMonth)}
+      {row("Vendas no mês", counts.salesMonth, limits.salesMonth)}
     </div>
   );
 }
@@ -1096,7 +1096,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
                 </select>
               </div>
               <div>
-                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Quando receber a 1Âª parcela?</label>
+                <label style={{ fontSize:"13px", fontWeight:"700", color:"#64748b", marginBottom:"6px", display:"block" }}>Quando receber a 1ª parcela?</label>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px", marginBottom:"8px" }}>
                   <button type="button" onClick={()=>{setInstallmentStartOption("today");setInstallmentFirstDueDate(todayISO());}}
                     style={{ padding:"10px", border:"none", borderRadius:"10px", background:installmentStartOption==="today"?"#16a34a":"#f1f5f9", color:installmentStartOption==="today"?"#fff":"#64748b", fontWeight:"900" }}>
@@ -1116,7 +1116,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
               <div style={{ fontWeight:"900", color:"#0369a1", marginBottom:"6px" }}>Resumo do crediario</div>
               <div style={{ fontSize:"13px", color:"#075985" }}>{installmentCount} vez(es) de {fmtCur(total/(parseInt(installmentCount,10)||2))}</div>
               <div style={{ fontSize:"12px", color:"#64748b" }}>
-                1Âª parcela: {installmentFirstDueDate ? new Date(installmentFirstDueDate+"T00:00:00").toLocaleDateString("pt-BR") : "-"}.
+                1ª parcela: {installmentFirstDueDate ? new Date(installmentFirstDueDate+"T00:00:00").toLocaleDateString("pt-BR") : "-"}.
                 {installmentStartOption==="today" ? " Recebe hoje." : installmentStartOption==="30days" ? " Primeira em 30 dias." : " Data personalizada."}
               </div>
               <div style={{ fontSize:"12px", color:"#64748b" }}>O recebimento entrara em Caixa / Financeiro / A receber.</div>
@@ -2310,7 +2310,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS_ALL = [
-    { key:"", icon:"IN", label:"InÃ­cio"  },
+    { key:"", icon:"IN", label:"Início"  },
     { key:"pdv",     icon:"PDV", label:"PDV"     },
     { key:"estoque", icon:"EST", label:"Estoque" },
     { key:"vendas",  icon:"VEN", label:"Vendas"  },
@@ -2374,7 +2374,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const DashboardTab = () => {
     const p = normalizePlan(currentPlan);
     const isStarter = p === "starter" && !isPlatformAdmin;
-    const planName = isPlatformAdmin ? "Administrador" : (p === "starter" ? "Starter grÃ¡tis" : p === "pro" ? "Pro mensal" : "Premium");
+    const planName = isPlatformAdmin ? "Administrador" : (p === "starter" ? "Starter grátis" : p === "pro" ? "Pro mensal" : "Premium");
 
     return (
       <div>
@@ -2383,7 +2383,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"10px" }}>
               <div>
                 <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Alertas importantes</div>
-                <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Veja o que precisa de atenÃ§Ã£o agora.</div>
+                <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Veja o que precisa de atenção agora.</div>
               </div>
               <div style={{ background:"#ef4444", color:"#fff", borderRadius:"999px", minWidth:"34px", height:"34px", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>
                 {lowStockProducts.length + overdueFiado.length}
@@ -2412,7 +2412,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
           <div style={{ fontSize:"13px", color:"#cbd5e1", fontWeight:"800" }}>Plano atual</div>
           <div style={{ fontSize:"28px", fontWeight:"900", marginTop:"2px" }}>{planName}</div>
           <div style={{ color:"#cbd5e1", fontSize:"13px", fontWeight:"700", marginTop:"6px" }}>
-            {isStarter ? "Liberado para PDV, estoque, clientes e configuraÃ§Ãµes." : "Acesso liberado conforme seu plano."}
+            {isStarter ? "Liberado para PDV, estoque, clientes e configurações." : "Acesso liberado conforme seu plano."}
           </div>
         </div>
 
@@ -2439,14 +2439,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         </div>
 
         <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
-          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"8px" }}>Resumo rÃ¡pido</div>
+          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"8px" }}>Resumo rápido</div>
           <div style={{ display:"grid", gap:"9px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
               <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido hoje</span>
               <strong style={{ color:"#16a34a" }}>{fmtCur(salesTodayTotal)}</strong>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
-              <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido no mÃªs</span>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido no mês</span>
               <strong style={{ color:"#2563eb" }}>{fmtCur(salesMonthTotal)}</strong>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between" }}>
@@ -2458,7 +2458,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
         {isStarter && (
           <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"16px", padding:"14px", color:"#1d4ed8", fontWeight:"800", fontSize:"13px", lineHeight:1.45 }}>
-            Recursos como Caixa profissional, RelatÃ³rios, Vendas avanÃ§adas e Fiscal ficam disponÃ­veis nos planos pagos.
+            Recursos como Caixa profissional, Relatórios, Vendas avançadas e Fiscal ficam disponíveis nos planos pagos.
           </div>
         )}
       </div>
@@ -2539,7 +2539,7 @@ const PDVTab = () => (
     <div>
       <div style={{ ...card, borderRadius:"20px", padding:"18px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"14px" }}>
-          <div style={{ width:"42px", height:"42px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px", fontWeight:"900" }}>ðŸ“¦</div>
+          <div style={{ width:"42px", height:"42px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px", fontWeight:"900" }}>EST</div>
           <div>
             <div style={{ fontWeight:"900", fontSize:"21px", color:"#0f172a" }}>{editingId ? "Editar Produto" : "Novo Produto"}</div>
             <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Preencha os dados para cadastrar ou atualizar o produto.</div>
@@ -2573,9 +2573,9 @@ const PDVTab = () => (
           </div>
 
           <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>CÃ³digo de Barras</label>
+            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Código de Barras</label>
             <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:"8px" }}>
-              <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="AutomÃ¡tico se vazio" onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
+              <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automático se vazio" onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
               <button style={{ ...btnSm("#6366f1"), minWidth:"82px", fontSize:"13px" }} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>Gerar</button>
             </div>
           </div>
@@ -2589,7 +2589,7 @@ const PDVTab = () => (
 
         <div style={{ display:"flex", gap:"8px", marginTop:"14px" }}>
           <button style={{ ...btn("#e94560"), flex:1, borderRadius:"14px", padding:"14px", fontSize:"16px" }} onClick={saveProduct}>
-            {editingId ? "ðŸ’¾ Salvar AlteraÃ§Ãµes" : "ðŸ’¾ Cadastrar Produto"}
+            {editingId ? " Salvar Alterações" : " Cadastrar Produto"}
           </button>
           {editingId&&<button style={{ ...btn("#64748b"), borderRadius:"14px" }} onClick={()=>{setEditingId(null);setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});}}>Cancelar</button>}
         </div>
@@ -2598,7 +2598,7 @@ const PDVTab = () => (
       <div style={{ ...card, borderRadius:"20px", padding:"18px" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"14px" }}>
           <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-            <div style={{ width:"38px", height:"38px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"20px" }}>ðŸ“¦</div>
+            <div style={{ width:"38px", height:"38px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"20px" }}>EST</div>
             <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Estoque de Produtos ({products.length})</div>
           </div>
           <input
@@ -2622,10 +2622,10 @@ const PDVTab = () => (
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1.4fr 1fr", gap:"12px", alignItems:"center" }}>
               <div style={{ minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                  <div style={{ width:"44px", height:"44px", borderRadius:"50%", background:"#ffe4e6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px" }}>ðŸ“¦</div>
+                  <div style={{ width:"44px", height:"44px", borderRadius:"50%", background:"#ffe4e6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px" }}>EST</div>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
-                    {p.barcode&&<div style={{ fontSize:"12px", color:"#64748b", fontFamily:"monospace", marginTop:"2px" }}>CÃ³digo: {p.barcode}</div>}
+                    {p.barcode&&<div style={{ fontSize:"12px", color:"#64748b", fontFamily:"monospace", marginTop:"2px" }}>Código: {p.barcode}</div>}
                   </div>
                 </div>
 
@@ -2656,10 +2656,10 @@ const PDVTab = () => (
             </div>
 
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginTop:"14px" }}>
-              <button title="Ver cÃ³digo" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>setShowBarcodeModal(p)}>â–¥ CÃ³digo</button>
-              <button title="Imprimir etiqueta" style={{ ...btnSm("#f0fdf4"), color:"#16a34a", border:"1px solid #bbf7d0", padding:"10px", fontSize:"13px" }} onClick={()=>printProductLabels(p)}>ðŸ· Etiqueta</button>
-              <button title="Editar" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>editProduct(p)}>âœŽ Editar</button>
-              <button title="Excluir" style={{ ...btnSm("#fff1f2"), color:"#e11d48", border:"1px solid #fecdd3", padding:"10px", fontSize:"13px" }} onClick={()=>deleteProduct(p.id)}>ðŸ—‘ Excluir</button>
+              <button title="Ver código" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>setShowBarcodeModal(p)}>Código  Código</button>
+              <button title="Imprimir etiqueta" style={{ ...btnSm("#f0fdf4"), color:"#16a34a", border:"1px solid #bbf7d0", padding:"10px", fontSize:"13px" }} onClick={()=>printProductLabels(p)}>Etiqueta  Etiqueta</button>
+              <button title="Editar" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>editProduct(p)}>Editar  Editar</button>
+              <button title="Excluir" style={{ ...btnSm("#fff1f2"), color:"#e11d48", border:"1px solid #fecdd3", padding:"10px", fontSize:"13px" }} onClick={()=>deleteProduct(p.id)}>Excluir  Excluir</button>
             </div>
           </div>
           );
@@ -2759,7 +2759,7 @@ const VendasTab = () => (
             ["", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
             ["", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
             ["Crediario vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
-            ["Recebido crediÃ¡rio", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
+            ["Recebido crediário", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ].map(([l,v,c],i)=>(
             <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
               <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
@@ -2778,7 +2778,7 @@ const VendasTab = () => (
               </div>
               {lastCashClosureOfDay() && (
                 <div style={{ fontSize:"12px", color:"#475569", marginBottom:"8px" }}>
-                  Ultimo fechamento: {fmtDate(lastCashClosureOfDay()?.date)} | DiferenÃ§a:
+                  Ultimo fechamento: {fmtDate(lastCashClosureOfDay()?.date)} | Diferença:
                   <strong style={{ color:Math.abs(lastCashClosureOfDay()?.diferenca||0)<0.01?"#16a34a":"#dc2626" }}> {fmtCur(lastCashClosureOfDay()?.diferenca||0)}</strong>
                 </div>
               )}
@@ -3256,7 +3256,7 @@ const VendasTab = () => (
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.entradas||0)}</div>
                   <div style={{ fontSize:"11px", color:hasDiff?"#dc2626":"#16a34a", fontWeight:"900" }}>
-                    {hasDiff ? `DiferenÃ§a ${fmtCur(diff)}` : "Sem diferenÃ§a"}
+                    {hasDiff ? `Diferença ${fmtCur(diff)}` : "Sem diferença"}
                   </div>
                 </div>
               </div>
@@ -3267,8 +3267,8 @@ const VendasTab = () => (
                   <div>Saldo contado: <strong>{fmtCur(c.saldoInformado ?? c.entradas)}</strong></div>
                   <div>Abertura: <strong>{fmtCur(c.abertura||0)}</strong></div>
                   <div>Sangria: <strong>{fmtCur(c.sangria||0)}</strong></div>
-                  <div>ReforÃ§o: <strong>{fmtCur(c.reforco||0)}</strong></div>
-                  <div>DiferenÃ§a: <strong style={{ color:hasDiff?"#dc2626":"#16a34a" }}>{fmtCur(diff)}</strong></div>
+                  <div>Reforço: <strong>{fmtCur(c.reforco||0)}</strong></div>
+                  <div>Diferença: <strong style={{ color:hasDiff?"#dc2626":"#16a34a" }}>{fmtCur(diff)}</strong></div>
                 </div>
               </div>
 
@@ -4119,7 +4119,7 @@ const VendasTab = () => (
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-pwa2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-pwa3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
