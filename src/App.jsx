@@ -1482,7 +1482,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [syncingNow, setSyncingNow] = useState(false);
   const [stableSyncStatus, setStableSyncStatus] = useState(() => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
-    return getOfflinePending() ? "pending" : "saved";
+    return "saved";
   });
   const [showSyncBanner, setShowSyncBanner] = useState(false);
   const currentPlan = normalizePlan(licenseInfo?.license?.plan || licenseInfo?.plan || "starter");
@@ -1567,7 +1567,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
       setIsOnline(online);
       setSyncPending(pending);
-      setStableSyncStatus(online ? (pending ? "pending" : "saved") : "offline");
+      setStableSyncStatus(online ? "saved" : "offline");
 
       if (!online) openBanner();
     };
@@ -1586,7 +1586,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
         setSyncingNow(false);
         setSyncPending(getOfflinePending());
-        setStableSyncStatus(getOfflinePending() ? "pending" : "saved");
+        setStableSyncStatus(navigator.onLine ? "saved" : "offline");
         syncLock = false;
 
         if (result?.ok) {
@@ -1609,7 +1609,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       const pending = getOfflinePending();
       setSyncPending(pending);
       if (navigator.onLine) {
-        setStableSyncStatus(pending ? "pending" : "saved");
+        setStableSyncStatus("saved");
       }
     };
 
@@ -4293,24 +4293,20 @@ const VendasTab = () => (
           fontSize:"11px",
           background: stableSyncStatus==="offline"
             ? "rgba(249,115,22,0.22)"
-            : stableSyncStatus==="pending"
-              ? "rgba(245,158,11,0.22)"
-              : stableSyncStatus==="syncing"
-                ? "rgba(59,130,246,0.22)"
-                : "rgba(34,197,94,0.2)",
+            : stableSyncStatus==="syncing"
+              ? "rgba(59,130,246,0.22)"
+              : "rgba(34,197,94,0.2)",
           color: stableSyncStatus==="offline"
             ? "#fdba74"
-            : stableSyncStatus==="pending"
-              ? "#fde68a"
-              : stableSyncStatus==="syncing"
-                ? "#bfdbfe"
-                : "#86efac",
+            : stableSyncStatus==="syncing"
+              ? "#bfdbfe"
+              : "#86efac",
           borderRadius:"20px",
           padding:"2px 8px"
         }}>
-          {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="pending" ? "Pendente" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
+          {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off5</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
