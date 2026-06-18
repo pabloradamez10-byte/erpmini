@@ -1480,6 +1480,10 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
   const [syncPending, setSyncPending] = useState(() => getOfflinePending());
   const [syncingNow, setSyncingNow] = useState(false);
+  const [stableSyncStatus, setStableSyncStatus] = useState(() => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
+    return getOfflinePending() ? "pending" : "saved";
+  });
   const [showSyncBanner, setShowSyncBanner] = useState(false);
   const currentPlan = normalizePlan(licenseInfo?.license?.plan || licenseInfo?.plan || "starter");
   const [tab, setTab]             = useState("");
@@ -1558,9 +1562,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     };
 
     const refreshStatus = () => {
-      setIsOnline(navigator.onLine);
-      setSyncPending(getOfflinePending());
-      if (!navigator.onLine) openBanner();
+      const online = navigator.onLine;
+      const pending = getOfflinePending();
+
+      setIsOnline(online);
+      setSyncPending(pending);
+      setStableSyncStatus(online ? (pending ? "pending" : "saved") : "offline");
+
+      if (!online) openBanner();
     };
 
     const handleOnline = async () => {
@@ -1570,12 +1579,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       if (getOfflinePending()) {
         syncLock = true;
         setSyncingNow(true);
+        setStableSyncStatus("syncing");
         openBanner();
 
         const result = await uploadCloudSnapshotNow();
 
         setSyncingNow(false);
         setSyncPending(getOfflinePending());
+        setStableSyncStatus(getOfflinePending() ? "pending" : "saved");
         syncLock = false;
 
         if (result?.ok) {
@@ -1590,11 +1601,16 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     const handleOffline = () => {
       setIsOnline(false);
       setSyncPending(getOfflinePending());
+      setStableSyncStatus("offline");
       openBanner();
     };
 
     const handleSyncState = () => {
-      setSyncPending(getOfflinePending());
+      const pending = getOfflinePending();
+      setSyncPending(pending);
+      if (navigator.onLine) {
+        setStableSyncStatus(pending ? "pending" : "saved");
+      }
     };
 
     window.addEventListener("online", handleOnline);
@@ -4251,7 +4267,7 @@ const VendasTab = () => (
       )}
 
       {/* Offline / Sync status */}
-      {showSyncBanner && (!isOnline || syncingNow) && (
+      {showSyncBanner && !isOnline && (
         <div style={{
           position:"sticky",
           top:0,
@@ -4273,8 +4289,28 @@ const VendasTab = () => (
       {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
-        <span style={{ fontSize:"11px", background:!isOnline?"rgba(249,115,22,0.22)":syncPending?"rgba(245,158,11,0.22)":"rgba(34,197,94,0.2)", color:!isOnline?"#fdba74":syncPending?"#fde68a":"#86efac", borderRadius:"20px", padding:"2px 8px" }}>{!isOnline ? "Offline" : syncPending ? "Pendente" : "Salvo"}</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off3</span>
+        <span style={{
+          fontSize:"11px",
+          background: stableSyncStatus==="offline"
+            ? "rgba(249,115,22,0.22)"
+            : stableSyncStatus==="pending"
+              ? "rgba(245,158,11,0.22)"
+              : stableSyncStatus==="syncing"
+                ? "rgba(59,130,246,0.22)"
+                : "rgba(34,197,94,0.2)",
+          color: stableSyncStatus==="offline"
+            ? "#fdba74"
+            : stableSyncStatus==="pending"
+              ? "#fde68a"
+              : stableSyncStatus==="syncing"
+                ? "#bfdbfe"
+                : "#86efac",
+          borderRadius:"20px",
+          padding:"2px 8px"
+        }}>
+          {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="pending" ? "Pendente" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
+        </span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
