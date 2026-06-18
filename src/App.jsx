@@ -2756,9 +2756,9 @@ const VendasTab = () => (
       <>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
           {[
-            ["", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
-            ["", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
-            ["Crediario vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
+            ["Entradas hoje", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
+            ["Vendas hoje", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
+            ["Crediário vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
             ["Recebido crediário", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
           ].map(([l,v,c],i)=>(
             <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
@@ -4119,7 +4119,7 @@ const VendasTab = () => (
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-pwa3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-pwa4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
