@@ -1,4 +1,4 @@
-const CACHE_NAME = "erpmini-cache-v3";
+const CACHE_NAME = "erpmini-cache-v5";
 
 const APP_SHELL = [
   "/",
@@ -10,63 +10,93 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(APP_SHELL);
+    })
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key))
-        )
-      )
-      .then(() => self.clients.claim())
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      );
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", (event) => {
-  const request = event.request;
 
-  if (request.method !== "GET") return;
+  if (event.request.method !== "GET") return;
 
-  const url = new URL(request.url);
+  const url = new URL(event.request.url);
 
-  if (url.origin !== self.location.origin) {
-    event.respondWith(fetch(request));
-    return;
-  }
+  if (url.origin !== self.location.origin) return;
 
-  if (request.mode === "navigate") {
+  // Navegação principal
+  if (event.request.mode === "navigate") {
+
     event.respondWith(
-      fetch(request)
+
+      fetch(event.request)
         .then((response) => {
+
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put("/", copy);
+            cache.put("/index.html", response.clone());
+          });
+
           return response;
         })
-        .catch(() => caches.match("/") || caches.match("/index.html"))
+
+        .catch(() => {
+
+          return (
+            caches.match("/") ||
+            caches.match("/index.html")
+          );
+
+        })
+
     );
+
     return;
   }
 
+  // Arquivos estáticos
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
 
-      return cached || fetchPromise;
-    })
+    caches.match(event.request)
+      .then((cached) => {
+
+        const fetchPromise = fetch(event.request)
+          .then((response) => {
+
+            if (response && response.status === 200) {
+
+              const copy = response.clone();
+
+              caches.open(CACHE_NAME)
+                .then((cache) => cache.put(event.request, copy));
+
+            }
+
+            return response;
+
+          })
+          .catch(() => cached);
+
+        return cached || fetchPromise;
+
+      })
+
   );
+
 });
