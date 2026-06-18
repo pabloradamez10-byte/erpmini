@@ -1,4 +1,4 @@
-const CACHE_NAME = "erpmini-cache-v6";
+const CACHE_NAME = "erpmini-cache-v7";
 
 const APP_SHELL = [
   "/",
@@ -45,12 +45,12 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copyForRoot = response.clone();
-          const copyForIndex = response.clone();
+          const rootCopy = response.clone();
+          const indexCopy = response.clone();
 
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put("/", copyForRoot);
-            cache.put("/index.html", copyForIndex);
+            cache.put("/", rootCopy);
+            cache.put("/index.html", indexCopy);
           });
 
           return response;
@@ -58,7 +58,7 @@ self.addEventListener("fetch", (event) => {
         .catch(() =>
           caches.match("/") ||
           caches.match("/index.html") ||
-          new Response("ERPmini offline. Abra novamente quando voltar a internet.", {
+          new Response("ERPmini offline.", {
             headers: { "Content-Type": "text/plain; charset=utf-8" }
           })
         )
