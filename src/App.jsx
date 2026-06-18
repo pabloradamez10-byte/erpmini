@@ -2461,20 +2461,44 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const card = { background:"#fff", borderRadius:"14px", padding:"16px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", marginBottom:"14px" };
 
   const NAV_ITEMS_ALL = [
-    { key:"", icon:"IN", label:"Início"  },
-    { key:"pdv",     icon:"PDV", label:"PDV"     },
-    { key:"estoque", icon:"EST", label:"Estoque" },
-    { key:"vendas",  icon:"VEN", label:"Vendas"  },
-    { key:"caixa",   icon:"CX", label:"Caixa"   },
-    { key:"fiado",   icon:"CLI", label:"Cliente" },
-    { key:"fiscal",  icon:"NF", label:"Fiscal" },
-    { key:"config",  icon:"CFG", label:"Config"  },
+    { key:"", icon:"home", label:"Início"  },
+    { key:"pdv",     icon:"cart", label:"PDV"     },
+    { key:"estoque", icon:"box", label:"Estoque" },
+    { key:"vendas",  icon:"chart", label:"Vendas"  },
+    { key:"caixa",   icon:"cash", label:"Caixa"   },
+    { key:"fiado",   icon:"users", label:"Cliente" },
+    { key:"fiscal",  icon:"doc", label:"Fiscal" },
+    { key:"config",  icon:"gear", label:"Config"  },
   ];
 
   const NAV_ITEMS = NAV_ITEMS_ALL.filter(({ key }) => {
     const normalizedKey = key === "" ? "inicio" : key;
     return hasPlanAccess(normalizedKey === "fiado" ? "cliente" : normalizedKey, currentPlan, isPlatformAdmin);
   });
+
+  const NavIcon = ({ name, active }) => {
+    const stroke = active ? "#e94560" : "#64748b";
+    const common = {
+      width: 24,
+      height: 24,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke,
+      strokeWidth: 2.2,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      style: { display:"block" }
+    };
+
+    if (name === "home") return <svg {...common}><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></svg>;
+    if (name === "cart") return <svg {...common}><path d="M4 5h2l2.1 10.2a2 2 0 0 0 2 1.6h6.8a2 2 0 0 0 2-1.6L20 8H7"/><circle cx="10" cy="20" r="1" fill={stroke}/><circle cx="17" cy="20" r="1" fill={stroke}/></svg>;
+    if (name === "box") return <svg {...common}><path d="M21 8.5 12 3 3 8.5l9 5.5 9-5.5Z"/><path d="M3 8.5V16l9 5 9-5V8.5"/><path d="M12 14v7"/></svg>;
+    if (name === "chart") return <svg {...common}><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>;
+    if (name === "cash") return <svg {...common}><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2"/><path d="M7 13h4"/><path d="M16.5 13h.01"/><path d="M7 17h10"/></svg>;
+    if (name === "users") return <svg {...common}><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.5"/><path d="M14.5 20a4.5 4.5 0 0 1 6 0"/></svg>;
+    if (name === "doc") return <svg {...common}><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9.5 12h6"/><path d="M9.5 16h6"/></svg>;
+    return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 2-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-3v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-2-2 .1-.1A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3 14H3v-3h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-2 .1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h3v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2 2-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21v3h-.2a1.7 1.7 0 0 0-1.4 1Z"/></svg>;
+  };
 
   // --- Cart Drawer (mobile) -------------------------------------------------
   const CartDrawer = () => (
@@ -4306,7 +4330,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off5</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-icon1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -4323,8 +4347,8 @@ const VendasTab = () => (
         <div style={{ background:"#fff", borderBottom:"2px solid #e2e8f0", display:"flex", padding:"0 24px" }}>
           {NAV_ITEMS.map(({key,icon,label})=>(
             <button key={key} onClick={()=>setTab(key)}
-              style={{ padding:"14px 20px", border:"none", background:"transparent", cursor:"pointer", fontWeight:tab===key?"700":"500", color:tab===key?"#e94560":"#64748b", borderBottom:tab===key?"3px solid #e94560":"3px solid transparent", fontSize:"14px", transition:"all 0.2s" }}>
-              {icon} {label}
+              style={{ padding:"12px 18px", border:"none", background:"transparent", cursor:"pointer", fontWeight:tab===key?"800":"600", color:tab===key?"#e94560":"#64748b", borderBottom:tab===key?"3px solid #e94560":"3px solid transparent", fontSize:"14px", transition:"all 0.2s", display:"flex", alignItems:"center", gap:"8px" }}>
+              <NavIcon name={icon} active={tab===key} /> <span>{label}</span>
             </button>
           ))}
         </div>
@@ -4344,13 +4368,15 @@ const VendasTab = () => (
 
       {/* Mobile bottom nav */}
       {isMobile && (
-        <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"2px solid #f1f5f9", display:"flex", zIndex:50, boxShadow:"0 -4px 20px rgba(0,0,0,0.1)" }}>
+        <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#fff", borderTop:"1px solid #e5e7eb", display:"flex", zIndex:50, boxShadow:"0 -6px 24px rgba(15,23,42,0.10)", padding:"6px 4px 7px", paddingBottom:"calc(7px + env(safe-area-inset-bottom))" }}>
           {NAV_ITEMS.map(({key,icon,label})=>(
             <button key={key} onClick={()=>setTab(key)}
-              style={{ flex:1, padding:"10px 4px", border:"none", background:"transparent", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:"2px" }}>
-              <span style={{ fontSize:"11px", fontWeight:"900", minWidth:"26px", height:"22px", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"center", background:tab===key?"#fee2e2":"#f1f5f9", color:tab===key?"#e94560":"#64748b" }}>{icon}</span>
-              <span style={{ fontSize:"10px", fontWeight:tab===key?"700":"500", color:tab===key?"#e94560":"#94a3b8" }}>{label}</span>
-              {tab===key&&<div style={{ width:"20px", height:"3px", background:"#e94560", borderRadius:"2px" }} />}
+              style={{ flex:1, padding:"4px 2px 2px", border:"none", background:"transparent", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"3px", minWidth:0 }}>
+              <span style={{ width:"34px", height:"30px", borderRadius:"12px", display:"flex", alignItems:"center", justifyContent:"center", background:tab===key?"#ffe4ea":"#f8fafc", transition:"all .2s" }}>
+                <NavIcon name={icon} active={tab===key} />
+              </span>
+              <span style={{ fontSize:"10px", lineHeight:"12px", fontWeight:tab===key?"800":"600", color:tab===key?"#e94560":"#64748b", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{label}</span>
+              {tab===key&&<div style={{ width:"24px", height:"3px", background:"#e94560", borderRadius:"999px", marginTop:"1px" }} />}
             </button>
           ))}
         </div>
