@@ -79,6 +79,32 @@ let cloudUserId = null;
 let cloudSaveTimer = null;
 let cloudApplyingRemote = false;
 
+const OFFLINE_PENDING_KEY = "erpmini_offline_pending";
+const OFFLINE_LAST_SYNC_KEY = "erpmini_offline_last_sync";
+
+function setOfflinePending(value) {
+  try {
+    localStorage.setItem(OFFLINE_PENDING_KEY, JSON.stringify(!!value));
+    window.dispatchEvent(new CustomEvent("erpmini-sync-state", { detail: { pending: !!value } }));
+  } catch {}
+}
+
+function getOfflinePending() {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_PENDING_KEY) || "false");
+  } catch {
+    return false;
+  }
+}
+
+function setOfflineLastSync() {
+  try {
+    localStorage.setItem(OFFLINE_LAST_SYNC_KEY, new Date().toISOString());
+    window.dispatchEvent(new CustomEvent("erpmini-sync-state", { detail: { pending: false } }));
+  } catch {}
+}
+
+
 function readLocalJsonSafe(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -99,23 +125,41 @@ function collectCloudPayload() {
 }
 
 async function uploadCloudSnapshotNow() {
-  if (!cloudUserId || cloudApplyingRemote) return;
+  if (!cloudUserId || cloudApplyingRemote) return { ok: false, skipped: true };
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    setOfflinePending(true);
+    return { ok: false, offline: true };
+  }
+
   try {
     const payload = collectCloudPayload();
-    await supabase
+    const { error } = await supabase
       .from(CLOUD_TABLE)
       .upsert(
         { user_id: cloudUserId, data: payload, updated_at: new Date().toISOString() },
         { onConflict: "user_id" }
       );
+
+    if (error) throw error;
+
+    setOfflinePending(false);
+    setOfflineLastSync();
+    return { ok: true };
   } catch (err) {
+    setOfflinePending(true);
     console.warn("ERPmini cloud save error:", err);
+    return { ok: false, error: err };
   }
 }
 
 function scheduleCloudSave() {
   if (!cloudUserId || cloudApplyingRemote) return;
+  setOfflinePending(true);
   clearTimeout(cloudSaveTimer);
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+
   cloudSaveTimer = setTimeout(uploadCloudSnapshotNow, 900);
 }
 
@@ -123,6 +167,11 @@ async function downloadCloudSnapshot(userId) {
   if (!userId) return { ok: false, message: "Usuario nao identificado." };
 
   cloudUserId = userId;
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    setOfflinePending(getOfflinePending());
+    return { ok: true, offline: true, message: "Modo offline. Usando dados salvos neste aparelho." };
+  }
 
   const { data, error } = await supabase
     .from(CLOUD_TABLE)
@@ -162,6 +211,20 @@ async function checkLicenseByEmail(email) {
     return { ok: false, title: "Licenca nao encontrada", message: "Nao foi possivel identificar o e-mail do usuario." };
   }
 
+  const cachedLicenseKey = `erpmini_cached_license_${normalizedEmail}`;
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    const cached = readLocalJsonSafe(cachedLicenseKey);
+    if (cached?.ok) {
+      return { ...cached, offlineCached: true, message: "Licenca validada pelo ultimo acesso online." };
+    }
+    return {
+      ok: false,
+      title: "Sem conexao",
+      message: "Abra o ERPmini uma vez com internet para validar a licenca neste aparelho."
+    };
+  }
+
   try {
     const { data, error } = await supabase
       .from("erpmini_licenses")
@@ -171,6 +234,10 @@ async function checkLicenseByEmail(email) {
 
     if (error) {
       console.warn("ERPmini license error:", error);
+      const cached = readLocalJsonSafe(cachedLicenseKey);
+      if (cached?.ok) {
+        return { ...cached, offlineCached: true, message: "Licenca validada pelo ultimo acesso online." };
+      }
       return {
         ok: false,
         title: "Erro ao validar licenca",
@@ -582,7 +649,7 @@ function PlanUsageCard({ plan, products = [], clients = [], sales = [] }) {
 }
 
 
-const APP_VERSION = "CADASTRO-PENDENTE-ETAPA24-20260616-0528";
+const APP_VERSION = "ERPmini-v-off1-offline-sync";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1410,6 +1477,9 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const currentUserEmail = (user?.email || "").trim().toLowerCase();
   const isPlatformAdmin = currentUserEmail === "pabloradamez10@gmail.com";
   const [showSplash, setShowSplash] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  const [syncPending, setSyncPending] = useState(() => getOfflinePending());
+  const [syncingNow, setSyncingNow] = useState(false);
   const currentPlan = normalizePlan(licenseInfo?.license?.plan || licenseInfo?.plan || "starter");
   const [tab, setTab]             = useState("");
   const [caixaView, setCaixaView] = useState("resumo");
@@ -1475,6 +1545,38 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     checkMonthlyLicense(activationKey).then(result => { if (alive) setLicense(result); });
     return () => { alive = false; };
   }, [activationKey]);
+
+  useEffect(()=>{
+    const refreshStatus = () => {
+      setIsOnline(navigator.onLine);
+      setSyncPending(getOfflinePending());
+    };
+
+    const handleOnline = async () => {
+      refreshStatus();
+      if (getOfflinePending()) {
+        setSyncingNow(true);
+        const result = await uploadCloudSnapshotNow();
+        setSyncingNow(false);
+        setSyncPending(getOfflinePending());
+        if (result?.ok) notify("Dados offline sincronizados com a nuvem.");
+      }
+    };
+
+    const handleSyncState = () => setSyncPending(getOfflinePending());
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", refreshStatus);
+    window.addEventListener("erpmini-sync-state", handleSyncState);
+
+    refreshStatus();
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", refreshStatus);
+      window.removeEventListener("erpmini-sync-state", handleSyncState);
+    };
+  }, []);
 
   useEffect(()=>{ saveLS("erpmini_products", products); }, [products]);
   useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
@@ -4115,11 +4217,33 @@ const VendasTab = () => (
         </div>
       )}
 
+      {/* Offline / Sync status */}
+      {(!isOnline || syncPending || syncingNow) && (
+        <div style={{
+          position:"sticky",
+          top:0,
+          zIndex:70,
+          background:!isOnline ? "#fff7ed" : syncingNow ? "#eff6ff" : "#fefce8",
+          color:!isOnline ? "#9a3412" : syncingNow ? "#1d4ed8" : "#854d0e",
+          borderBottom:"1px solid #fed7aa",
+          padding:"8px 12px",
+          textAlign:"center",
+          fontSize:"12px",
+          fontWeight:"900"
+        }}>
+          {!isOnline
+            ? "Modo offline: seus dados ficam salvos neste aparelho."
+            : syncingNow
+              ? "Sincronizando dados com a nuvem..."
+              : "Alterações pendentes de sincronização."}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
-        <span style={{ fontSize:"11px", background:"rgba(34,197,94,0.2)", color:"#86efac", borderRadius:"20px", padding:"2px 8px" }}>Salvo</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-pwa4</span>
+        <span style={{ fontSize:"11px", background:!isOnline?"rgba(249,115,22,0.22)":syncPending?"rgba(245,158,11,0.22)":"rgba(34,197,94,0.2)", color:!isOnline?"#fdba74":syncPending?"#fde68a":"#86efac", borderRadius:"20px", padding:"2px 8px" }}>{!isOnline ? "Offline" : syncPending ? "Pendente" : "Salvo"}</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
