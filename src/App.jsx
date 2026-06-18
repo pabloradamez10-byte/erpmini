@@ -160,7 +160,7 @@ function scheduleCloudSave() {
 
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 
-  cloudSaveTimer = setTimeout(uploadCloudSnapshotNow, 900);
+  cloudSaveTimer = setTimeout(uploadCloudSnapshotNow, 2500);
 }
 
 async function downloadCloudSnapshot(userId) {
@@ -1560,7 +1560,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     const refreshStatus = () => {
       setIsOnline(navigator.onLine);
       setSyncPending(getOfflinePending());
-      if (!navigator.onLine || getOfflinePending()) openBanner();
+      if (!navigator.onLine) openBanner();
     };
 
     const handleOnline = async () => {
@@ -1595,7 +1595,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
     const handleSyncState = () => {
       setSyncPending(getOfflinePending());
-      if (getOfflinePending()) openBanner();
     };
 
     window.addEventListener("online", handleOnline);
@@ -3893,7 +3892,7 @@ const VendasTab = () => (
             <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Admin Licencas</div>
             <div style={{ fontSize:"12px", color:"#64748b" }}>Visivel somente para Pablo.</div>
           </div>
-          <button style={{ ...btn("#2563eb"), padding:"9px 12px", fontSize:"12px" }} onClick={loadLicenses} disabled={adminLoading}>
+          <button style={{ ...btn("#2563eb"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>{ if (!adminLoading) loadLicenses(); }} disabled={adminLoading}>
             Atualizar
           </button>
         </div>
@@ -4252,7 +4251,7 @@ const VendasTab = () => (
       )}
 
       {/* Offline / Sync status */}
-      {showSyncBanner && (!isOnline || syncPending || syncingNow) && (
+      {showSyncBanner && (!isOnline || syncingNow) && (
         <div style={{
           position:"sticky",
           top:0,
@@ -4267,9 +4266,7 @@ const VendasTab = () => (
         }}>
           {!isOnline
             ? "Modo offline: seus dados ficam salvos neste aparelho."
-            : syncingNow
-              ? "Sincronizando dados com a nuvem..."
-              : "Alterações pendentes de sincronização."}
+            : "Sincronizando dados com a nuvem..."}
         </div>
       )}
 
@@ -4277,7 +4274,7 @@ const VendasTab = () => (
       <div style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#fff", padding:"12px 16px", display:"flex", alignItems:"center", gap:"10px", position:"sticky", top:0, zIndex:50 }}>
         <div style={{ fontSize:"20px", fontWeight:"800", letterSpacing:"1px" }}>ERP<span style={{ color:"#e94560" }}>mini</span></div>
         <span style={{ fontSize:"11px", background:!isOnline?"rgba(249,115,22,0.22)":syncPending?"rgba(245,158,11,0.22)":"rgba(34,197,94,0.2)", color:!isOnline?"#fdba74":syncPending?"#fde68a":"#86efac", borderRadius:"20px", padding:"2px 8px" }}>{!isOnline ? "Offline" : syncPending ? "Pendente" : "Salvo"}</span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-off3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
