@@ -558,11 +558,11 @@ const PLAN_LIMITS = {
 
 
 const allowedTabsForPlan = (plan, isAdmin=false) => {
-  if (isAdmin) return ["inicio","pdv","estoque","historico","vendas","caixa","cliente","fiscal","config"];
+  if (isAdmin) return ["inicio","pdv","estoque","cliente","historico","caixa","fiscal","config"];
   const p = normalizePlan(plan);
   if (p === "starter") return ["inicio","pdv","estoque","cliente","historico","config"];
-  if (p === "pro") return ["inicio","pdv","estoque","cliente","historico","vendas","caixa","config"];
-  if (p === "premium") return ["inicio","pdv","estoque","cliente","historico","vendas","caixa","fiscal","config"];
+  if (p === "pro") return ["inicio","pdv","estoque","cliente","historico","caixa","config"];
+  if (p === "premium") return ["inicio","pdv","estoque","cliente","historico","caixa","fiscal","config"];
   return ["inicio","pdv","estoque","cliente","historico","config"];
 };
 
@@ -2493,7 +2493,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     { key:"estoque", icon:"box", label:"Estoque" },
     { key:"fiado",   icon:"users", label:"Cliente" },
     { key:"historico", icon:"history", label:"Histórico" },
-    { key:"vendas",  icon:"chart", label:"Vendas"  },
     { key:"caixa",   icon:"cash", label:"Caixa"   },
     { key:"fiscal",  icon:"doc", label:"Fiscal" },
     { key:"config",  icon:"gear", label:"Config"  },
@@ -2887,7 +2886,27 @@ const PDVTab = () => (
           </div>
         </div>
 
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
+          {[
+            ["Total de vendas", fmtCur(totalSales), "linear-gradient(135deg,#e94560,#c0392b)"],
+            ["Transações", sales.length, "linear-gradient(135deg,#6366f1,#4338ca)"],
+            ["Ticket médio", sales.length?fmtCur(totalSales/sales.length):"R$ 0,00","linear-gradient(135deg,#22c55e,#16a34a)"],
+          ].map(([l,v,c],i)=>(
+            <div key={i} style={{ background:c, borderRadius:"14px", padding:"16px", color:"#fff", gridColumn:i===2&&isMobile?"1 / -1":undefined, boxShadow:"0 6px 18px rgba(15,23,42,.10)" }}>
+              <div style={{ fontSize:"12px", opacity:0.85, marginBottom:"5px", fontWeight:"800" }}>{l}</div>
+              <div style={{ fontSize:"22px", fontWeight:"900" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
         <div style={card}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"14px" }}>
+            <div>
+              <div style={{ fontWeight:"900", fontSize:"18px" }}>Vendas realizadas</div>
+              <div style={{ color:"#94a3b8", fontSize:"13px", fontWeight:"700" }}>Histórico com opção de reimpressão.</div>
+            </div>
+          </div>
+
           {orderedSales.length===0 ? (
             <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"28px 0" }}>Nenhuma venda registrada ainda.</div>
           ) : orderedSales.map(sale=>(
@@ -2915,7 +2934,7 @@ const PDVTab = () => (
 
               <div style={{ display:"flex", gap:"8px", justifyContent:isMobile?"flex-start":"flex-end", flexWrap:"wrap" }}>
                 <button style={{ ...btnSm("#64748b"), padding:"10px 12px" }} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>Ver</button>
-                <button style={{ ...btnSm("#e94560"), padding:"10px 12px" }} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);setTimeout(()=>{},0);}}>Reimprimir</button>
+                <button style={{ ...btnSm("#e94560"), padding:"10px 12px" }} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>Reimprimir</button>
               </div>
             </div>
           ))}
@@ -4412,7 +4431,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -4442,7 +4461,7 @@ const VendasTab = () => (
         {tab==="pdv"     && hasPlanAccess("pdv", currentPlan, isPlatformAdmin) && PDVTab()}
         {tab==="estoque" && hasPlanAccess("estoque", currentPlan, isPlatformAdmin) && EstoqueTab()}
         {tab==="historico" && hasPlanAccess("historico", currentPlan, isPlatformAdmin) && HistoricoTab()}
-        {tab==="vendas"  && hasPlanAccess("vendas", currentPlan, isPlatformAdmin) && VendasTab()}
+        {tab==="vendas" && HistoricoTab()}
         {tab==="caixa"   && hasPlanAccess("caixa", currentPlan, isPlatformAdmin) && CaixaTab()}
         {tab==="fiado"   && hasPlanAccess("cliente", currentPlan, isPlatformAdmin) && FiadoTab()}
         {tab==="fiscal"  && hasPlanAccess("fiscal", currentPlan, isPlatformAdmin) && FiscalTab()}
