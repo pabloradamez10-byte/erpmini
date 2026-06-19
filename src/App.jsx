@@ -880,7 +880,7 @@ const PAYMENT_METHODS = [
   { key:"pix",      label:"PIX", icon:"PIX", color:"#0891b2", light:"#ecfeff" },
   { key:"debito",   label:"Cartao Debito", icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
   { key:"credito",  label:"Cartao Credito", icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
-  { key:"crediario", label:"Crediario", icon:"Crediario", color:"#f59e0b", light:"#fffbeb" },
+  { key:"crediario", label:"Crediário", icon:"Crediário", color:"#f59e0b", light:"#fffbeb" },
 ];
 
 const initialProducts = [
@@ -1023,7 +1023,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
         <div style={{ width:"40px", height:"4px", background:"#e2e8f0", borderRadius:"4px", margin:"0 auto 20px" }} />
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
-          <div style={{ fontWeight:"800", fontSize:"18px" }}>{isReceive ? "Receber Fiado" : "Cartao Pagamento"}</div>
+          <div style={{ fontWeight:"800", fontSize:"18px" }}>{isReceive ? "Receber Crediário" : "Cartao Pagamento"}</div>
           <button onClick={onCancel} style={{ background:"#f1f5f9", border:"none", borderRadius:"50%", width:"32px", height:"32px", cursor:"pointer", fontSize:"16px" }}>x</button>
         </div>
 
@@ -1132,7 +1132,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
         {step==="parcelado" && (
           <>
             <div style={{ textAlign:"center", marginBottom:"16px" }}>
-              <div style={{ fontSize:"40px" }}>Crediario</div>
+              <div style={{ fontSize:"40px" }}>Crediário</div>
               <div style={{ fontWeight:"700", fontSize:"16px" }}>Venda para receber depois</div>
               <div style={{ fontSize:"13px", color:"#64748b" }}>1x hoje, 1x futuro ou parcelado</div>
             </div>
@@ -1898,7 +1898,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       }
       if (s.fiado && s.fiado.payments) {
         s.fiado.payments.forEach(p => {
-          if (isSameDay(p.date, key)) list.push({ ...p, origin:"Recebimento fiado", saleId:s.id, date:p.date, clientName:s.fiado.clientName || "" });
+          if (isSameDay(p.date, key)) list.push({ ...p, origin:"Recebimento crediário", saleId:s.id, date:p.date, clientName:s.fiado.clientName || "" });
         });
       }
     });
@@ -2296,17 +2296,35 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
   const handleCheckoutConfirm = ({ payments, total:t, change, fiado, receivablePlan }) => {
     if (isLimitReached("salesMonth", currentPlan, planCounts)) return notify(planLimitMessage("salesMonth", currentPlan), "error");
-    const sale = { id:++saleCounter.current, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: fiado ? {...fiado, paid:false} : null, receivablePlan:receivablePlan || null };
+
+    const saleId = ++saleCounter.current;
+
+    const saleFiado = fiado
+      ? { ...fiado, paid:false, type:"fiado", paidAmount:0, payments:[] }
+      : receivablePlan
+        ? {
+            clientId: receivablePlan.clientId,
+            clientName: receivablePlan.clientName,
+            dueDate: receivablePlan.firstDueDate || "",
+            installments: receivablePlan.installments || 1,
+            paid:false,
+            paidAmount:0,
+            payments:[],
+            type:"crediario"
+          }
+        : null;
+
+    const sale = { id:saleId, date:new Date().toISOString(), items:[...cart], total:t, payments, change, fiado: saleFiado, receivablePlan:receivablePlan || null };
     setProducts(prev=>prev.map(p=>{ const item=cart.find(i=>i.id===p.id); return item?{...p,stock:p.stock-item.qty}:p; }));
     if (receivablePlan) {
       createReceivableInstallments({
         clientName:receivablePlan.clientName,
         clientId:receivablePlan.clientId,
         document:`Venda #${sale.id}`,
-        description:"Crediario",
+        description:"Crediário",
         amount:t,
         dueDate:receivablePlan.firstDueDate,
-        category:"Crediario",
+        category:"Crediário",
         installments:receivablePlan.installments,
         saleId:sale.id,
         source:"crediario"
@@ -3593,9 +3611,9 @@ const VendasTab = () => (
       </div>
 
       <div style={card}>
-        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}> Vendas fiado em aberto</div>
+        <div style={{ fontWeight:"800", fontSize:"16px", marginBottom:"12px" }}> Crediário em aberto</div>
         {fiadoSales.length===0 ? (
-          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda fiada em aberto.</div>
+          <div style={{ color:"#94a3b8", fontSize:"14px" }}>Nenhuma venda em crediário em aberto.</div>
         ) : fiadoSales.map(s=>{
           const pago = (s.fiado && s.fiado.paidAmount) || 0;
           const aberto = fiadoOpenAmount(s);
@@ -3615,7 +3633,7 @@ const VendasTab = () => (
               </div>
               {payments.length>0 && (
                 <div style={{ marginTop:"8px", background:"#f8fafc", borderRadius:"10px", padding:"8px" }}>
-                  <div style={{ fontSize:"12px", fontWeight:"800", color:"#64748b", marginBottom:"4px" }}>Historico de pagamentos</div>
+                  <div style={{ fontSize:"12px", fontWeight:"800", color:"#64748b", marginBottom:"4px" }}>Histórico de pagamentos</div>
                   {payments.map((p,i)=><div key={i} style={{ fontSize:"12px", color:"#64748b" }}>{fmtDate(p.date)} - {fmtCur(p.amount)}</div>)}
                 </div>
               )}
@@ -4394,7 +4412,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
