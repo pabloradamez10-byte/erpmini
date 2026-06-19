@@ -558,12 +558,12 @@ const PLAN_LIMITS = {
 
 
 const allowedTabsForPlan = (plan, isAdmin=false) => {
-  if (isAdmin) return ["inicio","pdv","estoque","vendas","caixa","cliente","fiscal","config"];
+  if (isAdmin) return ["inicio","pdv","estoque","historico","vendas","caixa","cliente","fiscal","config"];
   const p = normalizePlan(plan);
-  if (p === "starter") return ["inicio","pdv","estoque","cliente","config"];
-  if (p === "pro") return ["inicio","pdv","estoque","vendas","caixa","cliente","config"];
-  if (p === "premium") return ["inicio","pdv","estoque","vendas","caixa","cliente","fiscal","config"];
-  return ["inicio","pdv","estoque","cliente","config"];
+  if (p === "starter") return ["inicio","pdv","estoque","cliente","historico","config"];
+  if (p === "pro") return ["inicio","pdv","estoque","cliente","historico","vendas","caixa","config"];
+  if (p === "premium") return ["inicio","pdv","estoque","cliente","historico","vendas","caixa","fiscal","config"];
+  return ["inicio","pdv","estoque","cliente","historico","config"];
 };
 
 const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
@@ -1391,7 +1391,7 @@ function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sa
 }
 
 // --- RECEIPT -----------------------------------------------------------------
-function ReceiptModal({ sale, storeName, onClose }) {
+function ReceiptModal({ sale, storeName, currentPlan, onClose }) {
   const receiptRef = useRef();
   const mLabel = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.label || k;
   const mIcon  = (k) => PAYMENT_METHODS.find(m=>m.key===k)?.icon  || "Cartao";
@@ -1458,12 +1458,21 @@ function ReceiptModal({ sale, storeName, onClose }) {
               </div>
             </>
           )}
-          <hr style={{ border:"none", borderTop:"", margin:"8px 0" }} />
+          <hr style={{ border:"none", borderTop:"1px dashed #999", margin:"8px 0" }} />
           <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! <br/>Volte sempre.</div>
+          {normalizePlan(currentPlan) === "starter" && (
+            <>
+              <hr style={{ border:"none", borderTop:"1px dashed #999", margin:"8px 0" }} />
+              <div style={{ textAlign:"center", fontSize:"11px", color:"#555", fontWeight:"700" }}>
+                Emitido por ERPmini Starter<br/>
+                Recibo não fiscal
+              </div>
+            </>
+          )}
         </div>
 
         <div style={{ display:"flex", gap:"10px", marginTop:"16px" }}>
-          <button onClick={printReceipt} style={{ flex:1, padding:"14px", background:"#1a1a2e", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Imprimir Imprimir</button>
+          <button onClick={printReceipt} style={{ flex:1, padding:"14px", background:"#1a1a2e", color:"#fff", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Imprimir</button>
           <button onClick={onClose} style={{ flex:1, padding:"14px", background:"#f1f5f9", color:"#64748b", border:"none", borderRadius:"12px", cursor:"pointer", fontWeight:"700", fontSize:"15px" }}>Fechar</button>
         </div>
       </div>
@@ -2464,9 +2473,10 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     { key:"", icon:"home", label:"Início"  },
     { key:"pdv",     icon:"cart", label:"PDV"     },
     { key:"estoque", icon:"box", label:"Estoque" },
+    { key:"fiado",   icon:"users", label:"Cliente" },
+    { key:"historico", icon:"history", label:"Histórico" },
     { key:"vendas",  icon:"chart", label:"Vendas"  },
     { key:"caixa",   icon:"cash", label:"Caixa"   },
-    { key:"fiado",   icon:"users", label:"Cliente" },
     { key:"fiscal",  icon:"doc", label:"Fiscal" },
     { key:"config",  icon:"gear", label:"Config"  },
   ];
@@ -2496,6 +2506,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     if (name === "chart") return <svg {...common}><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>;
     if (name === "cash") return <svg {...common}><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 7V5h10v2"/><path d="M7 13h4"/><path d="M16.5 13h.01"/><path d="M7 17h10"/></svg>;
     if (name === "users") return <svg {...common}><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.5"/><path d="M14.5 20a4.5 4.5 0 0 1 6 0"/></svg>;
+    if (name === "history") return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>;
     if (name === "doc") return <svg {...common}><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9.5 12h6"/><path d="M9.5 16h6"/></svg>;
     return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 2-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-3v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-2-2 .1-.1A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3 14H3v-3h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-2 .1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h3v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2 2-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21v3h-.2a1.7 1.7 0 0 0-1.4 1Z"/></svg>;
   };
@@ -2842,6 +2853,59 @@ const PDVTab = () => (
       </div>
     </div>
   );
+
+
+  // --- Histórico de vendas tab ----------------------------------------------
+  const HistoricoTab = () => {
+    const orderedSales = [...sales].sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+    return (
+      <div>
+        <div style={{ background:"linear-gradient(135deg,#0f172a,#1e293b)", color:"#fff", borderRadius:"20px", padding:"18px", marginBottom:"14px", boxShadow:"0 8px 24px rgba(15,23,42,.16)" }}>
+          <div style={{ fontSize:"13px", color:"#cbd5e1", fontWeight:"800" }}>Histórico de vendas</div>
+          <div style={{ fontSize:"26px", fontWeight:"900", marginTop:"2px" }}>{orderedSales.length} venda(s)</div>
+          <div style={{ color:"#cbd5e1", fontSize:"13px", fontWeight:"700", marginTop:"6px" }}>
+            Consulte vendas antigas e reimprima comprovantes.
+          </div>
+        </div>
+
+        <div style={card}>
+          {orderedSales.length===0 ? (
+            <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"28px 0" }}>Nenhuma venda registrada ainda.</div>
+          ) : orderedSales.map(sale=>(
+            <div key={sale.id} style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"auto 1fr auto auto", gap:"10px", alignItems:"center", padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ background:"#f1f5f9", borderRadius:"12px", padding:"8px 10px", fontSize:"12px", fontWeight:"900", color:"#64748b", width:isMobile?"fit-content":"auto" }}>
+                #{sale.id}
+              </div>
+
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontWeight:"900", color:"#0f172a" }}>Venda #{sale.id}</div>
+                <div style={{ fontSize:"12px", color:"#64748b", marginTop:"2px" }}>{fmtDate(sale.date)}</div>
+                {sale.fiado?.clientName && (
+                  <div style={{ fontSize:"12px", color:"#f97316", fontWeight:"800", marginTop:"2px" }}>Cliente: {sale.fiado.clientName}</div>
+                )}
+                <div style={{ display:"flex", gap:"4px", marginTop:"6px", flexWrap:"wrap" }}>
+                  {(sale.payments || []).map((p,i)=>(
+                    <span key={i} style={{ background:mColor(p.method)+"22", color:mColor(p.method), borderRadius:"10px", padding:"2px 7px", fontSize:"11px", fontWeight:"800" }}>
+                      {mLabel(p.method)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ fontWeight:"900", fontSize:"18px", color:"#16a34a", textAlign:isMobile?"left":"right" }}>{fmtCur(sale.total)}</div>
+
+              <div style={{ display:"flex", gap:"8px", justifyContent:isMobile?"flex-start":"flex-end", flexWrap:"wrap" }}>
+                <button style={{ ...btnSm("#64748b"), padding:"10px 12px" }} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}>Ver</button>
+                <button style={{ ...btnSm("#e94560"), padding:"10px 12px" }} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);setTimeout(()=>{},0);}}>Reimprimir</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
 
   // --- Vendas tab ------------------------------------------------------------
 const VendasTab = () => (
@@ -4330,7 +4394,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-icon1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -4359,6 +4423,7 @@ const VendasTab = () => (
         {tab==="" && DashboardTab()}
         {tab==="pdv"     && hasPlanAccess("pdv", currentPlan, isPlatformAdmin) && PDVTab()}
         {tab==="estoque" && hasPlanAccess("estoque", currentPlan, isPlatformAdmin) && EstoqueTab()}
+        {tab==="historico" && hasPlanAccess("historico", currentPlan, isPlatformAdmin) && HistoricoTab()}
         {tab==="vendas"  && hasPlanAccess("vendas", currentPlan, isPlatformAdmin) && VendasTab()}
         {tab==="caixa"   && hasPlanAccess("caixa", currentPlan, isPlatformAdmin) && CaixaTab()}
         {tab==="fiado"   && hasPlanAccess("cliente", currentPlan, isPlatformAdmin) && FiadoTab()}
@@ -4420,7 +4485,7 @@ const VendasTab = () => (
       )}
 
       {/* Receipt */}
-      {showReceipt && selectedSale && <ReceiptModal sale={selectedSale} storeName={storeName} onClose={()=>setShowReceipt(false)} />}
+      {showReceipt && selectedSale && <ReceiptModal sale={selectedSale} storeName={storeName} currentPlan={currentPlan} onClose={()=>setShowReceipt(false)} />}
 
       {/* Barcode modal */}
       {showBarcodeModal && (
