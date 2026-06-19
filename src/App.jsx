@@ -1459,7 +1459,7 @@ function ReceiptModal({ sale, storeName, currentPlan, onClose }) {
             </>
           )}
           <hr style={{ border:"none", borderTop:"1px dashed #999", margin:"8px 0" }} />
-          <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! <br/>Volte sempre.</div>
+          <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! <br/>Recibo não fiscal</div>
           {normalizePlan(currentPlan) === "starter" && (
             <>
               <hr style={{ border:"none", borderTop:"1px dashed #999", margin:"8px 0" }} />
