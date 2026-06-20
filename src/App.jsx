@@ -3868,9 +3868,15 @@ const VendasTab = () => (
           return;
         }
 
-        setMasterRows(cloudResp.data || []);
-        setMasterLicenses(licResp.data || []);
-        setMasterMsg(`Carregado: ${(cloudResp.data || []).length} loja(s) sincronizada(s) e ${(licResp.data || []).length} licença(s).`);
+        const rows = cloudResp.data || [];
+        const licRows = licResp.data || [];
+        setMasterRows(rows);
+        setMasterLicenses(licRows);
+        if (rows.length === 0) {
+          setMasterMsg(`Nenhuma loja retornou da tabela erpmini_cloud_data. Se já existem usuários usando o ERP, ajuste a política RLS no Supabase para Pablo conseguir ler os backups.`);
+        } else {
+          setMasterMsg(`Carregado: ${rows.length} loja(s) sincronizada(s) e ${licRows.length} licença(s).`);
+        }
       } catch (err) {
         setMasterRows([]);
         setMasterLicenses([]);
@@ -3903,7 +3909,7 @@ const VendasTab = () => (
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
           <div>
             <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Painel Master ERPmini</div>
-            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"700" }}>Somente leitura. Visível apenas para Pablo.</div>
+            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"700" }}>Somente leitura. Clique em Atualizar este painel para carregar as lojas.</div>
           </div>
           <button style={{ ...btn("#0f172a"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>loadMaster()} disabled={masterLoading}>
             {masterLoading ? "Carregando..." : "Atualizar"}
@@ -3944,7 +3950,7 @@ const VendasTab = () => (
 
         {masterRows.length === 0 ? (
           <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"18px 0" }}>
-            Clique em Atualizar. Se não aparecerem lojas, o Supabase pode estar bloqueando a leitura pela política RLS.
+            Clique em Atualizar neste painel. Se continuar zerado, rode a política SQL de acesso Master no Supabase.
           </div>
         ) : (
           <div style={{ display:"grid", gap:"10px" }}>
@@ -4711,7 +4717,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master5</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
