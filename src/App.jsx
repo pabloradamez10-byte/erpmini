@@ -2611,16 +2611,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
           </div>
         )}
 
-        <div style={{ background:"linear-gradient(135deg,#0f172a,#1e293b)", color:"#fff", borderRadius:"20px", padding:"18px", marginBottom:"14px", boxShadow:"0 8px 24px rgba(15,23,42,.16)" }}>
-          <div style={{ fontSize:"13px", color:"#cbd5e1", fontWeight:"800" }}>Plano atual</div>
-          <div style={{ fontSize:"28px", fontWeight:"900", marginTop:"2px" }}>{planName}</div>
-          <div style={{ color:"#cbd5e1", fontSize:"13px", fontWeight:"700", marginTop:"6px" }}>
-            {isStarter ? "Liberado para PDV, estoque, clientes e configurações." : "Acesso liberado conforme seu plano."}
-          </div>
-        </div>
-
-        <PlanUsageCard plan={currentPlan} products={products} clients={clients} sales={sales} />
-
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
           <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
             <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Vendas registradas hoje</div>
@@ -3797,6 +3787,235 @@ const VendasTab = () => (
   };
 
 
+
+  const MasterPanel = () => {
+    const [masterRows, setMasterRows] = useState([]);
+    const [masterLicenses, setMasterLicenses] = useState([]);
+    const [masterLoading, setMasterLoading] = useState(false);
+    const [masterMsg, setMasterMsg] = useState("");
+    const [masterSelected, setMasterSelected] = useState(null);
+
+    const safeArr = (obj, key) => Array.isArray(obj?.[key]) ? obj[key] : [];
+    const safeData = (row) => row?.data || {};
+
+    const rowSummary = (row) => {
+      const data = safeData(row);
+      const productsList = safeArr(data, "erpmini_products");
+      const clientsList = safeArr(data, "erpmini_clients");
+      const salesList = safeArr(data, "erpmini_sales");
+      const receivablesList = safeArr(data, "erpmini_receivables");
+      const store = data.erpmini_storename || "Sem nome";
+      const totalSold = salesList.reduce((sum,s)=>sum+(Number(s.total)||0),0);
+      const todayKey = new Date().toISOString().slice(0,10);
+      const salesToday = salesList.filter(s=>String(s.date||"").slice(0,10)===todayKey);
+      const totalToday = salesToday.reduce((sum,s)=>sum+(Number(s.total)||0),0);
+      const credOpenSales = salesList
+        .filter(s=>s.fiado && !s.fiado.paid)
+        .reduce((sum,s)=>sum+Math.max(0,(Number(s.total)||0)-(Number(s.fiado?.paidAmount)||0)),0);
+      const credOpenReceivables = receivablesList
+        .filter(r=>!r.paid)
+        .reduce((sum,r)=>sum+Math.max(0,(Number(r.amount)||0)-(Number(r.paidAmount)||0)),0);
+      const lowStock = productsList.filter(p=>(Number(p.stock)||0)<=5).length;
+      const license = masterLicenses.find(l=>String(l.email||"").toLowerCase()===String(row.user_id||"").toLowerCase());
+
+      return {
+        store,
+        products: productsList,
+        clients: clientsList,
+        sales: salesList,
+        receivables: receivablesList,
+        totalSold,
+        totalToday,
+        salesToday: salesToday.length,
+        credOpen: credOpenSales || credOpenReceivables,
+        lowStock,
+        license,
+        lastSync: row.updated_at || data.__saved_at || ""
+      };
+    };
+
+    const loadMaster = useCallback(async () => {
+      if (!isPlatformAdmin) return;
+      setMasterLoading(true);
+      setMasterMsg("");
+
+      const [{ data: cloudData, error: cloudError }, { data: licData, error: licError }] = await Promise.all([
+        supabase
+          .from(CLOUD_TABLE)
+          .select("user_id,data,updated_at")
+          .order("updated_at", { ascending:false }),
+        supabase
+          .from("erpmini_licenses")
+          .select("email,status,expires_at,plan,notes,updated_at")
+      ]);
+
+      setMasterLoading(false);
+
+      if (cloudError) {
+        setMasterMsg("Erro ao carregar dados das lojas: " + cloudError.message);
+        return;
+      }
+
+      if (licError) {
+        setMasterMsg("Lojas carregadas, mas houve erro ao carregar licenças: " + licError.message);
+      }
+
+      setMasterRows(cloudData || []);
+      setMasterLicenses(licData || []);
+    }, [isPlatformAdmin]);
+
+    useEffect(() => {
+      loadMaster();
+    }, [loadMaster]);
+
+    const totals = masterRows.reduce((acc,row)=>{
+      const s = rowSummary(row);
+      acc.products += s.products.length;
+      acc.clients += s.clients.length;
+      acc.sales += s.sales.length;
+      acc.total += s.totalSold;
+      acc.today += s.totalToday;
+      acc.credOpen += s.credOpen;
+      return acc;
+    }, { products:0, clients:0, sales:0, total:0, today:0, credOpen:0 });
+
+    const selectedSummary = masterSelected ? rowSummary(masterSelected) : null;
+
+    return (
+      <div style={card}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
+          <div>
+            <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Painel Master ERPmini</div>
+            <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"700" }}>Somente leitura. Visível apenas para Pablo.</div>
+          </div>
+          <button style={{ ...btn("#0f172a"), padding:"9px 12px", fontSize:"12px" }} onClick={loadMaster} disabled={masterLoading}>
+            {masterLoading ? "Carregando..." : "Atualizar"}
+          </button>
+        </div>
+
+        {masterMsg && (
+          <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", color:"#9a3412", borderRadius:"12px", padding:"10px", fontSize:"12px", fontWeight:"800", marginBottom:"12px" }}>
+            {masterMsg}
+          </div>
+        )}
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)", gap:"8px", marginBottom:"12px" }}>
+          {[
+            ["Lojas", masterRows.length, "#2563eb"],
+            ["Produtos", totals.products, "#16a34a"],
+            ["Clientes", totals.clients, "#7c3aed"],
+            ["Vendas", totals.sales, "#e94560"],
+            ["Vendido", fmtCur(totals.total), "#0f172a"],
+          ].map(([l,v,c],i)=>(
+            <div key={i} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ fontSize:"11px", color:"#64748b", fontWeight:"900" }}>{l}</div>
+              <div style={{ fontSize:String(v).length>10?"15px":"20px", color:c, fontWeight:"900", marginTop:"3px" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+          <div style={{ background:"#ecfdf5", border:"1px solid #bbf7d0", borderRadius:"14px", padding:"12px" }}>
+            <div style={{ fontSize:"12px", color:"#166534", fontWeight:"900" }}>Vendas hoje</div>
+            <div style={{ fontSize:"22px", color:"#16a34a", fontWeight:"900" }}>{fmtCur(totals.today)}</div>
+          </div>
+          <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
+            <div style={{ fontSize:"12px", color:"#9a3412", fontWeight:"900" }}>Crediário em aberto</div>
+            <div style={{ fontSize:"22px", color:"#f97316", fontWeight:"900" }}>{fmtCur(totals.credOpen)}</div>
+          </div>
+        </div>
+
+        {masterRows.length === 0 ? (
+          <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"18px 0" }}>
+            Nenhuma loja sincronizada ainda.
+          </div>
+        ) : (
+          <div style={{ display:"grid", gap:"10px" }}>
+            {masterRows.map(row=>{
+              const s = rowSummary(row);
+              return (
+                <div key={row.user_id} style={{ border:"1px solid #e2e8f0", borderRadius:"14px", padding:"12px", background:"#fff" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"10px" }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:"900", color:"#0f172a" }}>{s.store}</div>
+                      <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700", wordBreak:"break-word" }}>{row.user_id}</div>
+                      <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginTop:"7px" }}>
+                        <span style={{ background:"#eff6ff", color:"#2563eb", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>{s.products.length} produto(s)</span>
+                        <span style={{ background:"#f5f3ff", color:"#7c3aed", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>{s.clients.length} cliente(s)</span>
+                        <span style={{ background:"#fdf2f8", color:"#e94560", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>{s.sales.length} venda(s)</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(s.totalSold)}</div>
+                      <div style={{ color:"#94a3b8", fontSize:"11px", fontWeight:"800" }}>{s.license?.plan || "sem plano"}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"7px", marginTop:"10px" }}>
+                    <div style={{ background:"#f8fafc", borderRadius:"10px", padding:"8px" }}>
+                      <div style={{ fontSize:"10px", color:"#64748b", fontWeight:"900" }}>Hoje</div>
+                      <div style={{ fontWeight:"900" }}>{fmtCur(s.totalToday)}</div>
+                    </div>
+                    <div style={{ background:"#f8fafc", borderRadius:"10px", padding:"8px" }}>
+                      <div style={{ fontSize:"10px", color:"#64748b", fontWeight:"900" }}>Crediário</div>
+                      <div style={{ fontWeight:"900" }}>{fmtCur(s.credOpen)}</div>
+                    </div>
+                    <div style={{ background:"#f8fafc", borderRadius:"10px", padding:"8px" }}>
+                      <div style={{ fontSize:"10px", color:"#64748b", fontWeight:"900" }}>Est. baixo</div>
+                      <div style={{ fontWeight:"900" }}>{s.lowStock}</div>
+                    </div>
+                    <div style={{ background:"#f8fafc", borderRadius:"10px", padding:"8px" }}>
+                      <div style={{ fontSize:"10px", color:"#64748b", fontWeight:"900" }}>Última sync</div>
+                      <div style={{ fontWeight:"900", fontSize:"11px" }}>{s.lastSync ? fmtDate(s.lastSync) : "-"}</div>
+                    </div>
+                  </div>
+
+                  <button style={{ ...btnSm("#6366f1"), marginTop:"10px", width:"100%" }} onClick={()=>setMasterSelected(masterSelected?.user_id===row.user_id ? null : row)}>
+                    {masterSelected?.user_id===row.user_id ? "Ocultar detalhes" : "Ver detalhes"}
+                  </button>
+
+                  {masterSelected?.user_id===row.user_id && selectedSummary && (
+                    <div style={{ marginTop:"10px", background:"#f8fafc", borderRadius:"12px", padding:"10px" }}>
+                      <div style={{ fontWeight:"900", marginBottom:"8px" }}>Detalhes da loja</div>
+
+                      <div style={{ fontWeight:"900", color:"#334155", margin:"8px 0 5px" }}>Últimas vendas</div>
+                      {selectedSummary.sales.slice(0,5).map(sale=>(
+                        <div key={sale.id} style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #e2e8f0", padding:"6px 0", fontSize:"12px" }}>
+                          <span>#{sale.id} - {fmtDate(sale.date)}</span>
+                          <strong>{fmtCur(Number(sale.total)||0)}</strong>
+                        </div>
+                      ))}
+                      {selectedSummary.sales.length===0 && <div style={{ color:"#94a3b8", fontSize:"12px" }}>Sem vendas.</div>}
+
+                      <div style={{ fontWeight:"900", color:"#334155", margin:"10px 0 5px" }}>Produtos</div>
+                      {selectedSummary.products.slice(0,6).map(p=>(
+                        <div key={p.id || p.barcode || p.name} style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #e2e8f0", padding:"5px 0", fontSize:"12px" }}>
+                          <span>{p.name}</span>
+                          <strong>{p.stock ?? 0} un.</strong>
+                        </div>
+                      ))}
+                      {selectedSummary.products.length===0 && <div style={{ color:"#94a3b8", fontSize:"12px" }}>Sem produtos.</div>}
+
+                      <div style={{ fontWeight:"900", color:"#334155", margin:"10px 0 5px" }}>Clientes</div>
+                      {selectedSummary.clients.slice(0,6).map(c=>(
+                        <div key={c.id || c.phone || c.name} style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #e2e8f0", padding:"5px 0", fontSize:"12px" }}>
+                          <span>{c.name}</span>
+                          <strong>{c.phone || "-"}</strong>
+                        </div>
+                      ))}
+                      {selectedSummary.clients.length===0 && <div style={{ color:"#94a3b8", fontSize:"12px" }}>Sem clientes.</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
   const AdminLicensesPanel = () => {
     const [licenses, setLicenses] = useState([]);
     const [signupRequests, setSignupRequests] = useState([]);
@@ -4282,6 +4501,7 @@ const VendasTab = () => (
   const ConfigTab = () => (
     <div>
       {isPlatformAdmin && <AdminLicensesPanel />}
+      {isPlatformAdmin && <MasterPanel />}
       <div style={card}>
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>Config Configuracoes</div>
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
@@ -4453,7 +4673,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter5</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
