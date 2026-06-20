@@ -3835,35 +3835,50 @@ const VendasTab = () => (
       };
     };
 
-    const loadMaster = useCallback(async () => {
-      if (!isPlatformAdmin) return;
-      setMasterLoading(true);
-      setMasterMsg("");
-
-      const [{ data: cloudData, error: cloudError }, { data: licData, error: licError }] = await Promise.all([
-        supabase
-          .from(CLOUD_TABLE)
-          .select("user_id,data,updated_at")
-          .order("updated_at", { ascending:false }),
-        supabase
-          .from("erpmini_licenses")
-          .select("email,status,expires_at,plan,notes,updated_at")
-      ]);
-
-      setMasterLoading(false);
-
-      if (cloudError) {
-        setMasterMsg("Erro ao carregar dados das lojas: " + cloudError.message);
+    const loadMaster = async () => {
+      if (!isPlatformAdmin) {
+        setMasterMsg("Acesso negado: painel visível somente para Pablo.");
         return;
       }
 
-      if (licError) {
-        setMasterMsg("Lojas carregadas, mas houve erro ao carregar licenças: " + licError.message);
-      }
+      setMasterLoading(true);
+      setMasterMsg("Buscando dados no Supabase...");
 
-      setMasterRows(cloudData || []);
-      setMasterLicenses(licData || []);
-    }, [isPlatformAdmin]);
+      try {
+        const cloudResp = await supabase
+          .from(CLOUD_TABLE)
+          .select("user_id,data,updated_at")
+          .order("updated_at", { ascending:false });
+
+        if (cloudResp.error) {
+          setMasterRows([]);
+          setMasterLicenses([]);
+          setMasterMsg("Erro ao carregar lojas: " + cloudResp.error.message);
+          return;
+        }
+
+        const licResp = await supabase
+          .from("erpmini_licenses")
+          .select("email,status,expires_at,plan,notes,updated_at");
+
+        if (licResp.error) {
+          setMasterRows(cloudResp.data || []);
+          setMasterLicenses([]);
+          setMasterMsg(`Lojas carregadas: ${(cloudResp.data || []).length}. Erro ao carregar licenças: ${licResp.error.message}`);
+          return;
+        }
+
+        setMasterRows(cloudResp.data || []);
+        setMasterLicenses(licResp.data || []);
+        setMasterMsg(`Carregado: ${(cloudResp.data || []).length} loja(s) sincronizada(s) e ${(licResp.data || []).length} licença(s).`);
+      } catch (err) {
+        setMasterRows([]);
+        setMasterLicenses([]);
+        setMasterMsg("Erro inesperado ao carregar Painel Master: " + (err?.message || String(err)));
+      } finally {
+        setMasterLoading(false);
+      }
+    };
 
     useEffect(() => {
       // Carregamento manual: clique em Atualizar.
@@ -3890,7 +3905,7 @@ const VendasTab = () => (
             <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Painel Master ERPmini</div>
             <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"700" }}>Somente leitura. Visível apenas para Pablo.</div>
           </div>
-          <button style={{ ...btn("#0f172a"), padding:"9px 12px", fontSize:"12px" }} onClick={loadMaster} disabled={masterLoading}>
+          <button style={{ ...btn("#0f172a"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>loadMaster()} disabled={masterLoading}>
             {masterLoading ? "Carregando..." : "Atualizar"}
           </button>
         </div>
@@ -3929,7 +3944,7 @@ const VendasTab = () => (
 
         {masterRows.length === 0 ? (
           <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"18px 0" }}>
-            Clique em Atualizar para carregar as lojas sincronizadas.
+            Clique em Atualizar. Se não aparecerem lojas, o Supabase pode estar bloqueando a leitura pela política RLS.
           </div>
         ) : (
           <div style={{ display:"grid", gap:"10px" }}>
@@ -4033,30 +4048,49 @@ const VendasTab = () => (
     const [newNotes, setNewNotes] = useState("");
     const adminLoadedOnce = useRef(false);
 
-    const loadLicenses = useCallback(async () => {
-      if (!isPlatformAdmin) return;
-      setAdminLoading(true);
-      setAdminMsg("");
-      const { data, error } = await supabase
-        .from("erpmini_licenses")
-        .select("email,status,expires_at,plan,notes,created_at,updated_at")
-        .order("expires_at", { ascending: true });
-
-      let requests = [];
-      try {
-        requests = await fetchSignupRequests();
-      } catch (reqError) {
-        setAdminMsg("Licencas carregadas, mas nao foi possivel carregar solicitacoes pendentes: " + reqError.message);
-      }
-
-      setAdminLoading(false);
-      if (error) {
-        setAdminMsg("Erro ao carregar licencas: " + error.message);
+    const loadLicenses = async () => {
+      if (!isPlatformAdmin) {
+        setAdminMsg("Acesso negado: administração visível somente para Pablo.");
         return;
       }
-      setLicenses(data || []);
-      setSignupRequests(requests || []);
-    }, [isPlatformAdmin]);
+
+      setAdminLoading(true);
+      setAdminMsg("Buscando licenças no Supabase...");
+
+      try {
+        const { data, error } = await supabase
+          .from("erpmini_licenses")
+          .select("email,status,expires_at,plan,notes,created_at,updated_at")
+          .order("expires_at", { ascending: true });
+
+        if (error) {
+          setLicenses([]);
+          setSignupRequests([]);
+          setAdminMsg("Erro ao carregar licenças: " + error.message);
+          return;
+        }
+
+        let requests = [];
+        try {
+          requests = await fetchSignupRequests();
+        } catch (reqError) {
+          setLicenses(data || []);
+          setSignupRequests([]);
+          setAdminMsg(`Licenças carregadas: ${(data || []).length}. Erro nas solicitações: ${reqError.message}`);
+          return;
+        }
+
+        setLicenses(data || []);
+        setSignupRequests(requests || []);
+        setAdminMsg(`Carregado: ${(data || []).length} licença(s) e ${(requests || []).length} solicitação(ões).`);
+      } catch (err) {
+        setLicenses([]);
+        setSignupRequests([]);
+        setAdminMsg("Erro inesperado ao carregar licenças: " + (err?.message || String(err)));
+      } finally {
+        setAdminLoading(false);
+      }
+    };
 
     useEffect(() => {
       // Carregamento manual: clique em Atualizar.
@@ -4278,7 +4312,7 @@ const VendasTab = () => (
             <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Admin Licencas</div>
             <div style={{ fontSize:"12px", color:"#64748b" }}>Visivel somente para Pablo.</div>
           </div>
-          <button style={{ ...btn("#2563eb"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>{ if (!adminLoading) loadLicenses(); }} disabled={adminLoading}>
+          <button style={{ ...btn("#2563eb"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>loadLicenses()} disabled={adminLoading}>
             Atualizar
           </button>
         </div>
@@ -4677,7 +4711,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
