@@ -558,12 +558,12 @@ const PLAN_LIMITS = {
 
 
 const allowedTabsForPlan = (plan, isAdmin=false) => {
-  if (isAdmin) return ["inicio","pdv","estoque","cliente","historico","caixa","fiscal","config"];
+  if (isAdmin) return ["inicio","pdv","estoque","cliente","caixa","fiscal","config"];
   const p = normalizePlan(plan);
-  if (p === "starter") return ["inicio","pdv","estoque","cliente","historico","config"];
-  if (p === "pro") return ["inicio","pdv","estoque","cliente","historico","caixa","config"];
-  if (p === "premium") return ["inicio","pdv","estoque","cliente","historico","caixa","fiscal","config"];
-  return ["inicio","pdv","estoque","cliente","historico","config"];
+  if (p === "starter") return ["inicio","pdv","estoque","cliente","config"];
+  if (p === "pro") return ["inicio","pdv","estoque","cliente","caixa","config"];
+  if (p === "premium") return ["inicio","pdv","estoque","cliente","caixa","fiscal","config"];
+  return ["inicio","pdv","estoque","cliente","config"];
 };
 
 const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
@@ -1459,7 +1459,7 @@ function ReceiptModal({ sale, storeName, currentPlan, onClose }) {
             </>
           )}
           <hr style={{ border:"none", borderTop:"1px dashed #999", margin:"8px 0" }} />
-          <div style={{ textAlign:"center", fontSize:"11px", color:"#777" }}>Obrigado pela preferencia! <br/>Recibo não fiscal</div>
+          <div style={{ textAlign:"center", fontSize:"11px", color:"#555", fontWeight:"700" }}>Emitido por ERPmini Starter<br/>Recibo não fiscal</div>
           {normalizePlan(currentPlan) === "starter" && (
             <>
               <hr style={{ border:"none", borderTop:"1px dashed #999", margin:"8px 0" }} />
@@ -1531,6 +1531,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [storeName, setStoreName] = useState(()=>loadLS("erpmini_storename","Minha Loja"));
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showCart, setShowCart]   = useState(false);   // mobile cart drawer
+  const [pdvView, setPdvView] = useState("venda");
   const [showSettings, setShowSettings] = useState(false);
   const backupImportRef = useRef();
   const adminBackupImportRef = useRef();
@@ -2492,7 +2493,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     { key:"pdv",     icon:"cart", label:"PDV"     },
     { key:"estoque", icon:"box", label:"Estoque" },
     { key:"fiado",   icon:"users", label:"Cliente" },
-    { key:"historico", icon:"history", label:"Histórico" },
     { key:"caixa",   icon:"cash", label:"Caixa"   },
     { key:"fiscal",  icon:"doc", label:"Fiscal" },
     { key:"config",  icon:"gear", label:"Config"  },
@@ -2672,70 +2672,92 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
 const PDVTab = () => (
     <div>
-      {/* Barcode scanner */}
-      <div style={{ ...card, display:"flex", alignItems:"center", gap:"10px",
-        border:`2px solid ${barcodeFlash==="ok"?"#22c55e":barcodeFlash==="error"?"#ef4444":"#6366f1"}`,
-        background:barcodeFlash==="ok"?"#f0fdf4":barcodeFlash==="error"?"#fef2f2":"#eef2ff", transition:"all 0.2s", marginBottom:"12px" }}>
-        <span style={{ fontSize:"22px" }}>Codigo</span>
-        <input ref={barcodeRef}
-          style={{ flex:1, border:"none", background:"transparent", fontSize:"15px", outline:"none", fontWeight:"600" }}
-          placeholder="Codigo de barras..." value={barcodeInput}
-          onChange={e=>setBarcodeInput(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&handleBarcodeScan(barcodeInput)} />
-        <button style={btnSm("#6366f1")} onClick={()=>handleBarcodeScan(barcodeInput)}>OK</button>
+      <div style={{ display:"flex", gap:"8px", marginBottom:"12px", background:"#fff", padding:"8px", borderRadius:"18px", boxShadow:"0 4px 16px rgba(15,23,42,.08)" }}>
+        <button
+          onClick={()=>setPdvView("venda")}
+          style={{ flex:1, border:"none", borderRadius:"14px", padding:"12px", fontWeight:"900", cursor:"pointer", background:pdvView==="venda"?"#e94560":"#f1f5f9", color:pdvView==="venda"?"#fff":"#64748b" }}
+        >
+          PDV
+        </button>
+        <button
+          onClick={()=>setPdvView("historico")}
+          style={{ flex:1, border:"none", borderRadius:"14px", padding:"12px", fontWeight:"900", cursor:"pointer", background:pdvView==="historico"?"#e94560":"#f1f5f9", color:pdvView==="historico"?"#fff":"#64748b" }}
+        >
+          Histórico / Reimprimir
+        </button>
       </div>
 
-      {/* Search */}
-      <input style={{ ...inp, marginBottom:"12px" }} placeholder=" Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
-
-      {/* Product grid */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"10px" }}>
-        {filteredProducts.map(p=>(
-          <button key={p.id}
-            style={{ background:p.stock>0?"#fff":"#f8f8f8", border:`2px solid ${p.stock>0?"#e2e8f0":"#fecaca"}`, borderRadius:"12px", padding:"14px 10px", cursor:p.stock>0?"pointer":"not-allowed", textAlign:"left", opacity:p.stock>0?1:0.6, transition:"all 0.15s" }}
-            onClick={()=>{ addToCart(p); if(isMobile) notify(`OK ${p.name}`); }}>
-            <div style={{ fontSize:"14px", fontWeight:"700", color:"#1a1a2e", marginBottom:"4px", lineHeight:1.3 }}>{p.name}</div>
-            <div style={{ fontSize:"16px", fontWeight:"800", color:"#e94560" }}>{fmtCur(p.price)}</div>
-            <div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.barcode}</div>
-            <div style={{ fontSize:"11px", color:p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444", marginTop:"4px", fontWeight:"600" }}>
-              {p.stock>0?`${p.stock} un.`:"Esgotado"}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Desktop cart */}
-      {!isMobile && cart.length>0 && (
-        <div style={{ ...card, marginTop:"16px" }}>
-          <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>PDV Carrinho</div>
-          {cart.map(item=>(
-            <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:"600", fontSize:"13px" }}>{item.name}</div>
-                <div style={{ color:"#e94560", fontSize:"12px" }}>{fmtCur(item.price)} x {item.qty}</div>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>-</button>
-                <span style={{ minWidth:"20px", textAlign:"center" }}>{item.qty}</span>
-                <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
-                <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>x</button>
-              </div>
-              <div style={{ fontWeight:"700", minWidth:"70px", textAlign:"right" }}>{fmtCur(item.price*item.qty)}</div>
-            </div>
-          ))}
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:"20px", fontWeight:"800", margin:"14px 0 12px" }}>
-            <span>Total</span><span style={{ color:"#e94560" }}>{fmtCur(total)}</span>
+      {pdvView==="historico" ? (
+        HistoricoTab()
+      ) : (
+        <>
+          {/* Barcode scanner */}
+          <div style={{ ...card, display:"flex", alignItems:"center", gap:"10px",
+            border:`2px solid ${barcodeFlash==="ok"?"#22c55e":barcodeFlash==="error"?"#ef4444":"#6366f1"}`,
+            background:barcodeFlash==="ok"?"#f0fdf4":barcodeFlash==="error"?"#fef2f2":"#eef2ff", transition:"all 0.2s", marginBottom:"12px" }}>
+            <span style={{ fontSize:"22px" }}>Código</span>
+            <input ref={barcodeRef}
+              style={{ flex:1, border:"none", background:"transparent", fontSize:"15px", outline:"none", fontWeight:"600" }}
+              placeholder="Código de barras..." value={barcodeInput}
+              onChange={e=>setBarcodeInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&handleBarcodeScan(barcodeInput)} />
+            <button style={btnSm("#6366f1")} onClick={()=>handleBarcodeScan(barcodeInput)}>OK</button>
           </div>
-          <button style={{ ...btn(), width:"100%", padding:"14px", fontSize:"16px" }} onClick={()=>setShowCheckout(true)}>
-            Cartao Ir para Pagamento
-          </button>
-          <button style={{ ...btn("#94a3b8"), width:"100%", padding:"10px", fontSize:"13px", marginTop:"8px" }} onClick={()=>setCart([])}>
-            Excluir Limpar Carrinho
-          </button>
-        </div>
+
+          {/* Search */}
+          <input style={{ ...inp, marginBottom:"12px" }} placeholder=" Buscar produto..." value={searchProd} onChange={e=>setSearchProd(e.target.value)} />
+
+          {/* Product grid */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"10px" }}>
+            {filteredProducts.map(p=>(
+              <button key={p.id}
+                style={{ background:p.stock>0?"#fff":"#f8f8f8", border:`2px solid ${p.stock>0?"#e2e8f0":"#fecaca"}`, borderRadius:"12px", padding:"14px 10px", cursor:p.stock>0?"pointer":"not-allowed", textAlign:"left", opacity:p.stock>0?1:0.6, transition:"all 0.15s" }}
+                onClick={()=>{ addToCart(p); if(isMobile) notify(`OK ${p.name}`); }}>
+                <div style={{ fontSize:"14px", fontWeight:"700", color:"#1a1a2e", marginBottom:"4px", lineHeight:1.3 }}>{p.name}</div>
+                <div style={{ fontSize:"16px", fontWeight:"800", color:"#e94560" }}>{fmtCur(p.price)}</div>
+                <div style={{ fontSize:"10px", color:"#94a3b8", fontFamily:"monospace", marginTop:"2px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.barcode}</div>
+                <div style={{ fontSize:"11px", color:p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444", marginTop:"4px", fontWeight:"600" }}>
+                  {p.stock>0?`${p.stock} un.`:"Esgotado"}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop cart */}
+          {!isMobile && cart.length>0 && (
+            <div style={{ ...card, marginTop:"16px" }}>
+              <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}>PDV Carrinho</div>
+              {cart.map(item=>(
+                <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:"600", fontSize:"13px" }}>{item.name}</div>
+                    <div style={{ color:"#e94560", fontSize:"12px" }}>{fmtCur(item.price)} x {item.qty}</div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                    <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty-1)}>-</button>
+                    <span style={{ minWidth:"20px", textAlign:"center" }}>{item.qty}</span>
+                    <button style={btnSm("#64748b")} onClick={()=>updateQty(item.id,item.qty+1)}>+</button>
+                    <button style={btnSm("#ef4444")} onClick={()=>removeFromCart(item.id)}>x</button>
+                  </div>
+                  <div style={{ fontWeight:"700", minWidth:"70px", textAlign:"right" }}>{fmtCur(item.price*item.qty)}</div>
+                </div>
+              ))}
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:"20px", fontWeight:"800", margin:"14px 0 12px" }}>
+                <span>Total</span><span style={{ color:"#e94560" }}>{fmtCur(total)}</span>
+              </div>
+              <button style={{ ...btn(), width:"100%", padding:"14px", fontSize:"16px" }} onClick={()=>setShowCheckout(true)}>
+                Ir para Pagamento
+              </button>
+              <button style={{ ...btn("#94a3b8"), width:"100%", padding:"10px", fontSize:"13px", marginTop:"8px" }} onClick={()=>setCart([])}>
+                Limpar Carrinho
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
+
 
   // --- Estoque tab ------------------------------------------------------------
   const EstoqueTab = () => (
@@ -4431,7 +4453,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-starter5</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -4460,7 +4482,6 @@ const VendasTab = () => (
         {tab==="" && DashboardTab()}
         {tab==="pdv"     && hasPlanAccess("pdv", currentPlan, isPlatformAdmin) && PDVTab()}
         {tab==="estoque" && hasPlanAccess("estoque", currentPlan, isPlatformAdmin) && EstoqueTab()}
-        {tab==="historico" && hasPlanAccess("historico", currentPlan, isPlatformAdmin) && HistoricoTab()}
         {tab==="vendas" && HistoricoTab()}
         {tab==="caixa"   && hasPlanAccess("caixa", currentPlan, isPlatformAdmin) && CaixaTab()}
         {tab==="fiado"   && hasPlanAccess("cliente", currentPlan, isPlatformAdmin) && FiadoTab()}
