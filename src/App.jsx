@@ -3866,9 +3866,8 @@ const VendasTab = () => (
     }, [isPlatformAdmin]);
 
     useEffect(() => {
-      if (masterLoadedOnce.current) return;
-      masterLoadedOnce.current = true;
-      loadMaster();
+      // Carregamento manual: clique em Atualizar.
+      // Evita a tela de Configurações ficar piscando/pulando.
     }, []);
 
     const totals = masterRows.reduce((acc,row)=>{
@@ -3930,7 +3929,7 @@ const VendasTab = () => (
 
         {masterRows.length === 0 ? (
           <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"18px 0" }}>
-            Nenhuma loja sincronizada ainda.
+            Clique em Atualizar para carregar as lojas sincronizadas.
           </div>
         ) : (
           <div style={{ display:"grid", gap:"10px" }}>
@@ -4060,9 +4059,8 @@ const VendasTab = () => (
     }, [isPlatformAdmin]);
 
     useEffect(() => {
-      if (adminLoadedOnce.current) return;
-      adminLoadedOnce.current = true;
-      loadLicenses();
+      // Carregamento manual: clique em Atualizar.
+      // Evita a tela de Configurações ficar piscando/pulando.
     }, []);
 
     const saveLicense = async (payload) => {
@@ -4355,7 +4353,7 @@ const VendasTab = () => (
           </div>
 
           {pendingCount === 0 ? (
-            <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700" }}>Nenhum cadastro aguardando aprovacao.</div>
+            <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700" }}>Clique em Atualizar para carregar solicitações e licenças.</div>
           ) : (
             <div style={{ display:"grid", gap:"10px" }}>
               {pendingRequests.map((r) => (
@@ -4679,7 +4677,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
