@@ -3794,6 +3794,7 @@ const VendasTab = () => (
     const [masterLoading, setMasterLoading] = useState(false);
     const [masterMsg, setMasterMsg] = useState("");
     const [masterSelected, setMasterSelected] = useState(null);
+    const masterLoadedOnce = useRef(false);
 
     const safeArr = (obj, key) => Array.isArray(obj?.[key]) ? obj[key] : [];
     const safeData = (row) => row?.data || {};
@@ -3865,8 +3866,10 @@ const VendasTab = () => (
     }, [isPlatformAdmin]);
 
     useEffect(() => {
+      if (masterLoadedOnce.current) return;
+      masterLoadedOnce.current = true;
       loadMaster();
-    }, [loadMaster]);
+    }, []);
 
     const totals = masterRows.reduce((acc,row)=>{
       const s = rowSummary(row);
@@ -4029,6 +4032,7 @@ const VendasTab = () => (
     });
     const [newPlan, setNewPlan] = useState("mensal");
     const [newNotes, setNewNotes] = useState("");
+    const adminLoadedOnce = useRef(false);
 
     const loadLicenses = useCallback(async () => {
       if (!isPlatformAdmin) return;
@@ -4056,8 +4060,10 @@ const VendasTab = () => (
     }, [isPlatformAdmin]);
 
     useEffect(() => {
+      if (adminLoadedOnce.current) return;
+      adminLoadedOnce.current = true;
       loadLicenses();
-    }, [loadLicenses]);
+    }, []);
 
     const saveLicense = async (payload) => {
       setAdminLoading(true);
@@ -4673,7 +4679,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
