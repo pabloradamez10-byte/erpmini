@@ -662,6 +662,21 @@ function saveLS(key, value) {
   } catch {}
 }
 
+function loadSessionSafe(key, fallback) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveSessionSafe(key, value) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
 // --- Responsive hook ---------------------------------------------------------
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768);
@@ -3789,12 +3804,25 @@ const VendasTab = () => (
 
 
   const MasterPanel = () => {
-    const [masterRows, setMasterRows] = useState([]);
-    const [masterLicenses, setMasterLicenses] = useState([]);
+    const [masterRows, setMasterRows] = useState(()=>loadSessionSafe("erpmini_master_rows", []));
+    const [masterLicenses, setMasterLicenses] = useState(()=>loadSessionSafe("erpmini_master_licenses", []));
     const [masterLoading, setMasterLoading] = useState(false);
-    const [masterMsg, setMasterMsg] = useState("");
+    const [masterMsg, setMasterMsg] = useState(()=>loadSessionSafe("erpmini_master_msg", ""));
     const [masterSelected, setMasterSelected] = useState(null);
     const masterLoadedOnce = useRef(false);
+
+    const keepMasterRows = (rows) => {
+      setMasterRows(rows);
+      saveSessionSafe("erpmini_master_rows", rows);
+    };
+    const keepMasterLicenses = (rows) => {
+      setMasterLicenses(rows);
+      saveSessionSafe("erpmini_master_licenses", rows);
+    };
+    const keepMasterMsg = (msg) => {
+      setMasterMsg(msg);
+      saveSessionSafe("erpmini_master_msg", msg);
+    };
 
     const safeArr = (obj, key) => Array.isArray(obj?.[key]) ? obj[key] : [];
     const safeData = (row) => row?.data || {};
@@ -3842,7 +3870,7 @@ const VendasTab = () => (
       }
 
       setMasterLoading(true);
-      setMasterMsg("Buscando dados no Supabase...");
+      keepMasterMsg("Buscando dados no Supabase...");
 
       try {
         const cloudResp = await supabase
@@ -3851,9 +3879,7 @@ const VendasTab = () => (
           .order("updated_at", { ascending:false });
 
         if (cloudResp.error) {
-          setMasterRows([]);
-          setMasterLicenses([]);
-          setMasterMsg("Erro ao carregar lojas: " + cloudResp.error.message);
+          keepMasterMsg("Erro ao carregar lojas: " + cloudResp.error.message);
           return;
         }
 
@@ -3862,25 +3888,23 @@ const VendasTab = () => (
           .select("email,status,expires_at,plan,notes,updated_at");
 
         if (licResp.error) {
-          setMasterRows(cloudResp.data || []);
-          setMasterLicenses([]);
-          setMasterMsg(`Lojas carregadas: ${(cloudResp.data || []).length}. Erro ao carregar licenças: ${licResp.error.message}`);
+          keepMasterRows(cloudResp.data || []);
+          keepMasterLicenses([]);
+          keepMasterMsg(`Lojas carregadas: ${(cloudResp.data || []).length}. Erro ao carregar licenças: ${licResp.error.message}`);
           return;
         }
 
         const rows = cloudResp.data || [];
         const licRows = licResp.data || [];
-        setMasterRows(rows);
-        setMasterLicenses(licRows);
+        keepMasterRows(rows);
+        keepMasterLicenses(licRows);
         if (rows.length === 0) {
-          setMasterMsg(`Nenhuma loja retornou da tabela erpmini_cloud_data. Se já existem usuários usando o ERP, ajuste a política RLS no Supabase para Pablo conseguir ler os backups.`);
+          keepMasterMsg(`Nenhuma loja retornou da tabela erpmini_cloud_data. Se já existem usuários usando o ERP, ajuste a política RLS no Supabase para Pablo conseguir ler os backups.`);
         } else {
-          setMasterMsg(`Carregado: ${rows.length} loja(s) sincronizada(s) e ${licRows.length} licença(s).`);
+          keepMasterMsg(`Carregado: ${rows.length} loja(s) sincronizada(s) e ${licRows.length} licença(s).`);
         }
       } catch (err) {
-        setMasterRows([]);
-        setMasterLicenses([]);
-        setMasterMsg("Erro inesperado ao carregar Painel Master: " + (err?.message || String(err)));
+        keepMasterMsg("Erro inesperado ao carregar Painel Master: " + (err?.message || String(err)));
       } finally {
         setMasterLoading(false);
       }
@@ -4040,10 +4064,10 @@ const VendasTab = () => (
 
 
   const AdminLicensesPanel = () => {
-    const [licenses, setLicenses] = useState([]);
-    const [signupRequests, setSignupRequests] = useState([]);
+    const [licenses, setLicenses] = useState(()=>loadSessionSafe("erpmini_admin_licenses", []));
+    const [signupRequests, setSignupRequests] = useState(()=>loadSessionSafe("erpmini_admin_requests", []));
     const [adminLoading, setAdminLoading] = useState(false);
-    const [adminMsg, setAdminMsg] = useState("");
+    const [adminMsg, setAdminMsg] = useState(()=>loadSessionSafe("erpmini_admin_msg", ""));
     const [newEmail, setNewEmail] = useState("");
     const [newExpires, setNewExpires] = useState(() => {
       const d = new Date();
@@ -4054,6 +4078,19 @@ const VendasTab = () => (
     const [newNotes, setNewNotes] = useState("");
     const adminLoadedOnce = useRef(false);
 
+    const keepAdminLicenses = (rows) => {
+      setLicenses(rows);
+      saveSessionSafe("erpmini_admin_licenses", rows);
+    };
+    const keepAdminRequests = (rows) => {
+      setSignupRequests(rows);
+      saveSessionSafe("erpmini_admin_requests", rows);
+    };
+    const keepAdminMsg = (msg) => {
+      setAdminMsg(msg);
+      saveSessionSafe("erpmini_admin_msg", msg);
+    };
+
     const loadLicenses = async () => {
       if (!isPlatformAdmin) {
         setAdminMsg("Acesso negado: administração visível somente para Pablo.");
@@ -4061,7 +4098,7 @@ const VendasTab = () => (
       }
 
       setAdminLoading(true);
-      setAdminMsg("Buscando licenças no Supabase...");
+      keepAdminMsg("Buscando licenças no Supabase...");
 
       try {
         const { data, error } = await supabase
@@ -4070,9 +4107,7 @@ const VendasTab = () => (
           .order("expires_at", { ascending: true });
 
         if (error) {
-          setLicenses([]);
-          setSignupRequests([]);
-          setAdminMsg("Erro ao carregar licenças: " + error.message);
+          keepAdminMsg("Erro ao carregar licenças: " + error.message);
           return;
         }
 
@@ -4080,19 +4115,17 @@ const VendasTab = () => (
         try {
           requests = await fetchSignupRequests();
         } catch (reqError) {
-          setLicenses(data || []);
-          setSignupRequests([]);
-          setAdminMsg(`Licenças carregadas: ${(data || []).length}. Erro nas solicitações: ${reqError.message}`);
+          keepAdminLicenses(data || []);
+          keepAdminRequests([]);
+          keepAdminMsg(`Licenças carregadas: ${(data || []).length}. Erro nas solicitações: ${reqError.message}`);
           return;
         }
 
-        setLicenses(data || []);
-        setSignupRequests(requests || []);
-        setAdminMsg(`Carregado: ${(data || []).length} licença(s) e ${(requests || []).length} solicitação(ões).`);
+        keepAdminLicenses(data || []);
+        keepAdminRequests(requests || []);
+        keepAdminMsg(`Carregado: ${(data || []).length} licença(s) e ${(requests || []).length} solicitação(ões).`);
       } catch (err) {
-        setLicenses([]);
-        setSignupRequests([]);
-        setAdminMsg("Erro inesperado ao carregar licenças: " + (err?.message || String(err)));
+        keepAdminMsg("Erro inesperado ao carregar licenças: " + (err?.message || String(err)));
       } finally {
         setAdminLoading(false);
       }
@@ -4111,10 +4144,10 @@ const VendasTab = () => (
         .upsert({ ...payload, updated_at: new Date().toISOString() }, { onConflict: "email" });
       setAdminLoading(false);
       if (error) {
-        setAdminMsg("Erro ao salvar licenca: " + error.message);
+        keepAdminMsg("Erro ao salvar licenca: " + error.message);
         return false;
       }
-      setAdminMsg("Licenca salva com sucesso.");
+      keepAdminMsg("Licenca salva com sucesso.");
       await loadLicenses();
       return true;
     };
@@ -4717,7 +4750,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master5</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master6</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
