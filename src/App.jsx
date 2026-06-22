@@ -2791,18 +2791,24 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         </div>
 
         <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
-          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"4px" }}>Ranking de clientes</div>
-          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>Clientes que mais compraram e clientes com maior crediário.</div>
+          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"4px" }}>Inteligência de clientes</div>
+          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>
+            Ranking, ticket médio, crediário e clientes inativos.
+          </div>
 
           {(() => {
             const clientMap = {};
             (clients || []).forEach(c => {
-              clientMap[c.id || c.name] = {
-                id: c.id || c.name,
+              const key = c.id || c.name;
+              clientMap[key] = {
+                id: key,
                 name: c.name || "Cliente",
+                phone: c.phone || "",
                 purchases: 0,
                 total: 0,
-                openCredit: 0
+                openCredit: 0,
+                lastPurchase: null,
+                ticket: 0
               };
             });
 
@@ -2811,9 +2817,19 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
               const cName = sale.fiado?.clientName || sale.clientName || sale.client?.name || "Cliente não informado";
               if (!cId && !sale.fiado?.clientName && !sale.clientName) return;
               const key = cId || cName;
-              if (!clientMap[key]) clientMap[key] = { id:key, name:cName, purchases:0, total:0, openCredit:0 };
+
+              if (!clientMap[key]) {
+                clientMap[key] = { id:key, name:cName, phone:"", purchases:0, total:0, openCredit:0, lastPurchase:null, ticket:0 };
+              }
+
               clientMap[key].purchases += 1;
               clientMap[key].total += Number(sale.total) || 0;
+
+              const saleDate = sale.date ? new Date(sale.date) : null;
+              if (saleDate && (!clientMap[key].lastPurchase || saleDate > clientMap[key].lastPurchase)) {
+                clientMap[key].lastPurchase = saleDate;
+              }
+
               if (sale.fiado && !sale.fiado.paid) {
                 clientMap[key].openCredit += Math.max(0, (Number(sale.total)||0) - (Number(sale.fiado?.paidAmount)||0));
               }
@@ -2822,35 +2838,68 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
             (receivables || []).forEach(r => {
               if (r.paid) return;
               const key = r.clientId || r.clientName || r.id;
-              if (!clientMap[key]) clientMap[key] = { id:key, name:r.clientName || "Cliente", purchases:0, total:0, openCredit:0 };
+              if (!clientMap[key]) {
+                clientMap[key] = { id:key, name:r.clientName || "Cliente", phone:"", purchases:0, total:0, openCredit:0, lastPurchase:null, ticket:0 };
+              }
               clientMap[key].openCredit += Math.max(0, (Number(r.amount)||0) - (Number(r.paidAmount)||0));
             });
 
+            const now = new Date();
             const ranked = Object.values(clientMap)
+              .map(c => ({
+                ...c,
+                ticket: c.purchases > 0 ? c.total / c.purchases : 0,
+                inactiveDays: c.lastPurchase ? Math.floor((now - c.lastPurchase) / (1000*60*60*24)) : 999
+              }))
               .filter(c => c.total > 0 || c.openCredit > 0)
               .sort((a,b)=>b.total-a.total);
 
             const topClient = ranked[0];
+            const mostPurchases = [...ranked].sort((a,b)=>b.purchases-a.purchases)[0];
             const topCredit = [...ranked].sort((a,b)=>b.openCredit-a.openCredit)[0];
+            const bestTicket = [...ranked].sort((a,b)=>b.ticket-a.ticket)[0];
+            const inactive = ranked.filter(c => c.inactiveDays >= 30 && c.purchases > 0).sort((a,b)=>b.total-a.total);
 
             if (ranked.length === 0) {
-              return <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"16px 0" }}>Ainda não há compras por cliente suficientes para gerar ranking.</div>;
+              return <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"16px 0" }}>Ainda não há compras por cliente suficientes para gerar inteligência comercial.</div>;
             }
+
+            const miniCards = [
+              ["Melhor cliente", topClient?.name || "-", fmtCur(topClient?.total || 0), "#16a34a", "Quem mais gerou faturamento."],
+              ["Mais compras", mostPurchases?.name || "-", `${mostPurchases?.purchases || 0} compra(s)`, "#2563eb", "Cliente mais recorrente."],
+              ["Maior crediário", topCredit?.name || "-", fmtCur(topCredit?.openCredit || 0), "#f97316", "Prioridade de cobrança."],
+              ["Maior ticket", bestTicket?.name || "-", fmtCur(bestTicket?.ticket || 0), "#7c3aed", "Maior média por compra."]
+            ];
 
             return (
               <>
-                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
-                  <div style={{ background:"#ecfdf5", border:"1px solid #bbf7d0", borderRadius:"14px", padding:"12px" }}>
-                    <div style={{ color:"#166534", fontSize:"12px", fontWeight:"900" }}>Melhor cliente</div>
-                    <div style={{ color:"#0f172a", fontSize:"18px", fontWeight:"900", marginTop:"4px" }}>{topClient?.name || "-"}</div>
-                    <div style={{ color:"#16a34a", fontSize:"20px", fontWeight:"900" }}>{fmtCur(topClient?.total || 0)}</div>
-                  </div>
-                  <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
-                    <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"900" }}>Maior crediário</div>
-                    <div style={{ color:"#0f172a", fontSize:"18px", fontWeight:"900", marginTop:"4px" }}>{topCredit?.name || "-"}</div>
-                    <div style={{ color:"#f97316", fontSize:"20px", fontWeight:"900" }}>{fmtCur(topCredit?.openCredit || 0)}</div>
-                  </div>
+                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"10px", marginBottom:"12px" }}>
+                  {miniCards.map(([title,name,value,color,sub],idx)=>(
+                    <div key={idx} style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"14px", padding:"12px" }}>
+                      <div style={{ color:"#64748b", fontSize:"11px", fontWeight:"900" }}>{title}</div>
+                      <div style={{ color:"#0f172a", fontSize:"15px", fontWeight:"900", marginTop:"4px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{name}</div>
+                      <div style={{ color, fontSize:"18px", fontWeight:"900", marginTop:"2px" }}>{value}</div>
+                      <div style={{ color:"#94a3b8", fontSize:"10px", fontWeight:"800", marginTop:"3px" }}>{sub}</div>
+                    </div>
+                  ))}
                 </div>
+
+                {inactive.length > 0 && (
+                  <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+                    <div style={{ color:"#9a3412", fontWeight:"900" }}>{inactive.length} cliente(s) inativo(s) há mais de 30 dias</div>
+                    <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700", marginTop:"3px" }}>
+                      Sugestão: chamar esses clientes no WhatsApp com promoção ou lembrete.
+                    </div>
+                    <div style={{ display:"grid", gap:"6px", marginTop:"10px" }}>
+                      {inactive.slice(0,3).map(c=>(
+                        <div key={c.id} style={{ display:"flex", justifyContent:"space-between", gap:"8px", background:"#fff", borderRadius:"10px", padding:"8px", fontSize:"12px" }}>
+                          <strong style={{ color:"#0f172a" }}>{c.name}</strong>
+                          <span style={{ color:"#9a3412", fontWeight:"900" }}>{c.inactiveDays} dias</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display:"grid", gap:"8px" }}>
                   {ranked.slice(0,5).map((c,idx)=>(
@@ -2858,7 +2907,9 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                       <div style={{ width:"30px", height:"30px", borderRadius:"10px", background:idx===0?"#fef3c7":"#e2e8f0", color:idx===0?"#92400e":"#475569", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>{idx+1}</div>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontWeight:"900", color:"#0f172a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
-                        <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>{c.purchases} compra(s) • Crediário: {fmtCur(c.openCredit)}</div>
+                        <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>
+                          {c.purchases} compra(s) • Ticket: {fmtCur(c.ticket)} • Crediário: {fmtCur(c.openCredit)}
+                        </div>
                       </div>
                       <div style={{ textAlign:"right", fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.total)}</div>
                     </div>
@@ -5014,7 +5065,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel4</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel6</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
