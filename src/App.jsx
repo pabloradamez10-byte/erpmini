@@ -4041,7 +4041,7 @@ const VendasTab = () => (
     const [masterLicenses, setMasterLicenses] = useState(()=>loadPersistentSafe("erpmini_master_licenses", []));
     const [masterLoading, setMasterLoading] = useState(false);
     const [masterMsg, setMasterMsg] = useState(()=>loadPersistentSafe("erpmini_master_msg", ""));
-    const [masterSelected, setMasterSelected] = useState(null);
+    const [masterSelectedId, setMasterSelectedId] = useState(()=>loadPersistentSafe("erpmini_master_selected_id", null));
     const masterLoadedOnce = useRef(false);
 
     const keepMasterRows = (rows) => {
@@ -4159,7 +4159,8 @@ const VendasTab = () => (
       return acc;
     }, { products:0, clients:0, sales:0, total:0, today:0, credOpen:0 });
 
-    const selectedSummary = masterSelected ? rowSummary(masterSelected) : null;
+    const selectedRow = masterSelectedId ? masterRows.find(r => String(r.user_id) === String(masterSelectedId)) : null;
+    const selectedSummary = selectedRow ? rowSummary(selectedRow) : null;
 
     return (
       <div style={card}>
@@ -4168,7 +4169,11 @@ const VendasTab = () => (
             <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Painel Master ERPmini</div>
             <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"700" }}>Somente leitura. Clique em Atualizar este painel para carregar as lojas.</div>
           </div>
-          <button style={{ ...btn("#0f172a"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>loadMaster()} disabled={masterLoading}>
+          <button style={{ ...btn("#0f172a"), padding:"9px 12px", fontSize:"12px" }} onClick={async ()=>{
+              const y = window.scrollY;
+              await loadMaster();
+              setTimeout(()=>window.scrollTo({ top:y, behavior:"auto" }), 0);
+            }} disabled={masterLoading}>
             {masterLoading ? "Carregando..." : "Atualizar"}
           </button>
         </div>
@@ -4271,11 +4276,15 @@ const VendasTab = () => (
                     </div>
                   </div>
 
-                  <button style={{ ...btnSm("#6366f1"), marginTop:"10px", width:"100%" }} onClick={()=>setMasterSelected(masterSelected?.user_id===row.user_id ? null : row)}>
-                    {masterSelected?.user_id===row.user_id ? "Ocultar detalhes" : "Ver detalhes"}
+                  <button style={{ ...btnSm("#6366f1"), marginTop:"10px", width:"100%" }} onClick={()=>{
+                    const nextId = String(masterSelectedId) === String(row.user_id) ? null : row.user_id;
+                    setMasterSelectedId(nextId);
+                    savePersistentSafe("erpmini_master_selected_id", nextId);
+                  }}>
+                    {String(masterSelectedId) === String(row.user_id) ? "Ocultar detalhes" : "Ver detalhes"}
                   </button>
 
-                  {masterSelected?.user_id===row.user_id && selectedSummary && (
+                  {String(masterSelectedId) === String(row.user_id) && selectedSummary && (
                     <div style={{ marginTop:"10px", background:"#f8fafc", borderRadius:"12px", padding:"10px" }}>
                       <div style={{ fontWeight:"900", marginBottom:"8px" }}>Detalhes da loja</div>
 
@@ -5005,7 +5014,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel4</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
