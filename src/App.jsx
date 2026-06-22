@@ -677,6 +677,23 @@ function saveSessionSafe(key, value) {
   } catch {}
 }
 
+function loadPersistentSafe(key, fallback) {
+  try {
+    const sessionRaw = sessionStorage.getItem(key);
+    if (sessionRaw) return JSON.parse(sessionRaw);
+  } catch {}
+  try {
+    const localRaw = localStorage.getItem(key);
+    if (localRaw) return JSON.parse(localRaw);
+  } catch {}
+  return fallback;
+}
+
+function savePersistentSafe(key, value) {
+  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
 // --- Responsive hook ---------------------------------------------------------
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768);
@@ -1529,6 +1546,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [purchaseItems, setPurchaseItems] = useState([{ productId:"", name:"", qty:"", cost:"", salePrice:"" }]);
   const [newReceivable, setNewReceivable] = useState({ clientName:"", document:"", description:"", amount:"", dueDate:"", category:"Geral", installments:"1" });
   const [selectedReceivable, setSelectedReceivable] = useState(null);
+  const [confirmDeleteReceivable, setConfirmDeleteReceivable] = useState(null);
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -2205,8 +2223,15 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const deleteReceivable = (id) => {
     const rec = receivables.find(r=>r.id===id);
     if (!rec) return;
-    const ok = window.confirm(`Excluir conta a receber de ${rec.clientName}?\\nDocumento: ${rec.document || "-"}\\nValor em aberto: ${fmtCur(receivableOpenAmount(rec))}`);
-    if (ok) setReceivables(prev=>prev.filter(r=>r.id!==id));
+    setConfirmDeleteReceivable(rec);
+  };
+
+  const confirmDeleteReceivableNow = () => {
+    if (!confirmDeleteReceivable) return;
+    const id = confirmDeleteReceivable.id;
+    setReceivables(prev=>prev.filter(r=>r.id!==id));
+    setConfirmDeleteReceivable(null);
+    notify("Conta a receber excluída.");
   };
 
 
@@ -3933,24 +3958,24 @@ const VendasTab = () => (
 
 
   const MasterPanel = () => {
-    const [masterRows, setMasterRows] = useState(()=>loadSessionSafe("erpmini_master_rows", []));
-    const [masterLicenses, setMasterLicenses] = useState(()=>loadSessionSafe("erpmini_master_licenses", []));
+    const [masterRows, setMasterRows] = useState(()=>loadPersistentSafe("erpmini_master_rows", []));
+    const [masterLicenses, setMasterLicenses] = useState(()=>loadPersistentSafe("erpmini_master_licenses", []));
     const [masterLoading, setMasterLoading] = useState(false);
-    const [masterMsg, setMasterMsg] = useState(()=>loadSessionSafe("erpmini_master_msg", ""));
+    const [masterMsg, setMasterMsg] = useState(()=>loadPersistentSafe("erpmini_master_msg", ""));
     const [masterSelected, setMasterSelected] = useState(null);
     const masterLoadedOnce = useRef(false);
 
     const keepMasterRows = (rows) => {
       setMasterRows(rows);
-      saveSessionSafe("erpmini_master_rows", rows);
+      savePersistentSafe("erpmini_master_rows", rows);
     };
     const keepMasterLicenses = (rows) => {
       setMasterLicenses(rows);
-      saveSessionSafe("erpmini_master_licenses", rows);
+      savePersistentSafe("erpmini_master_licenses", rows);
     };
     const keepMasterMsg = (msg) => {
       setMasterMsg(msg);
-      saveSessionSafe("erpmini_master_msg", msg);
+      savePersistentSafe("erpmini_master_msg", msg);
     };
 
     const safeArr = (obj, key) => Array.isArray(obj?.[key]) ? obj[key] : [];
@@ -4193,10 +4218,10 @@ const VendasTab = () => (
 
 
   const AdminLicensesPanel = () => {
-    const [licenses, setLicenses] = useState(()=>loadSessionSafe("erpmini_admin_licenses", []));
-    const [signupRequests, setSignupRequests] = useState(()=>loadSessionSafe("erpmini_admin_requests", []));
+    const [licenses, setLicenses] = useState(()=>loadPersistentSafe("erpmini_admin_licenses", []));
+    const [signupRequests, setSignupRequests] = useState(()=>loadPersistentSafe("erpmini_admin_requests", []));
     const [adminLoading, setAdminLoading] = useState(false);
-    const [adminMsg, setAdminMsg] = useState(()=>loadSessionSafe("erpmini_admin_msg", ""));
+    const [adminMsg, setAdminMsg] = useState(()=>loadPersistentSafe("erpmini_admin_msg", ""));
     const [newEmail, setNewEmail] = useState("");
     const [newExpires, setNewExpires] = useState(() => {
       const d = new Date();
@@ -4209,15 +4234,15 @@ const VendasTab = () => (
 
     const keepAdminLicenses = (rows) => {
       setLicenses(rows);
-      saveSessionSafe("erpmini_admin_licenses", rows);
+      savePersistentSafe("erpmini_admin_licenses", rows);
     };
     const keepAdminRequests = (rows) => {
       setSignupRequests(rows);
-      saveSessionSafe("erpmini_admin_requests", rows);
+      savePersistentSafe("erpmini_admin_requests", rows);
     };
     const keepAdminMsg = (msg) => {
       setAdminMsg(msg);
-      saveSessionSafe("erpmini_admin_msg", msg);
+      savePersistentSafe("erpmini_admin_msg", msg);
     };
 
     const loadLicenses = async () => {
@@ -4879,7 +4904,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel1</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel2</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -4966,6 +4991,44 @@ const VendasTab = () => (
           onCancel={()=>setSelectedReceivable(null)}
           onConfirm={handleReceivableReceiveConfirm}
         />
+      )}
+
+      {confirmDeleteReceivable && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.55)", zIndex:90, display:"flex", alignItems:"center", justifyContent:"center", padding:"18px" }}>
+          <div style={{ background:"#fff", width:"100%", maxWidth:"420px", borderRadius:"22px", padding:"18px", boxShadow:"0 24px 70px rgba(0,0,0,.28)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"10px" }}>
+              <div style={{ width:"44px", height:"44px", borderRadius:"14px", background:"#fee2e2", color:"#dc2626", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"24px", fontWeight:"900" }}>!</div>
+              <div>
+                <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Excluir conta a receber?</div>
+                <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700" }}>Esta ação remove o lançamento do ERPmini.</div>
+              </div>
+            </div>
+
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"16px", padding:"14px", margin:"14px 0" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", borderBottom:"1px solid #e2e8f0", paddingBottom:"8px", marginBottom:"8px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Cliente</span>
+                <strong style={{ color:"#0f172a", textAlign:"right" }}>{confirmDeleteReceivable.clientName || "-"}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", borderBottom:"1px solid #e2e8f0", paddingBottom:"8px", marginBottom:"8px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Documento</span>
+                <strong style={{ color:"#0f172a", textAlign:"right" }}>{confirmDeleteReceivable.document || "-"}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Valor em aberto</span>
+                <strong style={{ color:"#dc2626", textAlign:"right", fontSize:"18px" }}>{fmtCur(receivableOpenAmount(confirmDeleteReceivable))}</strong>
+              </div>
+            </div>
+
+            <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", color:"#9a3412", borderRadius:"14px", padding:"10px 12px", fontSize:"13px", fontWeight:"800", marginBottom:"14px" }}>
+              Confirme somente se esta conta foi lançada por engano.
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+              <button style={{ ...btn("#e2e8f0"), color:"#334155", padding:"13px" }} onClick={()=>setConfirmDeleteReceivable(null)}>Cancelar</button>
+              <button style={{ ...btn("#dc2626"), padding:"13px" }} onClick={confirmDeleteReceivableNow}>Excluir</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Receipt */}
