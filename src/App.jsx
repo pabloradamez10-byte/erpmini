@@ -1547,6 +1547,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [newReceivable, setNewReceivable] = useState({ clientName:"", document:"", description:"", amount:"", dueDate:"", category:"Geral", installments:"1" });
   const [selectedReceivable, setSelectedReceivable] = useState(null);
   const [confirmDeleteReceivable, setConfirmDeleteReceivable] = useState(null);
+  const [selectedIntelClient, setSelectedIntelClient] = useState(null);
   const [selectedClientHistory, setSelectedClientHistory] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -2234,6 +2235,30 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     notify("Conta a receber excluída.");
   };
 
+  const goSellToIntelClient = (clientInfo) => {
+    setSelectedIntelClient(null);
+    setPdvView("venda");
+    setTab("pdv");
+    notify(`Venda para ${clientInfo?.name || "cliente"}: selecione os produtos no PDV.`);
+  };
+
+  const goReceiveFromIntelClient = (clientInfo) => {
+    setSelectedIntelClient(null);
+    setTab("caixa");
+    notify(`Procure ${clientInfo?.name || "cliente"} em Contas a Receber.`);
+  };
+
+  const openIntelClientWhatsApp = (clientInfo) => {
+    const phoneRaw = String(clientInfo?.phone || "").replace(/\D/g, "");
+    if (!phoneRaw) {
+      notify("Cliente sem WhatsApp cadastrado.", "error");
+      return;
+    }
+    const phone = phoneRaw.startsWith("55") ? phoneRaw : "55" + phoneRaw;
+    const msg = encodeURIComponent(`Olá ${clientInfo?.name || ""}. Você possui um crediário em aberto de ${fmtCur(clientInfo?.openCredit || 0)}.\n\nERPmini`);
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+  };
+
 
   const cleanPurchaseItems = () => {
     if (!String(newPayable.document||"").trim()) return [];
@@ -2860,6 +2885,13 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
             const bestTicket = [...ranked].sort((a,b)=>b.ticket-a.ticket)[0];
             const inactive = ranked.filter(c => c.inactiveDays >= 30 && c.purchases > 0).sort((a,b)=>b.total-a.total);
 
+            const medalStyle = (idx) => {
+              if (idx === 0) return { bg:"#fffbeb", border:"#fbbf24", medalBg:"#fef3c7", medalColor:"#92400e", label:"🥇" };
+              if (idx === 1) return { bg:"#f8fafc", border:"#cbd5e1", medalBg:"#e2e8f0", medalColor:"#334155", label:"🥈" };
+              if (idx === 2) return { bg:"#fff7ed", border:"#fdba74", medalBg:"#fed7aa", medalColor:"#9a3412", label:"🥉" };
+              return { bg:"#f8fafc", border:"#e2e8f0", medalBg:"#e2e8f0", medalColor:"#475569", label:String(idx+1) };
+            };
+
             if (ranked.length === 0) {
               return <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"16px 0" }}>Ainda não há compras por cliente suficientes para gerar inteligência comercial.</div>;
             }
@@ -2892,28 +2924,31 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                     </div>
                     <div style={{ display:"grid", gap:"6px", marginTop:"10px" }}>
                       {inactive.slice(0,3).map(c=>(
-                        <div key={c.id} style={{ display:"flex", justifyContent:"space-between", gap:"8px", background:"#fff", borderRadius:"10px", padding:"8px", fontSize:"12px" }}>
+                        <button key={c.id} onClick={()=>setSelectedIntelClient(c)} style={{ display:"flex", justifyContent:"space-between", gap:"8px", background:"#fff", border:"none", borderRadius:"10px", padding:"8px", fontSize:"12px", cursor:"pointer", textAlign:"left" }}>
                           <strong style={{ color:"#0f172a" }}>{c.name}</strong>
                           <span style={{ color:"#9a3412", fontWeight:"900" }}>{c.inactiveDays} dias</span>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
                 )}
 
                 <div style={{ display:"grid", gap:"8px" }}>
-                  {ranked.slice(0,5).map((c,idx)=>(
-                    <div key={c.id || c.name || idx} style={{ display:"grid", gridTemplateColumns:"auto 1fr auto", gap:"10px", alignItems:"center", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px", background:"#f8fafc" }}>
-                      <div style={{ width:"30px", height:"30px", borderRadius:"10px", background:idx===0?"#fef3c7":"#e2e8f0", color:idx===0?"#92400e":"#475569", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>{idx+1}</div>
-                      <div style={{ minWidth:0 }}>
-                        <div style={{ fontWeight:"900", color:"#0f172a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
-                        <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>
-                          {c.purchases} compra(s) • Ticket: {fmtCur(c.ticket)} • Crediário: {fmtCur(c.openCredit)}
+                  {ranked.slice(0,5).map((c,idx)=>{
+                    const s = medalStyle(idx);
+                    return (
+                      <button key={c.id || c.name || idx} onClick={()=>setSelectedIntelClient(c)} style={{ display:"grid", gridTemplateColumns:"auto 1fr auto", gap:"10px", alignItems:"center", border:`1.5px solid ${s.border}`, borderRadius:"14px", padding:"10px", background:s.bg, cursor:"pointer", textAlign:"left", boxShadow:idx<3?"0 6px 18px rgba(15,23,42,.08)":"none" }}>
+                        <div style={{ width:"38px", height:"38px", borderRadius:"13px", background:s.medalBg, color:s.medalColor, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900", fontSize:idx<3?"19px":"15px" }}>{s.label}</div>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontWeight:"900", color:"#0f172a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
+                          <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>
+                            {c.purchases} compra(s) • Ticket: {fmtCur(c.ticket)} • Crediário: {fmtCur(c.openCredit)}
+                          </div>
                         </div>
-                      </div>
-                      <div style={{ textAlign:"right", fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.total)}</div>
-                    </div>
-                  ))}
+                        <div style={{ textAlign:"right", fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.total)}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             );
@@ -5065,7 +5100,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel6</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel7</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -5187,6 +5222,58 @@ const VendasTab = () => (
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
               <button style={{ ...btn("#e2e8f0"), color:"#334155", padding:"13px" }} onClick={()=>setConfirmDeleteReceivable(null)}>Cancelar</button>
               <button style={{ ...btn("#dc2626"), padding:"13px" }} onClick={confirmDeleteReceivableNow}>Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedIntelClient && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,.58)", zIndex:120, display:"flex", alignItems:"flex-end", justifyContent:"center", padding:isMobile?"0":"18px" }}>
+          <div style={{ background:"#fff", width:"100%", maxWidth:"460px", borderRadius:isMobile?"24px 24px 0 0":"24px", padding:"18px", boxShadow:"0 24px 70px rgba(0,0,0,.30)", maxHeight:"88vh", overflowY:"auto" }}>
+            <div style={{ width:"48px", height:"5px", background:"#cbd5e1", borderRadius:"999px", margin:"0 auto 16px" }} />
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"12px", marginBottom:"12px" }}>
+              <div>
+                <div style={{ fontWeight:"900", fontSize:"24px", color:"#0f172a" }}>{selectedIntelClient.name}</div>
+                <div style={{ color:"#64748b", fontWeight:"700", marginTop:"2px" }}>Resumo comercial do cliente</div>
+              </div>
+              <button onClick={()=>setSelectedIntelClient(null)} style={{ border:"none", background:"#f1f5f9", borderRadius:"14px", width:"42px", height:"42px", fontSize:"20px", cursor:"pointer" }}>×</button>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+              <div style={{ background:"#ecfdf5", border:"1px solid #bbf7d0", borderRadius:"14px", padding:"12px" }}>
+                <div style={{ color:"#166534", fontWeight:"900", fontSize:"12px" }}>Faturamento</div>
+                <div style={{ color:"#16a34a", fontWeight:"900", fontSize:"22px" }}>{fmtCur(selectedIntelClient.total || 0)}</div>
+              </div>
+              <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:"14px", padding:"12px" }}>
+                <div style={{ color:"#1d4ed8", fontWeight:"900", fontSize:"12px" }}>Compras</div>
+                <div style={{ color:"#2563eb", fontWeight:"900", fontSize:"22px" }}>{selectedIntelClient.purchases || 0}</div>
+              </div>
+              <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
+                <div style={{ color:"#9a3412", fontWeight:"900", fontSize:"12px" }}>Crediário</div>
+                <div style={{ color:"#f97316", fontWeight:"900", fontSize:"22px" }}>{fmtCur(selectedIntelClient.openCredit || 0)}</div>
+              </div>
+              <div style={{ background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:"14px", padding:"12px" }}>
+                <div style={{ color:"#6d28d9", fontWeight:"900", fontSize:"12px" }}>Ticket médio</div>
+                <div style={{ color:"#7c3aed", fontWeight:"900", fontSize:"22px" }}>{fmtCur(selectedIntelClient.ticket || 0)}</div>
+              </div>
+            </div>
+
+            <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px", marginBottom:"6px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Última compra</span>
+                <strong style={{ color:"#0f172a" }}>{selectedIntelClient.lastPurchase ? fmtDate(selectedIntelClient.lastPurchase) : "-"}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:"10px" }}>
+                <span style={{ color:"#64748b", fontWeight:"800" }}>Telefone/WhatsApp</span>
+                <strong style={{ color:"#0f172a" }}>{selectedIntelClient.phone || "-"}</strong>
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gap:"10px" }}>
+              <button style={{ ...btn("#e94560"), padding:"14px" }} onClick={()=>goSellToIntelClient(selectedIntelClient)}>Vender para este cliente</button>
+              <button style={{ ...btn("#16a34a"), padding:"14px" }} onClick={()=>goReceiveFromIntelClient(selectedIntelClient)} disabled={(selectedIntelClient.openCredit || 0) <= 0}>Receber crediário</button>
+              <button style={{ ...btn("#22c55e"), padding:"14px" }} onClick={()=>openIntelClientWhatsApp(selectedIntelClient)}>Chamar no WhatsApp</button>
+              <button style={{ ...btn("#e2e8f0"), color:"#334155", padding:"12px" }} onClick={()=>setSelectedIntelClient(null)}>Fechar</button>
             </div>
           </div>
         </div>
