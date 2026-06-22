@@ -2791,6 +2791,85 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
         </div>
 
         <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
+          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"4px" }}>Ranking de clientes</div>
+          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>Clientes que mais compraram e clientes com maior crediário.</div>
+
+          {(() => {
+            const clientMap = {};
+            (clients || []).forEach(c => {
+              clientMap[c.id || c.name] = {
+                id: c.id || c.name,
+                name: c.name || "Cliente",
+                purchases: 0,
+                total: 0,
+                openCredit: 0
+              };
+            });
+
+            (sales || []).forEach(sale => {
+              const cId = sale.fiado?.clientId || sale.clientId || sale.customerId || sale.client?.id || sale.fiado?.clientName || sale.clientName;
+              const cName = sale.fiado?.clientName || sale.clientName || sale.client?.name || "Cliente não informado";
+              if (!cId && !sale.fiado?.clientName && !sale.clientName) return;
+              const key = cId || cName;
+              if (!clientMap[key]) clientMap[key] = { id:key, name:cName, purchases:0, total:0, openCredit:0 };
+              clientMap[key].purchases += 1;
+              clientMap[key].total += Number(sale.total) || 0;
+              if (sale.fiado && !sale.fiado.paid) {
+                clientMap[key].openCredit += Math.max(0, (Number(sale.total)||0) - (Number(sale.fiado?.paidAmount)||0));
+              }
+            });
+
+            (receivables || []).forEach(r => {
+              if (r.paid) return;
+              const key = r.clientId || r.clientName || r.id;
+              if (!clientMap[key]) clientMap[key] = { id:key, name:r.clientName || "Cliente", purchases:0, total:0, openCredit:0 };
+              clientMap[key].openCredit += Math.max(0, (Number(r.amount)||0) - (Number(r.paidAmount)||0));
+            });
+
+            const ranked = Object.values(clientMap)
+              .filter(c => c.total > 0 || c.openCredit > 0)
+              .sort((a,b)=>b.total-a.total);
+
+            const topClient = ranked[0];
+            const topCredit = [...ranked].sort((a,b)=>b.openCredit-a.openCredit)[0];
+
+            if (ranked.length === 0) {
+              return <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"16px 0" }}>Ainda não há compras por cliente suficientes para gerar ranking.</div>;
+            }
+
+            return (
+              <>
+                <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+                  <div style={{ background:"#ecfdf5", border:"1px solid #bbf7d0", borderRadius:"14px", padding:"12px" }}>
+                    <div style={{ color:"#166534", fontSize:"12px", fontWeight:"900" }}>Melhor cliente</div>
+                    <div style={{ color:"#0f172a", fontSize:"18px", fontWeight:"900", marginTop:"4px" }}>{topClient?.name || "-"}</div>
+                    <div style={{ color:"#16a34a", fontSize:"20px", fontWeight:"900" }}>{fmtCur(topClient?.total || 0)}</div>
+                  </div>
+                  <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
+                    <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"900" }}>Maior crediário</div>
+                    <div style={{ color:"#0f172a", fontSize:"18px", fontWeight:"900", marginTop:"4px" }}>{topCredit?.name || "-"}</div>
+                    <div style={{ color:"#f97316", fontSize:"20px", fontWeight:"900" }}>{fmtCur(topCredit?.openCredit || 0)}</div>
+                  </div>
+                </div>
+
+                <div style={{ display:"grid", gap:"8px" }}>
+                  {ranked.slice(0,5).map((c,idx)=>(
+                    <div key={c.id || c.name || idx} style={{ display:"grid", gridTemplateColumns:"auto 1fr auto", gap:"10px", alignItems:"center", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px", background:"#f8fafc" }}>
+                      <div style={{ width:"30px", height:"30px", borderRadius:"10px", background:idx===0?"#fef3c7":"#e2e8f0", color:idx===0?"#92400e":"#475569", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>{idx+1}</div>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontWeight:"900", color:"#0f172a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
+                        <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>{c.purchases} compra(s) • Crediário: {fmtCur(c.openCredit)}</div>
+                      </div>
+                      <div style={{ textAlign:"right", fontWeight:"900", color:"#16a34a" }}>{fmtCur(c.total)}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
+        <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
           <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"4px" }}>DRE simples</div>
           <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>Visão rápida de resultado com base no custo cadastrado dos produtos.</div>
 
@@ -4126,6 +4205,27 @@ const VendasTab = () => (
           </div>
         </div>
 
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:"10px", marginBottom:"12px" }}>
+          {(() => {
+            const summaries = masterRows.map(row => ({ row, s: rowSummary(row) }));
+            const topRevenue = [...summaries].sort((a,b)=>b.s.totalSold-a.s.totalSold)[0];
+            const topSales = [...summaries].sort((a,b)=>b.s.sales.length-a.s.sales.length)[0];
+            const attention = [...summaries].sort((a,b)=>b.s.lowStock-a.s.lowStock)[0];
+
+            return [
+              ["Top loja", topRevenue?.s.store || "-", topRevenue ? fmtCur(topRevenue.s.totalSold) : "R$ 0,00", "#2563eb"],
+              ["Mais vendas", topSales?.s.store || "-", topSales ? `${topSales.s.sales.length} venda(s)` : "0 venda(s)", "#7c3aed"],
+              ["Atenção", attention?.s.store || "-", attention ? `${attention.s.lowStock} estoque baixo` : "0 estoque baixo", "#dc2626"],
+            ].map(([title, store, value, color], idx)=>(
+              <div key={idx} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"14px", padding:"12px" }}>
+                <div style={{ color:"#64748b", fontSize:"11px", fontWeight:"900" }}>{title}</div>
+                <div style={{ color:"#0f172a", fontSize:"15px", fontWeight:"900", marginTop:"4px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{store}</div>
+                <div style={{ color, fontSize:"18px", fontWeight:"900", marginTop:"2px" }}>{value}</div>
+              </div>
+            ));
+          })()}
+        </div>
+
         {masterRows.length === 0 ? (
           <div style={{ color:"#94a3b8", fontWeight:"800", textAlign:"center", padding:"18px 0" }}>
             Clique em Atualizar neste painel. Se continuar zerado, rode a política SQL de acesso Master no Supabase.
@@ -4503,6 +4603,7 @@ const VendasTab = () => (
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", marginBottom:"12px" }}>
           <div>
             <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a" }}>Admin Licencas</div>
+            <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>Gerencie acessos e planos dos usuários.</div>
             <div style={{ fontSize:"12px", color:"#64748b" }}>Visivel somente para Pablo.</div>
           </div>
           <button style={{ ...btn("#2563eb"), padding:"9px 12px", fontSize:"12px" }} onClick={()=>loadLicenses()} disabled={adminLoading}>
@@ -4660,11 +4761,11 @@ const VendasTab = () => (
                 </div>
 
                 <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)", gap:"6px" }}>
-                  <button style={{ ...btn("#16a34a"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"ativo")}>Liberar</button>
+                  <button style={{ ...btn("#16a34a"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"ativo")}>Ativar</button>
                   <button style={{ ...btn("#ef4444"), padding:"9px", fontSize:"12px" }} onClick={()=>setStatus(lic,"bloqueado")}>Bloquear</button>
                   <button style={{ ...btn("#64748b"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"starter")}>Starter gratis</button>
-                  <button style={{ ...btn("#2563eb"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"pro")}>Pro mensal</button>
-                  <button style={{ ...btn("#7c3aed"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"premium")}>Premium anual</button>
+                  <button style={{ ...btn("#2563eb"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"pro")}>Pro Mensal</button>
+                  <button style={{ ...btn("#7c3aed"), padding:"9px", fontSize:"12px" }} onClick={()=>setLicensePlan(lic.email,"premium")}>Premium</button>
                 </div>
               </div>
             );
@@ -4904,7 +5005,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel2</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel3</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
