@@ -2592,11 +2592,86 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const DashboardTab = () => {
     const p = normalizePlan(currentPlan);
     const isStarter = p === "starter" && !isPlatformAdmin;
-    const planName = isPlatformAdmin ? "Administrador" : (p === "starter" ? "Starter grátis" : p === "pro" ? "Pro mensal" : "Premium");
+
+    const soldByProduct = {};
+    (sales || []).forEach((sale) => {
+      (sale.items || []).forEach((item) => {
+        const id = item.id || item.barcode || item.name;
+        const qty = Number(item.qty) || 0;
+        const unitPrice = Number(item.price) || 0;
+        const prod = products.find(pr => pr.id === item.id || pr.barcode === item.barcode || pr.name === item.name) || {};
+        const unitCost = Number(item.cost ?? prod.cost ?? prod.custo ?? 0);
+        if (!soldByProduct[id]) {
+          soldByProduct[id] = {
+            id,
+            name: item.name || prod.name || "Produto",
+            qty: 0,
+            revenue: 0,
+            cost: 0,
+            profit: 0,
+            lastSale: null
+          };
+        }
+        soldByProduct[id].qty += qty;
+        soldByProduct[id].revenue += qty * unitPrice;
+        soldByProduct[id].cost += qty * unitCost;
+        soldByProduct[id].profit += qty * (unitPrice - unitCost);
+        const d = sale.date ? new Date(sale.date) : null;
+        if (d && (!soldByProduct[id].lastSale || d > soldByProduct[id].lastSale)) soldByProduct[id].lastSale = d;
+      });
+    });
+
+    const productAnalysis = Object.values(soldByProduct)
+      .sort((a,b)=>b.profit-a.profit);
+
+    const totalProfitProducts = productAnalysis.reduce((sum,p)=>sum+Math.max(0,p.profit),0);
+    let accumulated = 0;
+    const abcProducts = productAnalysis.map((prod) => {
+      accumulated += Math.max(0, prod.profit);
+      const pct = totalProfitProducts > 0 ? (accumulated / totalProfitProducts) * 100 : 100;
+      const curve = pct <= 80 ? "A" : pct <= 95 ? "B" : "C";
+      return { ...prod, curve };
+    });
+
+    const productsA = abcProducts.filter(p=>p.curve==="A");
+    const productsC = abcProducts.filter(p=>p.curve==="C");
+    const championProducts = productsA.slice(0,3);
+
+    const now = new Date();
+    const staleProducts = (products || []).map((prod) => {
+      const metric = soldByProduct[prod.id] || soldByProduct[prod.barcode] || soldByProduct[prod.name];
+      const lastSale = metric?.lastSale || null;
+      const daysWithoutSale = lastSale ? Math.floor((now - lastSale) / (1000*60*60*24)) : 999;
+      const stock = Number(prod.stock) || 0;
+      const cost = Number(prod.cost ?? prod.custo ?? 0);
+      const price = Number(prod.price ?? prod.venda ?? 0);
+      const value = stock * (cost || price);
+      return { ...prod, lastSale, daysWithoutSale, stockValue:value };
+    }).filter(p => (Number(p.stock)||0) > 0 && p.daysWithoutSale >= 60);
+
+    const staleStockValue = staleProducts.reduce((sum,p)=>sum+(Number(p.stockValue)||0),0);
+
+    const totalRevenue = (sales || []).reduce((sum,s)=>sum+(Number(s.total)||0),0);
+    const estimatedCost = (sales || []).reduce((sum,sale)=>{
+      return sum + (sale.items || []).reduce((acc,item)=>{
+        const prod = products.find(pr => pr.id === item.id || pr.barcode === item.barcode || pr.name === item.name) || {};
+        const qty = Number(item.qty)||0;
+        const unitCost = Number(item.cost ?? prod.cost ?? prod.custo ?? 0);
+        return acc + qty * unitCost;
+      },0);
+    },0);
+    const grossProfit = totalRevenue - estimatedCost;
+    const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+    const cashReceived = (sales || []).reduce((sum,sale)=>{
+      return sum + (sale.payments || [])
+        .filter(p=>p.method!=="crediario" && p.method!=="fiado")
+        .reduce((acc,p)=>acc+(Number(p.amount)||0),0);
+    },0);
 
     return (
       <div>
-        {(lowStockProducts.length>0 || overdueFiado.length>0) && (
+        {(lowStockProducts.length>0 || overdueFiado.length>0 || staleProducts.length>0) && (
           <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px", border:"1.5px solid #fee2e2" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"10px" }}>
               <div>
@@ -2604,7 +2679,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
                 <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Veja o que precisa de atenção agora.</div>
               </div>
               <div style={{ background:"#ef4444", color:"#fff", borderRadius:"999px", minWidth:"34px", height:"34px", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:"900" }}>
-                {lowStockProducts.length + overdueFiado.length}
+                {lowStockProducts.length + overdueFiado.length + staleProducts.length}
               </div>
             </div>
 
@@ -2616,9 +2691,17 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
               </div>
             )}
 
+            {staleProducts.length>0 && (
+              <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"14px", padding:"12px", marginBottom:"8px" }}>
+                <div style={{ fontWeight:"900", color:"#9a3412" }}>Dinheiro parado no estoque: {fmtCur(staleStockValue)}</div>
+                <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>{staleProducts.length} produto(s) sem venda há mais de 60 dias.</div>
+                <button onClick={()=>setTab("estoque")} style={{ ...btn("#f97316"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver estoque</button>
+              </div>
+            )}
+
             {overdueFiado.length>0 && (
               <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
-                <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} fiado(s) vencido(s)</div>
+                <div style={{ fontWeight:"900", color:"#9a3412" }}>{overdueFiado.length} crediário(s) vencido(s)</div>
                 <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Clientes com pagamento em atraso.</div>
                 <button onClick={()=>setTab("fiado")} style={{ ...btn("#f97316"), padding:"9px 12px", fontSize:"13px", marginTop:"8px" }}>Ver clientes</button>
               </div>
@@ -2628,45 +2711,91 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
           <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
-            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Vendas registradas hoje</div>
-            <div style={{ fontSize:"30px", fontWeight:"900", color:"#16a34a", marginTop:"4px" }}>{salesOfToday.length}</div>
-            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Quantidade de vendas feitas no dia.</div>
+            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Vendas hoje</div>
+            <div style={{ fontSize:"30px", fontWeight:"900", color:"#16a34a", marginTop:"4px" }}>{fmtCur(salesTodayTotal)}</div>
+            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>{salesOfToday.length} venda(s) registradas hoje.</div>
           </div>
 
           <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
-            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Produtos cadastrados</div>
-            <div style={{ fontSize:"30px", fontWeight:"900", color:"#2563eb", marginTop:"4px" }}>{products.length}</div>
-            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>{isStarter ? "Limite do Starter: 30 produtos." : "Produtos do seu estoque."}</div>
+            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Crediário aberto</div>
+            <div style={{ fontSize:"30px", fontWeight:"900", color:"#f97316", marginTop:"4px" }}>{fmtCur(fiadoTotal)}</div>
+            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Valor ainda não recebido.</div>
           </div>
 
           <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)" }}>
-            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Clientes cadastrados</div>
-            <div style={{ fontSize:"30px", fontWeight:"900", color:"#7c3aed", marginTop:"4px" }}>{clients.length}</div>
-            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>{isStarter ? "Limite do Starter: 20 clientes." : "Clientes cadastrados no sistema."}</div>
+            <div style={{ fontSize:"13px", color:"#64748b", fontWeight:"900" }}>Estoque baixo</div>
+            <div style={{ fontSize:"30px", fontWeight:"900", color:"#dc2626", marginTop:"4px" }}>{lowStockProducts.length}</div>
+            <div style={{ color:"#94a3b8", fontSize:"12px", fontWeight:"700" }}>Produtos que precisam de atenção.</div>
           </div>
         </div>
 
         <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
-          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"8px" }}>Resumo rápido</div>
+          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"4px" }}>Inteligência ERPmini</div>
+          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>Curva ABC automática e dinheiro parado em estoque.</div>
+
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"10px", marginBottom:"12px" }}>
+            <div style={{ background:"#ecfdf5", border:"1px solid #bbf7d0", borderRadius:"14px", padding:"12px" }}>
+              <div style={{ color:"#166534", fontWeight:"900", fontSize:"13px" }}>Produtos A - campeões</div>
+              <div style={{ color:"#166534", fontSize:"12px", fontWeight:"700", marginTop:"3px" }}>Não deixe faltar no estoque.</div>
+              {championProducts.length===0 ? (
+                <div style={{ color:"#94a3b8", fontSize:"12px", marginTop:"8px" }}>Ainda não há vendas suficientes.</div>
+              ) : championProducts.map(p=>(
+                <div key={p.id} style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #bbf7d0", marginTop:"8px", paddingTop:"8px", gap:"8px" }}>
+                  <span style={{ fontWeight:"900", color:"#0f172a" }}>{p.name}</span>
+                  <strong style={{ color:"#16a34a" }}>{fmtCur(p.profit)}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:"14px", padding:"12px" }}>
+              <div style={{ color:"#9a3412", fontWeight:"900", fontSize:"13px" }}>Produtos C / parados</div>
+              <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"700", marginTop:"3px" }}>Itens com baixo giro ou sem venda.</div>
+              <div style={{ fontSize:"24px", fontWeight:"900", color:"#f97316", marginTop:"8px" }}>{fmtCur(staleStockValue)}</div>
+              <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"800" }}>parados há 60+ dias</div>
+            </div>
+          </div>
+
+          <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"14px", padding:"12px" }}>
+            <div style={{ fontWeight:"900", color:"#334155", marginBottom:"8px" }}>Leitura rápida</div>
+            <div style={{ color:"#64748b", fontSize:"13px", lineHeight:1.45, fontWeight:"700" }}>
+              {staleStockValue > 0
+                ? `Antes de comprar novos produtos, avalie vender ou promover os itens parados. Você tem ${fmtCur(staleStockValue)} imobilizados em estoque sem giro.`
+                : "Seu estoque não tem produtos parados há mais de 60 dias. Continue acompanhando os produtos campeões."}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background:"#fff", borderRadius:"18px", padding:"16px", boxShadow:"0 8px 24px rgba(15,23,42,.08)", marginBottom:"14px" }}>
+          <div style={{ fontWeight:"900", fontSize:"19px", color:"#0f172a", marginBottom:"4px" }}>DRE simples</div>
+          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>Visão rápida de resultado com base no custo cadastrado dos produtos.</div>
+
           <div style={{ display:"grid", gap:"9px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
-              <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido hoje</span>
-              <strong style={{ color:"#16a34a" }}>{fmtCur(salesTodayTotal)}</strong>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Receita em vendas</span>
+              <strong style={{ color:"#2563eb" }}>{fmtCur(totalRevenue)}</strong>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
-              <span style={{ color:"#64748b", fontWeight:"800" }}>Valor vendido no mês</span>
-              <strong style={{ color:"#2563eb" }}>{fmtCur(salesMonthTotal)}</strong>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Custo estimado</span>
+              <strong style={{ color:"#ef4444" }}>{fmtCur(estimatedCost)}</strong>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Lucro bruto estimado</span>
+              <strong style={{ color:grossProfit>=0?"#16a34a":"#ef4444" }}>{fmtCur(grossProfit)}</strong>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #f1f5f9", paddingBottom:"8px" }}>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Margem bruta</span>
+              <strong style={{ color:"#7c3aed" }}>{grossMargin.toFixed(1)}%</strong>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between" }}>
-              <span style={{ color:"#64748b", fontWeight:"800" }}>Fiado em aberto</span>
-              <strong style={{ color:"#f97316" }}>{fmtCur(fiadoTotal)}</strong>
+              <span style={{ color:"#64748b", fontWeight:"800" }}>Recebido à vista/cartão/PIX</span>
+              <strong style={{ color:"#0f172a" }}>{fmtCur(cashReceived)}</strong>
             </div>
           </div>
         </div>
 
         {isStarter && (
           <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"16px", padding:"14px", color:"#1d4ed8", fontWeight:"800", fontSize:"13px", lineHeight:1.45 }}>
-            Recursos como Caixa profissional, Relatórios, Vendas avançadas e Fiscal ficam disponíveis nos planos pagos.
+            Recursos como Caixa profissional, relatórios avançados, Fiscal e backup completo ficam disponíveis nos planos pagos.
           </div>
         )}
       </div>
@@ -4750,7 +4879,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master6</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
