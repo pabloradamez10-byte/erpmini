@@ -574,9 +574,4 @@ const normalizePlan = (plan) => {
 
   if (p === "free" || p === "gratis" || p === "gratuito" || p === "teste") return "starter";
   if (p === "mensal" || p === "pro_mensal") return "pro";
-  if (p === "anual" || p === "premium_anual") return "premium";
-
-  if (p === "starter" || p === "pro" || p === "premium") return p;
-
-  return "starter";
-};
+  if (p === "anu
