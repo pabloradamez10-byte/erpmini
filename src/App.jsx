@@ -571,6 +571,12 @@ const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isA
 
 const normalizePlan = (plan) => {
   const p = String(plan || "starter").toLowerCase();
-  if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
-  if (p === "mensal") return "pro";
-  if (p === "starter" || p === "pro" || p === "premium")
+
+  if (p === "free" || p === "gratis" || p === "gratuito" || p === "teste") return "starter";
+  if (p === "mensal" || p === "pro_mensal") return "pro";
+  if (p === "anual" || p === "premium_anual") return "premium";
+
+  if (p === "starter" || p === "pro" || p === "premium") return p;
+
+  return "starter";
+};
