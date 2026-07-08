@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { fmtCur, fmtDate, normalizePlan } from "./utils/format";
-import { loadLS, saveLS, loadPersistentSafe, savePersistentSafe } from "./utils/storage";
 import { isPlatformAdminEmail } from "./utils/permissions";
 
 
@@ -571,5 +569,8 @@ const allowedTabsForPlan = (plan, isAdmin=false) => {
 
 const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
 
-
-const currentMonthKey = () => new Date().toISOString().slice(0, 
+const normalizePlan = (plan) => {
+  const p = String(plan || "starter").toLowerCase();
+  if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
+  if (p === "mensal") return "pro";
+  if (p === "starter"
