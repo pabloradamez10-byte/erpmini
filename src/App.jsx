@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { fmtCur, fmtDate, normalizePlan } from "./utils/format";
+import { loadLS, saveLS, loadPersistentSafe, savePersistentSafe } from "./utils/storage";
+import { isPlatformAdminEmail } from "./utils/permissions";
 
 
 const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
@@ -66,8 +69,6 @@ const CLOUD_KEYS = [
   "erpmini_backup_latest",
   "erpmini_cash_closures",
   "erpmini_cash_ops",
-  "erpmini_company_profile",
-  "erpmini_owner_email",
   "erpmini_clients",
   "erpmini_payables",
   "erpmini_products",
@@ -571,7 +572,4 @@ const allowedTabsForPlan = (plan, isAdmin=false) => {
 const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
 
 const normalizePlan = (plan) => {
-  const p = String(plan || "starter").toLowerCase();
-  if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
-  if (p === "mensal") return "pro";
-  if (p === "starter" || p 
+  const p = String(plan || "sta
