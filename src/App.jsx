@@ -571,5 +571,5 @@ const allowedTabsForPlan = (plan, isAdmin=false) => {
 
 const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
 
-const normalizePlan = (plan) => {
-  const p = String(plan || "sta
+
+const currentMonthKey = () => new Date().toISOString().slice(0, 
