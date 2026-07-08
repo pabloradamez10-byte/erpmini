@@ -4136,6 +4136,7 @@ const VendasTab = () => (
     const [masterMsg, setMasterMsg] = useState(()=>loadPersistentSafe("erpmini_master_msg", ""));
     const [masterSelectedId, setMasterSelectedId] = useState(()=>loadPersistentSafe("erpmini_master_selected_id", null));
     const [masterSearch, setMasterSearch] = useState("");
+    const [masterManualEmails, setMasterManualEmails] = useState(()=>loadPersistentSafe("erpmini_master_manual_emails", {}));
     const masterLoadedOnce = useRef(false);
 
     const keepMasterRows = (rows) => {
@@ -4149,6 +4150,13 @@ const VendasTab = () => (
     const keepMasterMsg = (msg) => {
       setMasterMsg(msg);
       savePersistentSafe("erpmini_master_msg", msg);
+    };
+
+    const keepManualEmail = (rowId, email) => {
+      const clean = String(email || "").trim().toLowerCase();
+      const next = { ...masterManualEmails, [rowId]: clean };
+      setMasterManualEmails(next);
+      savePersistentSafe("erpmini_master_manual_emails", next);
     };
 
     const safeArr = (obj, key) => Array.isArray(obj?.[key]) ? obj[key] : [];
@@ -4165,7 +4173,9 @@ const VendasTab = () => (
     const ownerEmailFromRow = (row) => {
       const data = safeData(row);
       const profile = data.erpmini_company_profile || {};
-      return String(data.erpmini_owner_email || data.ownerEmail || profile.email || "").trim().toLowerCase();
+      const syncedEmail = String(data.erpmini_owner_email || data.ownerEmail || profile.email || "").trim().toLowerCase();
+      const manualEmail = String(masterManualEmails?.[row.user_id] || "").trim().toLowerCase();
+      return syncedEmail || manualEmail;
     };
 
     const storeNameFromRow = (row) => {
@@ -4384,6 +4394,42 @@ const VendasTab = () => (
       await loadMaster();
     };
 
+    const linkEmailToStore = async (row) => {
+      const cleanEmail = String(masterManualEmails?.[row.user_id] || "").trim().toLowerCase();
+
+      if (!cleanEmail || !cleanEmail.includes("@")) {
+        keepMasterMsg("Informe um e-mail válido para vincular à loja.");
+        return;
+      }
+
+      const currentData = safeData(row);
+      const nextData = { ...currentData, erpmini_owner_email: cleanEmail };
+
+      setMasterLoading(true);
+      const { error } = await supabase
+        .from(CLOUD_TABLE)
+        .upsert(
+          { user_id: row.user_id, data: nextData, updated_at: new Date().toISOString() },
+          { onConflict: "user_id" }
+        );
+      setMasterLoading(false);
+
+      if (error) {
+        keepMasterMsg("Erro ao vincular e-mail à loja: " + error.message);
+        return;
+      }
+
+      await saveMasterLicense(cleanEmail, {
+        status: "ativo",
+        plan: "starter",
+        expires_at: null,
+        notes: "E-mail vinculado manualmente pelo Painel Master."
+      });
+
+      keepMasterMsg("E-mail vinculado à loja.");
+      await loadMaster();
+    };
+
     const totals = masterRows.reduce((acc,row)=>{
       const s = rowSummary(row);
       acc.products += s.products.length;
@@ -4465,7 +4511,7 @@ const VendasTab = () => (
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontWeight:"900", color:"#0f172a", fontSize:"18px" }}>{s.store}</div>
                       <div style={{ color:s.ownerEmail ? "#64748b" : "#dc2626", fontSize:"12px", fontWeight:"800", wordBreak:"break-all" }}>
-                        Responsável: {s.ownerEmail || "e-mail ainda não sincronizado"}
+                        Responsável: {s.ownerEmail || "e-mail ainda não vinculado"}
                       </div>
                       <div style={{ color:"#94a3b8", fontSize:"11px", fontWeight:"700", wordBreak:"break-all" }}>
                         ID: {row.user_id}
@@ -4502,6 +4548,24 @@ const VendasTab = () => (
                     <span style={{ background:"#fff7ed", color:"#9a3412", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>Sync: {s.lastSync ? fmtDate(s.lastSync) : "-"}</span>
                   </div>
 
+                  <div style={{ marginTop:"10px", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
+                    <label style={{ fontSize:"11px", fontWeight:"900", color:"#64748b", display:"block", marginBottom:"5px" }}>E-mail responsável / acesso da loja</label>
+                    <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr auto", gap:"8px" }}>
+                      <input
+                        style={inp}
+                        value={masterManualEmails[row.user_id] ?? s.ownerEmail ?? ""}
+                        onChange={e=>keepManualEmail(row.user_id, e.target.value)}
+                        placeholder="email@cliente.com"
+                      />
+                      <button style={{ ...btnSm("#2563eb"), minWidth:isMobile?"100%":"120px" }} onClick={()=>linkEmailToStore(row)} disabled={masterLoading}>
+                        Vincular
+                      </button>
+                    </div>
+                    <div style={{ color:"#64748b", fontSize:"11px", fontWeight:"700", marginTop:"5px" }}>
+                      Depois de vincular, você poderá liberar, bloquear e trocar o plano desta loja.
+                    </div>
+                  </div>
+
                   <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginTop:"10px" }}>
                     <select style={inp} value={normalizePlan(s.license?.plan || "starter")} onChange={e=>changePlan(s, e.target.value)} disabled={!s.ownerEmail || masterLoading}>
                       <option value="starter">Starter grátis</option>
@@ -4520,7 +4584,7 @@ const VendasTab = () => (
 
                   {!s.ownerEmail && (
                     <div style={{ marginTop:"8px", background:"#fff7ed", border:"1px solid #fed7aa", color:"#9a3412", borderRadius:"10px", padding:"8px", fontSize:"12px", fontWeight:"800" }}>
-                      Para vincular o e-mail à loja, o cliente precisa abrir esta nova versão do ERP com internet uma vez.
+                      Esta loja ainda não tem e-mail vinculado. Informe o e-mail acima e clique em Vincular.
                     </div>
                   )}
 
@@ -5261,7 +5325,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel18fix</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel19</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
