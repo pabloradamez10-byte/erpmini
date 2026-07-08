@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { isPlatformAdminEmail } from "./utils/permissions";
 
 
 const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
@@ -573,4 +572,5 @@ const normalizePlan = (plan) => {
   const p = String(plan || "starter").toLowerCase();
   if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
   if (p === "mensal") return "pro";
-  if (p === "starter"
+  if (p === "starter" || p === "pro" || p === "premium") return p;
+  return "star
