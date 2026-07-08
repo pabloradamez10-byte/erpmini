@@ -66,6 +66,7 @@ const CLOUD_KEYS = [
   "erpmini_backup_latest",
   "erpmini_cash_closures",
   "erpmini_cash_ops",
+  "erpmini_owner_email",
   "erpmini_clients",
   "erpmini_payables",
   "erpmini_products",
@@ -572,5 +573,4 @@ const normalizePlan = (plan) => {
   const p = String(plan || "starter").toLowerCase();
   if (p === "free" || p === "gratis" || p === "gratuito") return "starter";
   if (p === "mensal") return "pro";
-  if (p === "starter" || p === "pro" || p === "premium") return p;
-  return "star
+  if (p === "starter" || p === "pro" || p === "premium")
