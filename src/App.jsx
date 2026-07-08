@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import MasterSaasPanel from "./admin/MasterSaasPanel.jsx";
 
 
 const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
@@ -5153,7 +5154,20 @@ const VendasTab = () => (
   // --- Config tab -------------------------------------------------------------
   const ConfigTab = () => (
     <div>
-      {isPlatformAdmin && <MasterPanel />}
+      {isPlatformAdmin && (
+        <MasterSaasPanel
+          supabase={supabase}
+          cloudTable={CLOUD_TABLE}
+          isMobile={isMobile}
+          fmtCur={fmtCur}
+          fmtDate={fmtDate}
+          normalizePlan={normalizePlan}
+          btn={btn}
+          btnSm={btnSm}
+          inp={inp}
+          card={card}
+        />
+      )}
       <div style={card}>
         <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"14px" }}>Config Configuracoes</div>
         <label style={{ fontSize:"13px", fontWeight:"600", color:"#64748b", marginBottom:"6px", display:"block" }}>Nome da Loja (aparece no comprovante)</label>
@@ -5325,7 +5339,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-intel19</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-master-saas1</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
