@@ -441,10 +441,10 @@ export default function MasterSaasPanel({
 
   const changePlan = async (item, plan) => {
     const p = normalizePlan(plan);
-    let expiresAt = item.license?.expires_at || null;
+    let expiresAt = null;
 
-    if (p === "pro" && !expiresAt) expiresAt = addMonths(1);
-    if (p === "premium" && !expiresAt) expiresAt = addYears(1);
+    if (p === "pro") expiresAt = addMonths(1);
+    if (p === "premium") expiresAt = addYears(1);
 
     await saveLicense(item.email, {
       plan: p,
@@ -761,6 +761,12 @@ export default function MasterSaasPanel({
                   <option value="servicos">Serviços</option>
                 </select>
                 <input style={inp} type="date" value={item.license?.expires_at || ""} onChange={(e)=>changeExpires(item, e.target.value)} disabled={!item.email || plan === "starter" || loading} />
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(3,1fr)", gap:"6px", marginTop:"8px" }}>
+                <button style={{ ...btnSm(plan === "starter" ? "#64748b" : "#94a3b8") }} onClick={()=>changePlan(item, "starter")} disabled={!item.email || loading}>Starter</button>
+                <button style={{ ...btnSm(plan === "pro" ? "#2563eb" : "#94a3b8") }} onClick={()=>changePlan(item, "pro")} disabled={!item.email || loading}>Pro mensal</button>
+                <button style={{ ...btnSm(plan === "premium" ? "#7c3aed" : "#94a3b8") }} onClick={()=>changePlan(item, "premium")} disabled={!item.email || loading}>Premium</button>
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap:"6px", marginTop:"8px" }}>
