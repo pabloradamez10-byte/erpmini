@@ -19,7 +19,7 @@ function normalizeMoney(value) {
 function statusLabel(status) {
   if (status === "aberto") return "Aberto";
   if (status === "andamento") return "Em andamento";
-  if (status === "pagamento") return "Aguardando pagamento";
+  if (status === "pagamento") return "Pronto para receber";
   if (status === "concluido") return "Concluído";
   if (status === "cancelado") return "Cancelado";
   return "Aberto";
@@ -101,6 +101,12 @@ export default function ServicesModule({
   };
 
   const openService = (service) => {
+    if (["concluido", "cancelado"].includes(String(service.status || ""))) {
+      setSelectedService(selectedService?.id === service.id ? null : service);
+      notify?.("Serviço concluído fica somente para consulta.");
+      return;
+    }
+
     setDraft({
       id: service.id,
       clientMode: "existente",
@@ -210,7 +216,7 @@ export default function ServicesModule({
       return;
     }
     const payload = saveStep("pagamento");
-    if (payload) notify?.("Serviço pronto para pagamento.");
+    if (payload) notify?.("Serviço pronto para receber.");
   };
 
   const addLabor = () => {
@@ -469,6 +475,7 @@ ${materialRows || '<div class="small">Sem materiais.</div>'}
         <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginTop:"9px" }}>
           <span style={{ background:"#f0fdf4", color:"#166534", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>Mão de obra: {fmtCur(service.laborTotal)}</span>
           <span style={{ background:"#fff7ed", color:"#9a3412", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>Materiais: {fmtCur(service.materialsTotal)}</span>
+          {(Number(service.discount) || 0) > 0 && <span style={{ background:"#fef2f2", color:"#991b1b", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>Desc.: {fmtCur(service.discount)}</span>}
           <span style={{ background:"#f8fafc", color:"#64748b", borderRadius:"999px", padding:"3px 8px", fontSize:"11px", fontWeight:"900" }}>{service.paymentMethod}</span>
         </div>
 
@@ -496,6 +503,21 @@ ${materialRows || '<div class="small">Sem materiais.</div>'}
                 <span>{item.qty}x {item.name}</span><strong>{fmtCur((Number(item.qty)||0)*(Number(item.price)||0))}</strong>
               </div>
             ))}
+
+            <div style={{ marginTop:"12px", background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", fontSize:"12px" }}>
+                <span>Mão de obra</span><strong>{fmtCur(service.laborTotal || 0)}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", fontSize:"12px" }}>
+                <span>Peças/materiais</span><strong>{fmtCur(service.materialsTotal || 0)}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 0", fontSize:"12px", color:"#991b1b" }}>
+                <span>Desconto</span><strong>{fmtCur(service.discount || 0)}</strong>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", paddingTop:"8px", marginTop:"6px", borderTop:"1px solid #e2e8f0", fontSize:"15px", fontWeight:"900" }}>
+                <span>Total</span><span>{fmtCur(service.total || 0)}</span>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -537,7 +559,7 @@ ${materialRows || '<div class="small">Sem materiais.</div>'}
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginBottom:"14px" }}>
               {stepBox("aberto", "Aberto", "Recebido")}
               {stepBox("andamento", "Andamento", "Executando")}
-              {stepBox("pagamento", "Pagamento", "Pronto")}
+              {stepBox("pagamento", "Receber", "Pronto")}
               {stepBox("concluido", "Concluído", "Finalizado")}
             </div>
 
@@ -561,8 +583,7 @@ ${materialRows || '<div class="small">Sem materiais.</div>'}
 
             <textarea style={{ ...inp, minHeight:"92px", marginBottom:"10px" }} value={draft.description} onChange={e=>updateDraft({ description:e.target.value })} placeholder="O que será feito? Ex.: troca de óleo, instalação, manutenção..." />
 
-            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
-              <button style={btnSm("#2563eb")} onClick={()=>saveStep("aberto")}>Salvar aberto</button>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:"8px" }}>
               <button style={btnSm("#f97316")} onClick={sendToWork}>Enviar para andamento</button>
             </div>
           </div>
@@ -634,7 +655,7 @@ ${materialRows || '<div class="small">Sem materiais.</div>'}
             </div>
 
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr", gap:"8px", marginTop:"12px" }}>
-              <button style={btnSm("#7c3aed")} onClick={sendToPayment}>Pronto para pagamento</button>
+              <button style={btnSm("#7c3aed")} onClick={sendToPayment}>Pronto para receber</button>
               <button style={btnSm("#16a34a")} onClick={finishPayment}>Receber e concluir</button>
               <button style={btnSm("#991b1b")} onClick={cancelService}>Cancelar serviço</button>
             </div>
