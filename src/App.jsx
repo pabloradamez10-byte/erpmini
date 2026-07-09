@@ -1550,6 +1550,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [products, setProducts]   = useState(()=>loadLS("erpmini_products", initialProducts));
   const [cart, setCart]           = useState([]);
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
+  const [services, setServices] = useState(()=>loadLS("erpmini_services", []));
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
   const [cashClosures, setCashClosures] = useState(()=>loadLS("erpmini_cash_closures", []));
   const [cashOps, setCashOps] = useState(()=>loadLS("erpmini_cash_ops", []));
