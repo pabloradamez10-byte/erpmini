@@ -365,7 +365,8 @@ export default function MasterSaasPanel({
       return false;
     }
 
-    const current = getLicenseByEmail(cleanEmail) || {};
+    const existingLicense = getLicenseByEmail(cleanEmail);
+    const current = existingLicense || {};
     const plan = normalizePlan(patch.plan ?? current.plan ?? "starter");
 
     const payload = {
@@ -386,8 +387,8 @@ export default function MasterSaasPanel({
     setLoading(true);
 
     const licenseQuery = supabase.from("erpmini_licenses");
-    const { error } = current.id
-      ? await licenseQuery.update(payload).eq("id", current.id)
+    const { error } = existingLicense
+      ? await licenseQuery.update(payload).eq("email", cleanEmail)
       : await licenseQuery.insert(payload);
 
     setLoading(false);
