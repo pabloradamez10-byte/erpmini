@@ -76,7 +76,8 @@ const CLOUD_KEYS = [
   "erpmini_salecounter",
   "erpmini_sales",
   "erpmini_services",
-  "erpmini_storename"
+  "erpmini_storename",
+  "erpmini_technicians"
 ];
 
 let cloudUserId = null;
@@ -5361,7 +5362,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-servicos3</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-servicos4-pro</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
