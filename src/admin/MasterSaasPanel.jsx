@@ -384,7 +384,12 @@ export default function MasterSaasPanel({
     };
 
     setLoading(true);
-    const { error } = await supabase.from("erpmini_licenses").upsert(payload, { onConflict: "email" });
+
+    const licenseQuery = supabase.from("erpmini_licenses");
+    const { error } = current.id
+      ? await licenseQuery.update(payload).eq("id", current.id)
+      : await licenseQuery.insert(payload);
+
     setLoading(false);
 
     if (error) {
