@@ -253,7 +253,8 @@ export default function ServicesModule({
   const [filter, setFilter] = useState("ativos");
   const [draft, setDraft] = useState(emptyDraft());
   const [selectedService, setSelectedService] = useState(null);
-  const [formSection, setFormSection] = useState("geral");
+  const [formSection, setFormSection] = useState("abertura");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [technicians, setTechnicians] = useState(loadTechnicians);
   const [newTech, setNewTech] = useState("");
   const photoInputRef = useRef(null);
@@ -317,7 +318,8 @@ export default function ServicesModule({
       ...emptyDraft(),
       history: pushHistory([], "Criação", "Nova ordem de serviço iniciada."),
     });
-    setFormSection("geral");
+    setFormSection("abertura");
+    setShowAdvanced(false);
     setView("form");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -363,7 +365,15 @@ export default function ServicesModule({
       notes: service.notes || "",
       history: service.history || [],
     });
-    setFormSection("geral");
+    const nextSection = service.status === "pagamento"
+      ? "entrega"
+      : service.status === "andamento"
+        ? "execucao"
+        : ["orcamento", "aguardando_aprovacao", "aprovado"].includes(service.status)
+          ? "orcamento"
+          : "abertura";
+    setFormSection(nextSection);
+    setShowAdvanced(false);
     setView("form");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -498,15 +508,17 @@ export default function ServicesModule({
   const sendToWork = () => {
     const payload = saveStep("andamento", "Serviço iniciado", draft.technician ? `Responsável: ${draft.technician}.` : "Execução iniciada.");
     if (payload) notify?.("Serviço enviado para andamento.");
+    return payload;
   };
 
   const sendToPayment = () => {
     if (draft.laborItems.length === 0 && draft.materialItems.length === 0) {
       notify?.("Adicione mão de obra ou peças/materiais antes do recebimento.", "error");
-      return;
+      return null;
     }
     const payload = saveStep("pagamento", "Serviço pronto", "Aguardando recebimento.");
     if (payload) notify?.("Serviço pronto para receber.");
+    return payload;
   };
 
   const addLabor = () => {
@@ -687,11 +699,78 @@ export default function ServicesModule({
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
   };
 
-  const sectionButton = (key, label) => (
-    <button type="button" onClick={() => setFormSection(key)} style={{ border: "none", borderRadius: "12px", padding: "10px 8px", fontWeight: 900, background: formSection === key ? "#e94560" : "#f1f5f9", color: formSection === key ? "#fff" : "#64748b" }}>
-      {label}
-    </button>
-  );
+  const saveOpeningAndContinue = () => {
+    const payload = saveStep("aberto", "Abertura salva", "Dados do cliente e do serviço registrados.");
+    if (payload) {
+      setFormSection("orcamento");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const saveBudgetOnly = () => {
+    const payload = saveStep(draft.status === "aberto" ? "orcamento" : draft.status, "Orçamento salvo", "Itens e valores atualizados.");
+    if (payload) notify?.("Orçamento salvo.");
+  };
+
+  const startExecution = () => {
+    const payload = sendToWork();
+    if (payload) {
+      setFormSection("execucao");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const markReady = () => {
+    const payload = sendToPayment();
+    if (payload) {
+      setFormSection("entrega");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const currentSavedService = () => services.find((s) => String(s.id) === String(draft.id));
+
+  const saveAndPrint = () => {
+    const payload = saveStep(draft.status || "orcamento", "Documento atualizado", "OS preparada para PDF.");
+    if (payload) printService(payload);
+  };
+
+  const saveAndWhatsApp = () => {
+    const payload = saveStep(draft.status || "orcamento", "Compartilhamento", "OS preparada para envio ao cliente.");
+    if (payload) shareWhatsApp(payload);
+  };
+
+  const steps = [
+    { key: "abertura", number: 1, label: "Abertura" },
+    { key: "orcamento", number: 2, label: "Orçamento" },
+    { key: "execucao", number: 3, label: "Execução" },
+    { key: "entrega", number: 4, label: "Entrega" },
+  ];
+
+  const sectionButton = (key, label, number) => {
+    const active = formSection === key;
+    return (
+      <button
+        type="button"
+        onClick={() => setFormSection(key)}
+        style={{
+          border: active ? "2px solid #e94560" : "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "10px 6px",
+          fontWeight: 900,
+          background: active ? "#fff1f4" : "#fff",
+          color: active ? "#e94560" : "#64748b",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "3px",
+        }}
+      >
+        <span style={{ width: "24px", height: "24px", borderRadius: "50%", display: "grid", placeItems: "center", background: active ? "#e94560" : "#e2e8f0", color: active ? "#fff" : "#64748b", fontSize: "12px" }}>{number}</span>
+        <span style={{ fontSize: "11px" }}>{label}</span>
+      </button>
+    );
+  };
 
   const ServiceCard = ({ service }) => {
     const st = statusStyle(service.status);
@@ -755,28 +834,92 @@ export default function ServicesModule({
       ) : (
         <div>
           <div style={{ ...card, borderRadius: "22px", padding: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}><div><div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>{draft.id ? `Serviço #${draft.id}` : "Abrir Serviço"}</div><div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Salve e avance por etapas.</div></div><span style={{ ...statusStyle(draft.status), background: statusStyle(draft.status).bg, borderRadius: "999px", padding: "6px 10px", fontWeight: 900, fontSize: "12px" }}>{statusLabel(draft.status)}</span></div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "6px", marginTop: "12px" }}>{sectionButton("geral","Geral")}{sectionButton("itens","Itens")}{sectionButton("evidencias","Fotos/Assinatura")}{sectionButton("financeiro","Financeiro")}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>{draft.id ? `Serviço #${draft.id}` : "Nova Ordem de Serviço"}</div>
+                <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Siga uma etapa por vez. Os dados permanecem salvos.</div>
+              </div>
+              <span style={{ background: statusStyle(draft.status).bg, color: statusStyle(draft.status).color, borderRadius: "999px", padding: "6px 10px", fontWeight: 900, fontSize: "12px" }}>{statusLabel(draft.status)}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "6px", marginTop: "14px" }}>
+              {steps.map((step) => sectionButton(step.key, step.label, step.number))}
+            </div>
           </div>
 
-          {formSection === "geral" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+          {formSection === "abertura" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
+            <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>1. Cliente e serviço</div>
+            <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Registre apenas as informações necessárias para abrir a OS.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
               <button style={{ ...btn(draft.clientMode === "existente" ? "#e94560" : "#e2e8f0"), color: draft.clientMode === "existente" ? "#fff" : "#334155" }} onClick={() => updateDraft({ clientMode: "existente" })}>Cliente existente</button>
               <button style={{ ...btn(draft.clientMode === "novo" ? "#e94560" : "#e2e8f0"), color: draft.clientMode === "novo" ? "#fff" : "#334155" }} onClick={() => updateDraft({ clientMode: "novo" })}>Novo cliente</button>
             </div>
-            {draft.clientMode === "existente" ? <select style={{ ...inp, marginTop: "8px" }} value={draft.clientId} onChange={(e) => updateDraft({ clientId: e.target.value })}><option value="">Selecione o cliente</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.newClient.name} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, name: e.target.value } })} placeholder="Nome"/><input style={inp} value={draft.newClient.phone} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, phone: e.target.value } })} placeholder="Telefone"/><input style={inp} value={draft.newClient.email} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, email: e.target.value } })} placeholder="E-mail"/></div>}
-            <textarea style={{ ...inp, minHeight: "90px", marginTop: "8px" }} value={draft.description} onChange={(e) => updateDraft({ description: e.target.value })} placeholder="Serviço solicitado" />
-            <textarea style={{ ...inp, minHeight: "75px", marginTop: "8px" }} value={draft.diagnosis} onChange={(e) => updateDraft({ diagnosis: e.target.value })} placeholder="Diagnóstico / observações técnicas" />
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.equipment} onChange={(e) => updateDraft({ equipment: e.target.value })} placeholder="Equipamento / objeto (opcional)"/><input style={inp} value={draft.identifier} onChange={(e) => updateDraft({ identifier: e.target.value })} placeholder="Placa / série / identificação"/><select style={inp} value={draft.technician} onChange={(e) => updateDraft({ technician: e.target.value })}><option value="">Responsável</option>{technicians.map((t) => <option key={t}>{t}</option>)}</select><input style={inp} type="date" value={draft.promisedDate} onChange={(e) => updateDraft({ promisedDate: e.target.value })}/></div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", marginTop: "8px" }}><input style={inp} value={newTech} onChange={(e) => setNewTech(e.target.value)} placeholder="Cadastrar responsável"/><button style={btnSm("#0f172a")} onClick={addTechnician}>Adicionar</button></div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: "8px", marginTop: "12px" }}><button style={btnSm("#2563eb")} onClick={() => saveStep("aberto","OS salva","Informações iniciais registradas.")}>Salvar aberto</button><button style={btnSm("#7c3aed")} onClick={sendBudget}>Enviar orçamento</button><button style={btnSm("#16a34a")} onClick={approveBudget}>Aprovar orçamento</button><button style={btnSm("#f97316")} onClick={sendToWork}>Enviar para andamento</button><button style={btnSm("#991b1b")} onClick={rejectBudget}>Recusar/cancelar</button></div>
+            {draft.clientMode === "existente" ? <select style={{ ...inp, marginTop: "8px" }} value={draft.clientId} onChange={(e) => updateDraft({ clientId: e.target.value })}><option value="">Selecione o cliente</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.newClient.name} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, name: e.target.value } })} placeholder="Nome do cliente"/><input style={inp} value={draft.newClient.phone} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, phone: e.target.value } })} placeholder="Telefone / WhatsApp"/><input style={inp} value={draft.newClient.email} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, email: e.target.value } })} placeholder="E-mail (opcional)"/></div>}
+            <textarea style={{ ...inp, minHeight: "90px", marginTop: "8px" }} value={draft.description} onChange={(e) => updateDraft({ description: e.target.value })} placeholder="O que o cliente solicitou?" />
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}>
+              <input style={inp} value={draft.equipment} onChange={(e) => updateDraft({ equipment: e.target.value })} placeholder="Equipamento / objeto (opcional)"/>
+              <input style={inp} value={draft.identifier} onChange={(e) => updateDraft({ identifier: e.target.value })} placeholder="Placa / série / identificação"/>
+              <select style={inp} value={draft.technician} onChange={(e) => updateDraft({ technician: e.target.value })}><option value="">Responsável pelo serviço</option>{technicians.map((t) => <option key={t}>{t}</option>)}</select>
+              <input style={inp} type="date" value={draft.promisedDate} onChange={(e) => updateDraft({ promisedDate: e.target.value })}/>
+            </div>
+            <details style={{ marginTop: "10px" }}><summary style={{ cursor: "pointer", color: "#475569", fontWeight: 900 }}>Cadastrar novo responsável</summary><div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", marginTop: "8px" }}><input style={inp} value={newTech} onChange={(e) => setNewTech(e.target.value)} placeholder="Nome do responsável"/><button style={btnSm("#0f172a")} onClick={addTechnician}>Adicionar</button></div></details>
+            <button style={{ ...btn("#e94560"), width: "100%", marginTop: "14px" }} onClick={saveOpeningAndContinue}>Salvar e continuar para orçamento</button>
+            <button style={{ ...btn("#e2e8f0"), color: "#334155", width: "100%", marginTop: "8px" }} onClick={() => saveStep("aberto", "Abertura salva", "Informações iniciais registradas.")}>Salvar e permanecer aqui</button>
           </div>}
 
-          {formSection === "itens" && <><div style={{ ...card, borderRadius: "22px", padding: "18px" }}><div style={{ fontWeight: 900, fontSize: "18px" }}>Mão de obra</div><div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 140px auto", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.laborName} onChange={(e) => updateDraft({ laborName: e.target.value })} placeholder="Descrição"/><input style={inp} value={draft.laborValue} onChange={(e) => updateDraft({ laborValue: e.target.value })} placeholder="Valor"/><button style={btnSm("#16a34a")} onClick={addLabor}>Adicionar</button></div>{draft.laborItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.name}</span><span><b>{fmtCur(i.value)}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ laborItems: draft.laborItems.filter((x) => x.id !== i.id) })}>X</button></span></div>)}</div><div style={{ ...card, borderRadius: "22px", padding: "18px" }}><div style={{ fontWeight: 900, fontSize: "18px" }}>Peças / materiais</div><div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 100px auto", gap: "8px", marginTop: "8px" }}><select style={inp} value={draft.productId} onChange={(e) => updateDraft({ productId: e.target.value })}><option value="">Selecionar do estoque</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name} — {p.stock || 0} un.</option>)}</select><input style={inp} type="number" min="1" value={draft.productQty} onChange={(e) => updateDraft({ productQty: e.target.value })}/><button style={btnSm("#16a34a")} onClick={addMaterial}>Reservar</button></div>{draft.materialItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.qty}x {i.name} <small style={{ color: "#f97316" }}>reservado</small></span><span><b>{fmtCur(i.qty*i.price)}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ materialItems: draft.materialItems.filter((x) => String(x.id) !== String(i.id)) })}>X</button></span></div>)}</div></>}
+          {formSection === "orcamento" && <div>
+            <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
+              <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>2. Montar orçamento</div>
+              <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Adicione mão de obra e materiais. O total é calculado automaticamente.</div>
+              <div style={{ fontWeight: 900, fontSize: "17px" }}>Mão de obra</div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 140px auto", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.laborName} onChange={(e) => updateDraft({ laborName: e.target.value })} placeholder="Descrição do serviço"/><input style={inp} value={draft.laborValue} onChange={(e) => updateDraft({ laborValue: e.target.value })} placeholder="Valor"/><button style={btnSm("#16a34a")} onClick={addLabor}>Adicionar</button></div>
+              {draft.laborItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.name}</span><span><b>{fmtCur(i.value)}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ laborItems: draft.laborItems.filter((x) => x.id !== i.id) })}>×</button></span></div>)}
+              <div style={{ fontWeight: 900, fontSize: "17px", marginTop: "18px" }}>Peças e materiais</div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 100px auto", gap: "8px", marginTop: "8px" }}><select style={inp} value={draft.productId} onChange={(e) => updateDraft({ productId: e.target.value })}><option value="">Selecionar do estoque</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name} — {p.stock || 0} un.</option>)}</select><input style={inp} type="number" min="1" value={draft.productQty} onChange={(e) => updateDraft({ productQty: e.target.value })}/><button style={btnSm("#16a34a")} onClick={addMaterial}>Reservar</button></div>
+              {draft.materialItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.qty}x {i.name} <small style={{ color: "#f97316" }}>reservado</small></span><span><b>{fmtCur(i.qty*i.price)}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ materialItems: draft.materialItems.filter((x) => String(x.id) !== String(i.id)) })}>×</button></span></div>)}
+              <input style={{ ...inp, marginTop: "12px" }} value={draft.discount} onChange={(e) => updateDraft({ discount: e.target.value })} placeholder="Desconto (opcional)"/>
+              <div style={{ background: "#0f172a", color: "#fff", borderRadius: "18px", padding: "16px", marginTop: "12px" }}><div style={{ display: "flex", justifyContent: "space-between" }}><span>Mão de obra</span><b>{fmtCur(laborTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Materiais</span><b>{fmtCur(materialsTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Desconto</span><b>{fmtCur(discountValue)}</b></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: "22px", fontWeight: 900, borderTop: "1px solid #334155", marginTop: "8px", paddingTop: "8px" }}><span>Total</span><span>{fmtCur(total)}</span></div></div>
+            </div>
+            <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
+              <div style={{ fontWeight: 900, fontSize: "17px" }}>Ações do orçamento</div>
+              <button style={{ ...btn("#2563eb"), width: "100%", marginTop: "10px" }} onClick={saveBudgetOnly}>Salvar orçamento</button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}><button style={btnSm("#0f172a")} onClick={saveAndPrint}>PDF / Imprimir</button><button style={btnSm("#16a34a")} onClick={saveAndWhatsApp}>WhatsApp</button></div>
+              {draft.status !== "aguardando_aprovacao" && draft.approvalStatus !== "aprovado" && <button style={{ ...btn("#7c3aed"), width: "100%", marginTop: "8px" }} onClick={sendBudget}>Marcar como enviado ao cliente</button>}
+              {draft.status === "aguardando_aprovacao" && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}><button style={btnSm("#16a34a")} onClick={approveBudget}>Cliente aprovou</button><button style={btnSm("#991b1b")} onClick={rejectBudget}>Cliente recusou</button></div>}
+              {(draft.approvalStatus === "aprovado" || draft.status === "aprovado" || draft.status === "aberto" || draft.status === "orcamento") && <button style={{ ...btn("#f97316"), width: "100%", marginTop: "8px" }} onClick={startExecution}>Iniciar execução</button>}
+            </div>
+          </div>}
 
-          {formSection === "evidencias" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}><div style={{ fontWeight: 900, fontSize: "18px" }}>Fotos e anexos</div><input ref={photoInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => handlePhotos(e.target.files)}/><button style={{ ...btn("#2563eb"), width: "100%", marginTop: "8px" }} onClick={() => photoInputRef.current?.click()}>Adicionar fotos ({draft.photos.length}/{MAX_PHOTOS})</button><div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "6px", marginTop: "8px" }}>{draft.photos.map((src,idx) => <div key={idx} style={{ position: "relative" }}><img src={src} alt="Serviço" style={{ width: "100%", height: "90px", objectFit: "cover", borderRadius: "10px" }}/><button onClick={() => updateDraft({ photos: draft.photos.filter((_,i) => i !== idx) })} style={{ position: "absolute", top: 3, right: 3, border: "none", background: "#991b1b", color: "#fff", borderRadius: "50%", width: 25, height: 25 }}>×</button></div>)}</div><input ref={attachmentInputRef} type="file" multiple hidden onChange={(e) => handleAttachments(e.target.files)}/><button style={{ ...btn("#64748b"), width: "100%", marginTop: "10px" }} onClick={() => attachmentInputRef.current?.click()}>Adicionar anexos</button>{draft.attachments.map((a) => <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "7px", background: "#f8fafc", marginTop: "5px", borderRadius: "8px" }}><span>{a.name}</span><button onClick={() => updateDraft({ attachments: draft.attachments.filter((x) => x.id !== a.id) })}>Excluir</button></div>)}<div style={{ fontWeight: 900, fontSize: "18px", marginTop: "18px" }}>Assinatura do cliente</div><SignaturePad value={draft.signature} onChange={(signature) => updateDraft({ signature })}/><button style={{ ...btn("#2563eb"), width: "100%", marginTop: "10px" }} onClick={() => saveStep(draft.status,"Evidências salvas","Fotos, anexos ou assinatura atualizados.")}>Salvar evidências</button></div>}
+          {formSection === "execucao" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
+            <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>3. Execução do serviço</div>
+            <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Registre o trabalho realizado, fotos e observações técnicas.</div>
+            <textarea style={{ ...inp, minHeight: "90px" }} value={draft.diagnosis} onChange={(e) => updateDraft({ diagnosis: e.target.value })} placeholder="Diagnóstico e trabalho realizado" />
+            <input style={{ ...inp, marginTop: "8px" }} type="number" min="0" value={draft.timeMinutes} onChange={(e) => updateDraft({ timeMinutes: e.target.value })} placeholder="Tempo gasto em minutos"/>
+            <textarea style={{ ...inp, minHeight: "75px", marginTop: "8px" }} value={draft.notes} onChange={(e) => updateDraft({ notes: e.target.value })} placeholder="Observações internas"/>
+            <input ref={photoInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => handlePhotos(e.target.files)}/>
+            <button style={{ ...btn("#2563eb"), width: "100%", marginTop: "12px" }} onClick={() => photoInputRef.current?.click()}>Adicionar fotos ({draft.photos.length}/{MAX_PHOTOS})</button>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "6px", marginTop: "8px" }}>{draft.photos.map((src,idx) => <div key={idx} style={{ position: "relative" }}><img src={src} alt="Serviço" style={{ width: "100%", height: "90px", objectFit: "cover", borderRadius: "10px" }}/><button onClick={() => updateDraft({ photos: draft.photos.filter((_,i) => i !== idx) })} style={{ position: "absolute", top: 3, right: 3, border: "none", background: "#991b1b", color: "#fff", borderRadius: "50%", width: 25, height: 25 }}>×</button></div>)}</div>
+            <input ref={attachmentInputRef} type="file" multiple hidden onChange={(e) => handleAttachments(e.target.files)}/>
+            <button style={{ ...btn("#64748b"), width: "100%", marginTop: "10px" }} onClick={() => attachmentInputRef.current?.click()}>Adicionar anexos</button>
+            {draft.attachments.map((a) => <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px", background: "#f8fafc", marginTop: "5px", borderRadius: "8px" }}><span>{a.name}</span><button onClick={() => updateDraft({ attachments: draft.attachments.filter((x) => x.id !== a.id) })}>Excluir</button></div>)}
+            <button style={{ ...btn("#2563eb"), width: "100%", marginTop: "12px" }} onClick={() => saveStep("andamento", "Execução atualizada", "Dados da execução e evidências salvos.")}>Salvar andamento</button>
+            <button style={{ ...btn("#7c3aed"), width: "100%", marginTop: "8px" }} onClick={markReady}>Marcar como pronto</button>
+          </div>}
 
-          {formSection === "financeiro" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}><div style={{ fontWeight: 900, fontSize: "18px" }}>Financeiro e garantia</div><div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}><select style={inp} value={draft.paymentMethod} onChange={(e) => updateDraft({ paymentMethod: e.target.value })}>{PAYMENT_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}</select><input style={inp} value={draft.discount} onChange={(e) => updateDraft({ discount: e.target.value })} placeholder="Desconto"/>{draft.paymentMethod === "crediario" && <input style={inp} type="date" value={draft.dueDate} onChange={(e) => updateDraft({ dueDate: e.target.value })}/>}<input style={inp} type="number" value={draft.timeMinutes} onChange={(e) => updateDraft({ timeMinutes: e.target.value })} placeholder="Tempo gasto (min)"/><input style={inp} value={draft.commissionPercent} onChange={(e) => updateDraft({ commissionPercent: e.target.value })} placeholder="Comissão sobre lucro (%)"/><input style={inp} type="number" value={draft.warrantyDays} onChange={(e) => updateDraft({ warrantyDays: e.target.value })} placeholder="Garantia (dias)"/><input style={inp} value={draft.warrantyNotes} onChange={(e) => updateDraft({ warrantyNotes: e.target.value })} placeholder="Observações da garantia"/></div><textarea style={{ ...inp, minHeight: "75px", marginTop: "8px" }} value={draft.notes} onChange={(e) => updateDraft({ notes: e.target.value })} placeholder="Observações internas"/><div style={{ background: "#0f172a", color: "#fff", borderRadius: "18px", padding: "16px", marginTop: "12px" }}><div style={{ display: "flex", justifyContent: "space-between" }}><span>Mão de obra</span><b>{fmtCur(laborTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Materiais</span><b>{fmtCur(materialsTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Desconto</span><b>{fmtCur(discountValue)}</b></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: "21px", fontWeight: 900, borderTop: "1px solid #334155", marginTop: "8px", paddingTop: "8px" }}><span>Total</span><span>{fmtCur(total)}</span></div><div style={{ display: "flex", justifyContent: "space-between", color: "#86efac", marginTop: "6px" }}><span>Lucro estimado</span><b>{fmtCur(profit)}</b></div><div style={{ display: "flex", justifyContent: "space-between", color: "#c4b5fd" }}><span>Comissão</span><b>{fmtCur(commission)}</b></div></div><div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "10px" }}><button style={btnSm("#7c3aed")} onClick={sendToPayment}>Pronto para receber</button><button style={btnSm("#16a34a")} onClick={finishPayment}>Receber e concluir</button><button style={btnSm("#991b1b")} onClick={cancelService}>Cancelar serviço</button></div></div>}
+          {formSection === "entrega" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
+            <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>4. Entrega e pagamento</div>
+            <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Confirme pagamento, garantia e assinatura antes de concluir.</div>
+            <select style={inp} value={draft.paymentMethod} onChange={(e) => updateDraft({ paymentMethod: e.target.value })}>{PAYMENT_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}</select>
+            {draft.paymentMethod === "crediario" && <input style={{ ...inp, marginTop: "8px" }} type="date" value={draft.dueDate} onChange={(e) => updateDraft({ dueDate: e.target.value })}/>} 
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}><input style={inp} type="number" value={draft.warrantyDays} onChange={(e) => updateDraft({ warrantyDays: e.target.value })} placeholder="Garantia em dias"/><input style={inp} value={draft.warrantyNotes} onChange={(e) => updateDraft({ warrantyNotes: e.target.value })} placeholder="Condições da garantia"/></div>
+            <div style={{ fontWeight: 900, fontSize: "17px", marginTop: "16px" }}>Assinatura do cliente</div>
+            <SignaturePad value={draft.signature} onChange={(signature) => updateDraft({ signature })}/>
+            <button type="button" onClick={() => setShowAdvanced((v) => !v)} style={{ width: "100%", marginTop: "12px", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "12px", padding: "10px", fontWeight: 900, color: "#475569" }}>{showAdvanced ? "Ocultar opções administrativas" : "Mostrar opções administrativas"}</button>
+            {showAdvanced && <div style={{ background: "#f8fafc", borderRadius: "14px", padding: "12px", marginTop: "8px" }}><input style={inp} value={draft.commissionPercent} onChange={(e) => updateDraft({ commissionPercent: e.target.value })} placeholder="Comissão sobre lucro (%)"/><div style={{ display: "flex", justifyContent: "space-between", color: "#166534", marginTop: "8px" }}><span>Lucro estimado</span><b>{fmtCur(profit)}</b></div><div style={{ display: "flex", justifyContent: "space-between", color: "#6d28d9" }}><span>Comissão</span><b>{fmtCur(commission)}</b></div></div>}
+            <div style={{ background: "#0f172a", color: "#fff", borderRadius: "18px", padding: "16px", marginTop: "12px" }}><div style={{ display: "flex", justifyContent: "space-between" }}><span>Mão de obra</span><b>{fmtCur(laborTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Materiais</span><b>{fmtCur(materialsTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Desconto</span><b>{fmtCur(discountValue)}</b></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: "22px", fontWeight: 900, borderTop: "1px solid #334155", marginTop: "8px", paddingTop: "8px" }}><span>Total</span><span>{fmtCur(total)}</span></div></div>
+            <button style={{ ...btn("#16a34a"), width: "100%", marginTop: "12px" }} onClick={finishPayment}>Receber e concluir serviço</button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}><button style={btnSm("#0f172a")} onClick={saveAndPrint}>PDF / Imprimir</button><button style={btnSm("#16a34a")} onClick={saveAndWhatsApp}>WhatsApp</button></div>
+            <button style={{ ...btn("#991b1b"), width: "100%", marginTop: "8px" }} onClick={cancelService}>Cancelar serviço</button>
+          </div>}
 
           {finalReadOnly && <div style={{ ...card, background: "#fff7ed", color: "#9a3412", fontWeight: 900 }}>Serviço finalizado: somente consulta.</div>}
         </div>
