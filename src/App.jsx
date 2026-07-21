@@ -664,7 +664,7 @@ function PlanUsageCard({ plan, products = [], clients = [], sales = [] }) {
 }
 
 
-const APP_VERSION = "ERPmini-v-off1-offline-sync";
+const APP_VERSION = "ERPmini-v6-piloto-comercial";
 
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
@@ -1592,28 +1592,33 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const backupAutoRan = useRef(false);
   const barcodeRef  = useRef();
   const saleCounter = useRef(loadLS("erpmini_salecounter", 1000));
-  const [activationKey, setActivationKey] = useState(()=>loadLS("erpmini_activation_key", ""));
-  const [activationInput, setActivationInput] = useState(()=>loadLS("erpmini_activation_key", ""));
+  // v6: a licença válida já foi verificada no AuthGate pelo Supabase.
+  // O antigo segundo bloqueio via Google Sheets foi desativado para evitar dupla ativação.
+  const [activationKey] = useState(currentUserEmail || "supabase");
+  const [activationInput, setActivationInput] = useState(currentUserEmail || "");
   const [activationError, setActivationError] = useState("");
   const [license, setLicense] = useState({
-    loading:true,
-    active:false,
-    needsActivation:!loadLS("erpmini_activation_key", ""),
-    message:"Verificando licenca..."
+    loading:false,
+    active:true,
+    needsActivation:false,
+    clientId:currentUserEmail,
+    empresa:storeName,
+    message:"Licença validada pelo Supabase."
   });
 
-  const refreshLicense = useCallback(async (key = activationKey) => {
-    setLicense(prev => ({ ...prev, loading:true }));
-    const result = await checkMonthlyLicense(key);
+  const refreshLicense = useCallback(async () => {
+    const result = {
+      loading:false,
+      active:true,
+      needsActivation:false,
+      clientId:currentUserEmail,
+      empresa:storeName,
+      message:"Licença validada pelo Supabase."
+    };
     setLicense(result);
+    notify("Licença atualizada pelo Supabase.");
     return result;
-  }, [activationKey]);
-
-  useEffect(()=>{
-    let alive = true;
-    checkMonthlyLicense(activationKey).then(result => { if (alive) setLicense(result); });
-    return () => { alive = false; };
-  }, [activationKey]);
+  }, [currentUserEmail, storeName]);
 
   useEffect(()=>{
     let bannerTimer = null;
@@ -1848,33 +1853,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   };
 
   const activateLicense = async () => {
-    const key = activationInput.trim();
-    if (!key) { setActivationError("Digite a chave de ativacao."); return; }
-
     setActivationError("");
-    const result = await checkMonthlyLicense(key);
-
-    if (result.active) {
-      saveLS("erpmini_activation_key", key);
-      setActivationKey(key);
-      setLicense(result);
-    } else {
-      setActivationError(result.message || "Licenca nao liberada.");
-      setLicense(result);
-    }
+    await refreshLicense();
   };
 
   const changeActivationKey = () => {
-    localStorage.removeItem("erpmini_activation_key");
-    setActivationKey("");
-    setActivationInput("");
+    setActivationInput(currentUserEmail || "");
     setActivationError("");
-    setLicense({
-      loading:false,
-      active:false,
-      needsActivation:true,
-      message:"Digite sua chave de ativacao."
-    });
+    notify("A licença agora é vinculada ao e-mail da conta no Supabase.");
   };
 
   useEffect(()=>{
@@ -5288,28 +5274,6 @@ const VendasTab = () => (
     </div>
   );
 
-  if (license.needsActivation) {
-    return (
-      <ActivationScreen
-        value={activationInput}
-        onChange={setActivationInput}
-        onActivate={activateLicense}
-        checking={license.loading}
-        error={activationError}
-      />
-    );
-  }
-
-  if (license.loading) {
-    return (
-      <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Segoe UI',sans-serif" }}>
-        <div style={{ background:"#fff", borderRadius:"16px", padding:"22px 26px", fontWeight:"800", color:"#1a1a2e", boxShadow:"0 8px 30px rgba(0,0,0,0.08)" }}>Licenca Verificando licenca...</div>
-      </div>
-    );
-  }
-
-  if (!license.active) return <LicenseBlockedScreen license={license} />;
-
   return (
     <div style={{ fontFamily:"'Segoe UI',sans-serif", background:"#f0f4f8", minHeight:"100vh", paddingBottom: isMobile?"80px":"0" }}>
 
@@ -5362,7 +5326,7 @@ const VendasTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v-servicos5-fluxo</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v6-piloto-comercial</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
