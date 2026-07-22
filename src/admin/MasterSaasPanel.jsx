@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { addDiagnosticLog, clearDiagnosticLogs, getDiagnosticLogs, subscribeDiagnosticLogs } from "../utils/diagnosticLog.js";
 
 const LS_ROWS = "erpmini_saas_master_rows";
 const LS_LICENSES = "erpmini_saas_master_licenses";
@@ -96,6 +97,10 @@ export default function MasterSaasPanel({
   const [manualEmails, setManualEmails] = useState(() => loadSafe(LS_MANUAL_EMAILS, {}));
   const [showNewLicense, setShowNewLicense] = useState(() => loadSafe(LS_SHOW_NEW, false));
   const [confirmAction, setConfirmAction] = useState(null);
+  const [diagnosticLogs, setDiagnosticLogs] = useState(() => getDiagnosticLogs());
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  useEffect(() => subscribeDiagnosticLogs(() => setDiagnosticLogs(getDiagnosticLogs())), []);
 
   const [newClient, setNewClient] = useState({
     companyName: "",
@@ -326,6 +331,7 @@ export default function MasterSaasPanel({
   const loadMaster = async () => {
     setLoading(true);
     keepMsg("Buscando clientes, lojas e licenças...");
+    addDiagnosticLog("ADMIN", "Atualização iniciada", "info");
 
     try {
       const [cloudResp, licResp, reqResp] = await Promise.all([
@@ -335,12 +341,14 @@ export default function MasterSaasPanel({
       ]);
 
       if (cloudResp.error) {
+        addDiagnosticLog("ADMIN", "Falha ao carregar empresas", "error", cloudResp.error.message);
         keepMsg("Erro ao carregar lojas: " + cloudResp.error.message);
         setLoading(false);
         return;
       }
 
       if (licResp.error) {
+        addDiagnosticLog("ADMIN", "Falha ao carregar licenças", "error", licResp.error.message);
         keepMsg("Erro ao carregar licenças: " + licResp.error.message);
         setLoading(false);
         return;
@@ -349,8 +357,16 @@ export default function MasterSaasPanel({
       keepRows(cloudResp.data || []);
       keepLicenses(licResp.data || []);
       keepRequests(reqResp.error ? [] : reqResp.data || []);
-      keepMsg(`Carregado: ${(cloudResp.data || []).length} loja(s), ${(licResp.data || []).length} licença(s).`);
+      addDiagnosticLog("ADMIN", "Empresas carregadas", "success", `${(cloudResp.data || []).length} registro(s)`);
+      addDiagnosticLog("ADMIN", "Licenças carregadas", "success", `${(licResp.data || []).length} registro(s)`);
+      if (reqResp.error) {
+        addDiagnosticLog("ADMIN", "Falha ao carregar solicitações", "error", reqResp.error.message);
+      } else {
+        addDiagnosticLog("ADMIN", "Solicitações carregadas", "success", `${(reqResp.data || []).length} registro(s)`);
+      }
+      keepMsg(`Carregado: ${(cloudResp.data || []).length} loja(s), ${(licResp.data || []).length} licença(s), ${(reqResp.data || []).length} solicitação(ões).`);
     } catch (err) {
+      addDiagnosticLog("ADMIN", "Atualização interrompida", "error", err?.message || String(err));
       keepMsg("Erro inesperado: " + (err?.message || String(err)));
     } finally {
       setLoading(false);
@@ -560,14 +576,15 @@ export default function MasterSaasPanel({
     }
   };
 
-  const approveRequest = async (email) => {
-    const cleanEmail = String(email || "").trim().toLowerCase();
+  const approveRequest = async (request) => {
+    const cleanEmail = String(request?.email || "").trim().toLowerCase();
+    const requestBusinessType = request?.business_type === "servicos" ? "servicos" : "comercio";
 
     const ok = await saveLicense(cleanEmail, {
       status: "ativo",
       plan: "pro",
       expires_at: addMonths(1),
-      notes: "Aprovado pelo Painel Master."
+      notes: withBusinessNote("Aprovado pelo Painel Master.", requestBusinessType)
     });
 
     if (ok) {
@@ -582,7 +599,44 @@ export default function MasterSaasPanel({
     await loadMaster();
   };
 
-  const pendingRequests = requests.filter((r) => String(r.status || "").toLowerCase() === "pendente");
+  const deleteSignupRequest = async (request) => {
+    const confirmed = window.confirm(`Excluir a solicitação de ${request.email}?\n\nO usuário poderá enviar uma nova solicitação no próximo login.`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    const query = supabase
+      .from("erpmini_signup_requests")
+      .update({ status: "excluido", updated_at: new Date().toISOString() });
+    const { error } = request.id
+      ? await query.eq("id", request.id)
+      : await query.eq("email", String(request.email || "").trim().toLowerCase());
+    setLoading(false);
+
+    if (error) {
+      addDiagnosticLog("ADMIN", "Falha ao excluir solicitação", "error", error.message);
+      keepMsg("Erro ao excluir solicitação: " + error.message);
+      return;
+    }
+
+    addDiagnosticLog("ADMIN", "Solicitação excluída", "success", request.email);
+    keepMsg("Solicitação excluída. O usuário poderá enviar uma nova no próximo login.");
+    await loadMaster();
+  };
+
+  const normalizeRequestStatus = (status) => String(status || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const isPendingRequest = (request) => ["pendente", "pending", "aguardando"].includes(normalizeRequestStatus(request?.status));
+  const visibleRequests = requests.filter((request) => !["excluido", "excluida", "deleted"].includes(normalizeRequestStatus(request?.status)));
+  const pendingRequests = visibleRequests.filter(isPendingRequest);
+
+  const clearLogs = () => {
+    clearDiagnosticLogs();
+    setDiagnosticLogs([]);
+  };
 
   const confirmTitle = confirmAction?.type === "store" ? "Excluir loja sincronizada" : "Excluir acesso";
   const confirmDescription = confirmAction?.type === "store"
@@ -608,6 +662,92 @@ export default function MasterSaasPanel({
           {msg}
         </div>
       )}
+
+      <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"16px", padding:"12px", marginBottom:"12px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", marginBottom:visibleRequests.length ? "10px" : 0 }}>
+          <div>
+            <div style={{ fontWeight:"900", color:"#9a3412" }}>Solicitações de acesso</div>
+            <div style={{ color:"#c2410c", fontSize:"11px", fontWeight:"800" }}>
+              {pendingRequests.length} pendente(s) • {visibleRequests.length} total
+            </div>
+          </div>
+        </div>
+
+        {visibleRequests.length === 0 ? (
+          <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"700" }}>Nenhuma solicitação encontrada.</div>
+        ) : (
+          <div style={{ display:"grid", gap:"8px", maxHeight:"360px", overflowY:"auto" }}>
+            {visibleRequests.map((r, index) => {
+              const pending = isPendingRequest(r);
+              const rawStatus = String(r.status || "sem status");
+              return (
+                <div key={r.id || `${r.email}-${r.created_at || index}`} style={{ background:"#fff", border:"1px solid #fed7aa", borderRadius:"12px", padding:"10px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"8px", flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{r.email || "E-mail não informado"}</div>
+                      <div style={{ color:"#64748b", fontSize:"11px", fontWeight:"700" }}>{r.created_at ? fmtDate(r.created_at) : "Data não informada"}</div>
+                    </div>
+                    <span style={ui.pill(pending ? "#fef3c7" : normalizeRequestStatus(r.status) === "aprovado" ? "#dcfce7" : "#f1f5f9", pending ? "#92400e" : normalizeRequestStatus(r.status) === "aprovado" ? "#166534" : "#64748b")}>
+                      {rawStatus}
+                    </span>
+                  </div>
+                  <div style={{ marginTop:"6px" }}>
+                    <span style={ui.pill(r.business_type === "servicos" ? "#ecfdf5" : "#eff6ff", r.business_type === "servicos" ? "#047857" : "#2563eb")}>
+                      {r.business_type === "servicos" ? "Serviços" : "Comércio"}
+                    </span>
+                  </div>
+                  {pending && (
+                    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 1fr", gap:"8px", marginTop:"8px" }}>
+                      <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r)} disabled={loading}>Aprovar</button>
+                      <button style={{ ...btnSm("#ef4444") }} onClick={()=>rejectRequest(r.email)} disabled={loading}>Recusar</button>
+                    </div>
+                  )}
+                  <button style={{ ...btnSm("#991b1b"), width:"100%", marginTop:"8px" }} onClick={()=>deleteSignupRequest(r)} disabled={loading}>
+                    Excluir solicitação
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div style={{ background:"#0f172a", borderRadius:"16px", padding:"12px", marginBottom:"12px", color:"#fff" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px" }}>
+          <div>
+            <div style={{ fontWeight:"900" }}>Diagnóstico do sistema</div>
+            <div style={{ color:"#94a3b8", fontSize:"11px", fontWeight:"700" }}>{diagnosticLogs.length} evento(s) neste aparelho</div>
+          </div>
+          <button style={{ ...btnSm("#334155"), padding:"8px 10px" }} onClick={()=>setShowDiagnostics(!showDiagnostics)}>
+            {showDiagnostics ? "Ocultar" : "Ver logs"}
+          </button>
+        </div>
+
+        {showDiagnostics && (
+          <div style={{ marginTop:"10px" }}>
+            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"8px" }}>
+              <button style={{ ...btnSm("#991b1b"), padding:"7px 10px" }} onClick={clearLogs} disabled={!diagnosticLogs.length}>Limpar logs</button>
+            </div>
+            <div style={{ display:"grid", gap:"6px", maxHeight:"320px", overflowY:"auto" }}>
+              {diagnosticLogs.length === 0 ? (
+                <div style={{ color:"#94a3b8", fontSize:"12px", textAlign:"center", padding:"12px" }}>Nenhum evento registrado.</div>
+              ) : diagnosticLogs.map((log) => {
+                const color = log.status === "success" ? "#4ade80" : log.status === "error" ? "#f87171" : log.status === "warning" ? "#fbbf24" : "#60a5fa";
+                const icon = log.status === "success" ? "✔" : log.status === "error" ? "✖" : log.status === "warning" ? "!" : "•";
+                return (
+                  <div key={log.id} style={{ background:"#1e293b", borderRadius:"10px", padding:"8px 9px", fontSize:"11px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:"8px" }}>
+                      <strong style={{ color }}>{icon} {log.scope} — {log.step}</strong>
+                      <span style={{ color:"#94a3b8", whiteSpace:"nowrap" }}>{new Date(log.at).toLocaleTimeString("pt-BR")}</span>
+                    </div>
+                    {log.detail && <div style={{ color:"#cbd5e1", marginTop:"3px", wordBreak:"break-word" }}>{log.detail}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr 1fr" : "repeat(5,1fr)", gap:"8px", marginBottom:"12px" }}>
         {[
@@ -663,24 +803,6 @@ export default function MasterSaasPanel({
           <button style={{ ...btn("#16a34a"), width:"100%", marginTop:"8px" }} onClick={createLicense} disabled={loading}>
             Criar licença
           </button>
-        </div>
-      )}
-
-      {pendingRequests.length > 0 && (
-        <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"16px", padding:"12px", marginBottom:"12px" }}>
-          <div style={{ fontWeight:"900", color:"#9a3412", marginBottom:"8px" }}>Solicitações pendentes</div>
-          <div style={{ display:"grid", gap:"8px" }}>
-            {pendingRequests.map((r) => (
-              <div key={r.email} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
-                <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{r.email}</div>
-                <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700", marginBottom:"8px" }}>{r.created_at ? fmtDate(r.created_at) : "-"}</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
-                  <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r.email)} disabled={loading}>Aprovar</button>
-                  <button style={{ ...btnSm("#ef4444") }} onClick={()=>rejectRequest(r.email)} disabled={loading}>Recusar</button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 

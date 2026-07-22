@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useRef, useEffect, useCallback } f
 import { createClient } from "@supabase/supabase-js";
 import MasterSaasPanel from "./admin/MasterSaasPanel.jsx";
 import ServicesModule from "./servicesModule/ServicesModule.jsx";
+import { addDiagnosticLog } from "./utils/diagnosticLog.js";
 
 
 const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
@@ -9,20 +10,64 @@ const SUPABASE_ANON_KEY = "sb_publishable_PAIUP7LETrzQfZLMWcpsfw_8v8IeXTx";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function createPendingLicenseForCurrentUser(email) {
+async function createPendingLicenseForCurrentUser(email, businessType = "comercio") {
   const cleanEmail = String(email || "").trim().toLowerCase();
-  if (!cleanEmail) return { ok: false, message: "E-mail invalido." };
+  const cleanBusinessType = businessType === "servicos" ? "servicos" : "comercio";
+  addDiagnosticLog("SIGNUP", "Verificando solicitação existente", "info", cleanEmail);
+  if (!cleanEmail) {
+    addDiagnosticLog("SIGNUP", "E-mail inválido", "error");
+    return { ok: false, message: "E-mail invalido." };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from("erpmini_signup_requests")
+    .select("id,status")
+    .eq("email", cleanEmail)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const latestRequest = !readError ? existing?.[0] : null;
+
+  if (String(latestRequest?.status || "").toLowerCase() === "pendente") {
+    addDiagnosticLog("SIGNUP", "Solicitação já existente", "success", cleanEmail);
+    return { ok: true, existing: true, message: "Solicitacao ja existente." };
+  }
+
+  if (latestRequest) {
+    addDiagnosticLog(
+      "SIGNUP",
+      "Solicitação anterior encerrada; tentando reabrir",
+      "info",
+      `${cleanEmail} • ${latestRequest.status || "sem status"}`
+    );
+
+    const reopenQuery = supabase
+      .from("erpmini_signup_requests")
+      .update({ status: "pendente", business_type: cleanBusinessType, updated_at: new Date().toISOString() });
+    const { error: reopenError } = latestRequest.id
+      ? await reopenQuery.eq("id", latestRequest.id)
+      : await reopenQuery.eq("email", cleanEmail);
+
+    if (!reopenError) {
+      addDiagnosticLog("SIGNUP", "Solicitação reaberta", "success", cleanEmail);
+      return { ok: true, reopened: true, message: "Solicitacao reaberta." };
+    }
+
+    addDiagnosticLog("SIGNUP", "Não foi possível reabrir; tentando novo INSERT", "warning", reopenError.message);
+  }
 
   const { error } = await supabase
     .from("erpmini_signup_requests")
     .insert([
       {
         email: cleanEmail,
-        status: "pendente"
+        status: "pendente",
+        business_type: cleanBusinessType
       }
     ]);
 
   if (error) {
+    addDiagnosticLog("SIGNUP", "INSERT da solicitação falhou", "error", error.message);
     const msg = String(error.message || "").toLowerCase();
     if (msg.includes("duplicate") || msg.includes("already exists")) {
       return { ok: true, message: "Solicitacao ja existente." };
@@ -30,16 +75,22 @@ async function createPendingLicenseForCurrentUser(email) {
     return { ok: false, message: error.message };
   }
 
+  addDiagnosticLog("SIGNUP", "Solicitação criada", "success", cleanEmail);
   return { ok: true, message: "Solicitacao criada." };
 }
 
 async function fetchSignupRequests() {
+  addDiagnosticLog("ADMIN", "Buscando solicitações", "info");
   const { data, error } = await supabase
     .from("erpmini_signup_requests")
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) return [];
+  if (error) {
+    addDiagnosticLog("ADMIN", "Falha ao carregar solicitações", "error", error.message);
+    throw error;
+  }
+  addDiagnosticLog("ADMIN", "Solicitações carregadas", "success", `${(data || []).length} registro(s)`);
   return data || [];
 }
 
@@ -148,10 +199,12 @@ async function uploadCloudSnapshotNow() {
 
     if (error) throw error;
 
+    addDiagnosticLog("CLOUD", "Snapshot enviado", "success");
     setOfflinePending(false);
     setOfflineLastSync();
     return { ok: true };
   } catch (err) {
+    addDiagnosticLog("CLOUD", "Falha ao enviar snapshot", "error", err?.message || String(err));
     setOfflinePending(true);
     console.warn("ERPmini cloud save error:", err);
     return { ok: false, error: err };
@@ -185,11 +238,13 @@ async function downloadCloudSnapshot(userId) {
     .maybeSingle();
 
   if (error) {
+    addDiagnosticLog("CLOUD", "Falha ao baixar snapshot", "error", error.message);
     console.warn("ERPmini cloud load error:", error);
     return { ok: false, message: error.message };
   }
 
   if (!data?.data) {
+    addDiagnosticLog("CLOUD", "Primeiro snapshot necessário", "warning");
     await uploadCloudSnapshotNow();
     return { ok: true, message: "Primeiro backup enviado para nuvem." };
   }
@@ -205,12 +260,14 @@ async function downloadCloudSnapshot(userId) {
     cloudApplyingRemote = false;
   }
 
+  addDiagnosticLog("CLOUD", "Snapshot carregado", "success");
   return { ok: true, message: "Dados carregados da nuvem." };
 }
 
 
 async function checkLicenseByEmail(email) {
   const normalizedEmail = (email || "").trim().toLowerCase();
+  addDiagnosticLog("LOGIN", "Validando licença", "info", normalizedEmail);
 
   if (!normalizedEmail) {
     return { ok: false, title: "Licenca nao encontrada", message: "Nao foi possivel identificar o e-mail do usuario." };
@@ -238,6 +295,7 @@ async function checkLicenseByEmail(email) {
       .maybeSingle();
 
     if (error) {
+      addDiagnosticLog("LOGIN", "Consulta da licença falhou", "error", error.message);
       console.warn("ERPmini license error:", error);
       const cached = readLocalJsonSafe(cachedLicenseKey);
       if (cached?.ok) {
@@ -251,6 +309,7 @@ async function checkLicenseByEmail(email) {
     }
 
     if (!data) {
+      addDiagnosticLog("LOGIN", "Licença não encontrada", "warning", normalizedEmail);
       return {
         ok: false,
         title: "Licenca nao liberada",
@@ -261,6 +320,7 @@ async function checkLicenseByEmail(email) {
     const licenseStatus = (data.status || "").toLowerCase();
 
     if (licenseStatus === "pendente") {
+      addDiagnosticLog("LOGIN", "Licença pendente", "warning", normalizedEmail);
       return {
         ok: false,
         title: "Cadastro aguardando aprovacao",
@@ -269,6 +329,7 @@ async function checkLicenseByEmail(email) {
     }
 
     if (licenseStatus !== "ativo") {
+      addDiagnosticLog("LOGIN", "Licença bloqueada", "warning", normalizedEmail);
       return {
         ok: false,
         title: "Licenca bloqueada",
@@ -300,8 +361,10 @@ async function checkLicenseByEmail(email) {
       }
     }
 
+    addDiagnosticLog("LOGIN", "Licença validada", "success", `${normalizedEmail} • ${planName}`);
     return { ok: true, license: data };
   } catch (err) {
+    addDiagnosticLog("LOGIN", "Exceção ao validar licença", "error", err?.message || String(err));
     console.warn("ERPmini license exception:", err);
     return {
       ok: false,
@@ -312,27 +375,6 @@ async function checkLicenseByEmail(email) {
 }
 
 function SupabaseLicenseBlockedScreen({ info, onLogout }) {
-  if (showSplash) {
-    return (
-      <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0f172a,#111827)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", color:"#fff" }}>
-        <div style={{ textAlign:"center" }}>
-          <div style={{ width:"92px", height:"92px", borderRadius:"28px", background:"linear-gradient(135deg,#0f172a,#e94560)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 18px", boxShadow:"0 18px 45px rgba(0,0,0,.35)" }}>
-            <div style={{ fontSize:"40px" }}>ERP</div>
-          </div>
-          <div style={{ fontSize:"42px", fontWeight:"900", letterSpacing:"-.04em" }}>
-            ERP<span style={{ color:"#e94560" }}>mini</span>
-          </div>
-          <div style={{ marginTop:"8px", color:"#cbd5e1", fontWeight:"800", fontSize:"16px" }}>
-            Controle seu negócio na palma da mão
-          </div>
-          <div style={{ margin:"28px auto 0", width:"130px", height:"6px", borderRadius:"999px", background:"rgba(255,255,255,.15)", overflow:"hidden" }}>
-            <div style={{ width:"70%", height:"100%", background:"#e94560", borderRadius:"999px" }} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
       <div style={{ width:"100%", maxWidth:"420px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)", textAlign:"center" }}>
@@ -377,7 +419,11 @@ function AuthProvider({ children }) {
   }, []);
 
   const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password });
-  const signUp = (email, password) => supabase.auth.signUp({ email, password });
+  const signUp = (email, password, businessType) => supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { business_type: businessType === "servicos" ? "servicos" : "comercio" } }
+  });
   const signOut = () => supabase.auth.signOut();
 
   return (
@@ -396,6 +442,7 @@ function AuthScreen() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [businessType, setBusinessType] = useState("comercio");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -407,20 +454,34 @@ function AuthScreen() {
     const cleanEmail = email.trim().toLowerCase();
 
     if (mode === "login") {
+      addDiagnosticLog("LOGIN", "Login iniciado", "info", cleanEmail);
       const result = await signIn(cleanEmail, password);
       setBusy(false);
-      if (result.error) return setMsg(result.error.message);
+      if (result.error) {
+        addDiagnosticLog("LOGIN", "Login falhou", "error", result.error.message);
+        return setMsg(result.error.message);
+      }
+      addDiagnosticLog("LOGIN", "Login realizado", "success", cleanEmail);
       return;
     }
 
-    const result = await signUp(cleanEmail, password);
+    addDiagnosticLog("SIGNUP", "Cadastro iniciado", "info", cleanEmail);
+    const result = await signUp(cleanEmail, password, businessType);
 
     if (result.error) {
+      addDiagnosticLog("SIGNUP", "Cadastro falhou", "error", result.error.message);
       setBusy(false);
       return setMsg(result.error.message);
     }
 
-    const pending = await createPendingLicenseForCurrentUser(cleanEmail);
+    addDiagnosticLog("SIGNUP", "Conta criada", "success", cleanEmail);
+
+    // Com confirmação de e-mail ativa, o cadastro pode ser criado sem uma
+    // sessão autenticada. Nesse caso o RLS impede o INSERT agora e o AuthGate
+    // repetirá a solicitação automaticamente no primeiro login confirmado.
+    const pending = result.data?.session
+      ? await createPendingLicenseForCurrentUser(cleanEmail, businessType)
+      : { ok: true, deferred: true };
 
     setBusy(false);
 
@@ -429,7 +490,9 @@ function AuthScreen() {
       return;
     }
 
-    setMsg("Conta criada. Agora aguarde o administrador liberar seu acesso.");
+    setMsg(pending.deferred
+      ? "Conta criada. Confirme seu e-mail e faça login para enviar a solicitação de acesso."
+      : "Conta criada. Agora aguarde o administrador liberar seu acesso.");
     setMode("login");
     setPassword("");
   };
@@ -449,6 +512,15 @@ function AuthScreen() {
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
         <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        {mode === "signup" && (
+          <>
+            <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Tipo de negócio</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", margin:"6px 0 12px" }}>
+              <button type="button" onClick={()=>setBusinessType("comercio")} style={{ padding:"12px 8px", border:`2px solid ${businessType === "comercio" ? "#e94560" : "#e2e8f0"}`, borderRadius:"12px", background:businessType === "comercio" ? "#fff1f2" : "#fff", color:businessType === "comercio" ? "#be123c" : "#64748b", fontWeight:"900" }}>Comércio</button>
+              <button type="button" onClick={()=>setBusinessType("servicos")} style={{ padding:"12px 8px", border:`2px solid ${businessType === "servicos" ? "#e94560" : "#e2e8f0"}`, borderRadius:"12px", background:businessType === "servicos" ? "#fff1f2" : "#fff", color:businessType === "servicos" ? "#be123c" : "#64748b", fontWeight:"900" }}>Serviços</button>
+            </div>
+          </>
+        )}
         {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
         <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
           {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar conta e solicitar acesso"}
@@ -486,10 +558,27 @@ function AuthGate() {
       const license = await checkLicenseByEmail(user.email);
       if (!alive) return;
 
-      setLicenseInfo(license);
+      let accessInfo = license;
+
+      if (!license.ok && license.title === "Licenca nao liberada") {
+        const pending = await createPendingLicenseForCurrentUser(user.email, user.user_metadata?.business_type);
+        if (!pending.ok) {
+          console.warn("ERPmini signup request retry error:", pending.message);
+        } else {
+          accessInfo = {
+            ...license,
+            title: "Solicitação de acesso enviada",
+            message: pending.existing
+              ? "Sua solicitação já está aguardando análise do administrador."
+              : "Sua solicitação foi enviada ao administrador. Aguarde a liberação do acesso."
+          };
+        }
+      }
+
+      setLicenseInfo(accessInfo);
       setLicenseReady(true);
 
-      if (!license.ok) {
+      if (!accessInfo.ok) {
         setCloudMsg("");
         setCloudReady(false);
         return;
