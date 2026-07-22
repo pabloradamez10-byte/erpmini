@@ -598,7 +598,14 @@ export default function MasterSaasPanel({
     await loadMaster();
   };
 
-  const pendingRequests = requests.filter((r) => String(r.status || "").toLowerCase() === "pendente");
+  const normalizeRequestStatus = (status) => String(status || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const isPendingRequest = (request) => ["pendente", "pending", "aguardando"].includes(normalizeRequestStatus(request?.status));
+  const pendingRequests = requests.filter(isPendingRequest);
 
   const clearLogs = () => {
     clearDiagnosticLogs();
@@ -629,6 +636,47 @@ export default function MasterSaasPanel({
           {msg}
         </div>
       )}
+
+      <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"16px", padding:"12px", marginBottom:"12px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", marginBottom:requests.length ? "10px" : 0 }}>
+          <div>
+            <div style={{ fontWeight:"900", color:"#9a3412" }}>Solicitações de acesso</div>
+            <div style={{ color:"#c2410c", fontSize:"11px", fontWeight:"800" }}>
+              {pendingRequests.length} pendente(s) • {requests.length} total
+            </div>
+          </div>
+        </div>
+
+        {requests.length === 0 ? (
+          <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"700" }}>Nenhuma solicitação encontrada.</div>
+        ) : (
+          <div style={{ display:"grid", gap:"8px", maxHeight:"360px", overflowY:"auto" }}>
+            {requests.map((r, index) => {
+              const pending = isPendingRequest(r);
+              const rawStatus = String(r.status || "sem status");
+              return (
+                <div key={r.id || `${r.email}-${r.created_at || index}`} style={{ background:"#fff", border:"1px solid #fed7aa", borderRadius:"12px", padding:"10px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"8px", flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{r.email || "E-mail não informado"}</div>
+                      <div style={{ color:"#64748b", fontSize:"11px", fontWeight:"700" }}>{r.created_at ? fmtDate(r.created_at) : "Data não informada"}</div>
+                    </div>
+                    <span style={ui.pill(pending ? "#fef3c7" : normalizeRequestStatus(r.status) === "aprovado" ? "#dcfce7" : "#f1f5f9", pending ? "#92400e" : normalizeRequestStatus(r.status) === "aprovado" ? "#166534" : "#64748b")}>
+                      {rawStatus}
+                    </span>
+                  </div>
+                  {pending && (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginTop:"8px" }}>
+                      <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r.email)} disabled={loading}>Aprovar</button>
+                      <button style={{ ...btnSm("#ef4444") }} onClick={()=>rejectRequest(r.email)} disabled={loading}>Recusar</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div style={{ background:"#0f172a", borderRadius:"16px", padding:"12px", marginBottom:"12px", color:"#fff" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px" }}>
@@ -721,24 +769,6 @@ export default function MasterSaasPanel({
           <button style={{ ...btn("#16a34a"), width:"100%", marginTop:"8px" }} onClick={createLicense} disabled={loading}>
             Criar licença
           </button>
-        </div>
-      )}
-
-      {pendingRequests.length > 0 && (
-        <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"16px", padding:"12px", marginBottom:"12px" }}>
-          <div style={{ fontWeight:"900", color:"#9a3412", marginBottom:"8px" }}>Solicitações pendentes</div>
-          <div style={{ display:"grid", gap:"8px" }}>
-            {pendingRequests.map((r) => (
-              <div key={r.email} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
-                <div style={{ fontWeight:"900", color:"#0f172a", wordBreak:"break-all" }}>{r.email}</div>
-                <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700", marginBottom:"8px" }}>{r.created_at ? fmtDate(r.created_at) : "-"}</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
-                  <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r.email)} disabled={loading}>Aprovar</button>
-                  <button style={{ ...btnSm("#ef4444") }} onClick={()=>rejectRequest(r.email)} disabled={loading}>Recusar</button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
