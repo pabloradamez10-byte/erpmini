@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authEvent, setAuthEvent] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -15,7 +16,8 @@ export function AuthProvider({ children }) {
       setAuthLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      setAuthEvent(event);
       setUser(session?.user || null);
       setAuthLoading(false);
     });
@@ -33,8 +35,12 @@ export function AuthProvider({ children }) {
     options: { data: { business_type: businessType === "servicos" ? "servicos" : "comercio" } }
   });
   const signOut = () => supabase.auth.signOut();
+  const requestPasswordReset = (email) => supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/`
+  });
+  const updatePassword = (password) => supabase.auth.updateUser({ password });
 
-  return <AuthContext.Provider value={{ user, authLoading, signIn, signUp, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, authLoading, authEvent, signIn, signUp, signOut, requestPasswordReset, updatePassword }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
