@@ -88,23 +88,13 @@ window.fetch = async (input, init = {}) => {
   return nativeFetch(input, init);
 };
 
-async function removeLegacyPwaCache() {
-  try {
-    if ("serviceWorker" in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map((registration) => registration.unregister()));
-    }
-
-    if ("caches" in window) {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-    }
-  } catch (error) {
-    console.warn("ERPmini: não foi possível limpar o cache antigo do PWA.", error);
-  }
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => {
+      console.warn("ERPmini: não foi possível ativar o modo instalável/offline.", error);
+    });
+  });
 }
-
-removeLegacyPwaCache();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
