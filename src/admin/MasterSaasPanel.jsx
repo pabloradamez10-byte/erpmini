@@ -598,6 +598,30 @@ export default function MasterSaasPanel({
     await loadMaster();
   };
 
+  const deleteSignupRequest = async (request) => {
+    const confirmed = window.confirm(`Excluir a solicitação de ${request.email}?\n\nO usuário poderá enviar uma nova solicitação no próximo login.`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    const query = supabase
+      .from("erpmini_signup_requests")
+      .update({ status: "excluido", updated_at: new Date().toISOString() });
+    const { error } = request.id
+      ? await query.eq("id", request.id)
+      : await query.eq("email", String(request.email || "").trim().toLowerCase());
+    setLoading(false);
+
+    if (error) {
+      addDiagnosticLog("ADMIN", "Falha ao excluir solicitação", "error", error.message);
+      keepMsg("Erro ao excluir solicitação: " + error.message);
+      return;
+    }
+
+    addDiagnosticLog("ADMIN", "Solicitação excluída", "success", request.email);
+    keepMsg("Solicitação excluída. O usuário poderá enviar uma nova no próximo login.");
+    await loadMaster();
+  };
+
   const normalizeRequestStatus = (status) => String(status || "")
     .trim()
     .toLowerCase()
@@ -605,7 +629,8 @@ export default function MasterSaasPanel({
     .replace(/[\u0300-\u036f]/g, "");
 
   const isPendingRequest = (request) => ["pendente", "pending", "aguardando"].includes(normalizeRequestStatus(request?.status));
-  const pendingRequests = requests.filter(isPendingRequest);
+  const visibleRequests = requests.filter((request) => !["excluido", "excluida", "deleted"].includes(normalizeRequestStatus(request?.status)));
+  const pendingRequests = visibleRequests.filter(isPendingRequest);
 
   const clearLogs = () => {
     clearDiagnosticLogs();
@@ -638,20 +663,20 @@ export default function MasterSaasPanel({
       )}
 
       <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"16px", padding:"12px", marginBottom:"12px" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", marginBottom:requests.length ? "10px" : 0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px", marginBottom:visibleRequests.length ? "10px" : 0 }}>
           <div>
             <div style={{ fontWeight:"900", color:"#9a3412" }}>Solicitações de acesso</div>
             <div style={{ color:"#c2410c", fontSize:"11px", fontWeight:"800" }}>
-              {pendingRequests.length} pendente(s) • {requests.length} total
+              {pendingRequests.length} pendente(s) • {visibleRequests.length} total
             </div>
           </div>
         </div>
 
-        {requests.length === 0 ? (
+        {visibleRequests.length === 0 ? (
           <div style={{ color:"#9a3412", fontSize:"12px", fontWeight:"700" }}>Nenhuma solicitação encontrada.</div>
         ) : (
           <div style={{ display:"grid", gap:"8px", maxHeight:"360px", overflowY:"auto" }}>
-            {requests.map((r, index) => {
+            {visibleRequests.map((r, index) => {
               const pending = isPendingRequest(r);
               const rawStatus = String(r.status || "sem status");
               return (
@@ -666,11 +691,14 @@ export default function MasterSaasPanel({
                     </span>
                   </div>
                   {pending && (
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginTop:"8px" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 1fr", gap:"8px", marginTop:"8px" }}>
                       <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r.email)} disabled={loading}>Aprovar</button>
                       <button style={{ ...btnSm("#ef4444") }} onClick={()=>rejectRequest(r.email)} disabled={loading}>Recusar</button>
                     </div>
                   )}
+                  <button style={{ ...btnSm("#991b1b"), width:"100%", marginTop:"8px" }} onClick={()=>deleteSignupRequest(r)} disabled={loading}>
+                    Excluir solicitação
+                  </button>
                 </div>
               );
             })}
