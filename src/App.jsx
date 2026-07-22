@@ -23,7 +23,7 @@ import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
 
 
 function AuthGate() {
-  const { user, authLoading, authEvent, signOut } = useAuth();
+  const { user, authLoading, passwordRecovery, signOut } = useAuth();
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudMsg, setCloudMsg] = useState("");
   const [licenseReady, setLicenseReady] = useState(false);
@@ -106,7 +106,7 @@ function AuthGate() {
     );
   }
 
-  if (authEvent === "PASSWORD_RECOVERY") return <PasswordRecoveryScreen />;
+  if (passwordRecovery) return <PasswordRecoveryScreen />;
 
   if (!user) return <AuthScreen />;
 
