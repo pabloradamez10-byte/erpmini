@@ -1,0 +1,67 @@
+name: Apply logout fix
+
+on:
+  push:
+    paths:
+      - '.erpmini-upload/LOGOUT_FIX_READY'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch logout flow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.jsx')
+          s = p.read_text(encoding='utf-8')
+          old = '''  const handleSignOut = async () => {
+    await uploadCloudSnapshotNow();
+    cloudUserId = null;
+    await signOut();
+  };'''
+          new = '''  const handleSignOut = async () => {
+    try {
+      // Não deixa uma sincronização lenta ou com erro bloquear a saída da conta.
+      await Promise.race([
+        uploadCloudSnapshotNow(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    } catch (err) {
+      console.warn("ERPmini logout sync warning:", err);
+    } finally {
+      cloudUserId = null;
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = null;
+
+      try {
+        await signOut();
+      } catch (err) {
+        console.warn("ERPmini signOut warning:", err);
+      }
+
+      // Garante que a interface volte para a tela de login mesmo se o listener atrasar.
+      window.location.reload();
+    }
+  };'''
+          if old not in s:
+              raise SystemExit('Bloco handleSignOut não encontrado')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit fix
+        run: |
+          rm -f .erpmini-upload/LOGOUT_FIX_READY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx .erpmini-upload/LOGOUT_FIX_READY
+          git commit -m "Corrige botão sair da conta" || exit 0
+          git push
