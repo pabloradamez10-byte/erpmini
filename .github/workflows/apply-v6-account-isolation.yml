@@ -1,0 +1,93 @@
+name: Apply ERPmini account isolation hotfix
+
+on:
+  push:
+    paths:
+      - '.erpmini-hotfix/account-isolation'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch App.jsx
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.jsx')
+          s = p.read_text(encoding='utf-8')
+
+          anchor = '''function readLocalJsonSafe(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectCloudPayload() {'''
+          replacement = '''function readLocalJsonSafe(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearActiveWorkspace() {
+  try {
+    CLOUD_KEYS.forEach((key) => localStorage.removeItem(key));
+    localStorage.removeItem(OFFLINE_PENDING_KEY);
+    localStorage.removeItem(OFFLINE_LAST_SYNC_KEY);
+  } catch {}
+}
+
+function collectCloudPayload() {'''
+          if anchor not in s:
+            raise SystemExit('anchor clearActiveWorkspace not found')
+          s = s.replace(anchor, replacement, 1)
+
+          anchor = '''      setCloudMsg("Sincronizando nuvem...");
+      const result = await downloadCloudSnapshot(user.id);'''
+          replacement = '''      setCloudMsg("Preparando ambiente da conta...");
+      clearActiveWorkspace();
+      setCloudMsg("Sincronizando nuvem...");
+      const result = await downloadCloudSnapshot(user.id);'''
+          if anchor not in s:
+            raise SystemExit('anchor boot sync not found')
+          s = s.replace(anchor, replacement, 1)
+
+          anchor = '''  const handleSignOut = async () => {
+    await uploadCloudSnapshotNow();
+    cloudUserId = null;
+    await signOut();
+  };'''
+          replacement = '''  const handleSignOut = async () => {
+    await uploadCloudSnapshotNow();
+    cloudUserId = null;
+    clearActiveWorkspace();
+    await signOut();
+  };'''
+          if anchor not in s:
+            raise SystemExit('anchor logout not found')
+          s = s.replace(anchor, replacement, 1)
+
+          s = s.replace('v6-piloto-comercial', 'v6.1-isolamento-contas')
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Remove trigger marker and workflow
+        run: |
+          rm -f .erpmini-hotfix/account-isolation
+          rm -f .github/workflows/apply-v6-account-isolation.yml
+      - name: Commit hotfix
+        run: |
+          git config user.name "ERPmini Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/App.jsx .erpmini-hotfix/account-isolation .github/workflows/apply-v6-account-isolation.yml
+          git commit -m "Corrige isolamento de dados entre contas"
+          git push
