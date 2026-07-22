@@ -7,7 +7,6 @@ export const CLOUD_KEYS = [
   "erpmini_backup_latest",
   "erpmini_cash_closures",
   "erpmini_cash_ops",
-  "erpmini_company_profile",
   "erpmini_owner_email",
   "erpmini_clients",
   "erpmini_payables",
@@ -15,5 +14,7 @@ export const CLOUD_KEYS = [
   "erpmini_receivables",
   "erpmini_salecounter",
   "erpmini_sales",
-  "erpmini_storename"
+  "erpmini_services",
+  "erpmini_storename",
+  "erpmini_technicians"
 ];
