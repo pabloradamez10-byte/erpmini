@@ -16,6 +16,7 @@ import { clearCloudUser, downloadCloudSnapshot, getOfflinePending, scheduleCloud
 import InventoryTab from "./inventory/InventoryTab.jsx";
 import { BarcodeImage, generateBarcode } from "./inventory/barcode.jsx";
 import ClientsTab, { ClientHistoryModal } from "./clients/ClientsTab.jsx";
+import CashSummary from "./cash/CashSummary.jsx";
 
 
 function AuthGate() {
@@ -2358,122 +2359,6 @@ const PDVTab = () => (
       </button>
     );
 
-    const ResumoCaixa = () => (
-      <>
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
-          {[
-            ["Entradas hoje", fmtCur(entradas), "linear-gradient(135deg,#16a34a,#15803d)"],
-            ["Vendas hoje", fmtCur(vendasHoje), "linear-gradient(135deg,#e94560,#c0392b)"],
-            ["Crediário vendido", fmtCur(fiadoHoje), "linear-gradient(135deg,#f59e0b,#d97706)"],
-            ["Recebido crediário", fmtCur(recebimentosFiadoHoje), "linear-gradient(135deg,#6366f1,#4338ca)"],
-          ].map(([l,v,c],i)=>(
-            <div key={i} style={{ background:c, borderRadius:"12px", padding:"14px", color:"#fff" }}>
-              <div style={{ fontSize:"11px", opacity:0.85, marginBottom:"4px" }}>{l}</div>
-              <div style={{ fontSize:"19px", fontWeight:"900" }}>{v}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"17px", marginBottom:"12px" }}> Caixa profissional</div>
-
-          {!cashOpeningOfDay() ? (
-            <div style={{ background:lastCashClosureOfDay()?"#f1f5f9":"#fff7ed", border:`1.5px solid ${lastCashClosureOfDay()?"#cbd5e1":"#fdba74"}`, borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
-              <div style={{ fontWeight:"900", color:lastCashClosureOfDay()?"#334155":"#9a3412", marginBottom:"6px" }}>
-                {lastCashClosureOfDay() ? "Ultimo turno fechado. Pode abrir novo turno." : "Caixa ainda nao aberto hoje"}
-              </div>
-              {lastCashClosureOfDay() && (
-                <div style={{ fontSize:"12px", color:"#475569", marginBottom:"8px" }}>
-                  Ultimo fechamento: {fmtDate(lastCashClosureOfDay()?.date)} | Diferença:
-                  <strong style={{ color:Math.abs(lastCashClosureOfDay()?.diferenca||0)<0.01?"#16a34a":"#dc2626" }}> {fmtCur(lastCashClosureOfDay()?.diferenca||0)}</strong>
-                </div>
-              )}
-              <div style={{ fontSize:"12px", color:lastCashClosureOfDay()?"#475569":"#9a3412", marginBottom:"10px" }}>Informe quanto tem de dinheiro no caixa para troco.</div>
-              <div style={{ display:"flex", gap:"8px" }}>
-                <input style={{ ...inp, flex:1, margin:0 }} inputMode="decimal" placeholder="Saldo inicial" value={cashOpeningValue} onChange={e=>setCashOpeningValue(e.target.value)} />
-                <button style={{ ...btn("#16a34a"), padding:"12px 14px" }} onClick={openCash}>Abrir turno</button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:"14px", padding:"12px", marginBottom:"12px" }}>
-              <div style={{ fontWeight:"900", color:"#166534" }}>Caixa aberto - turno {cashClosuresOfDay().length + 1}</div>
-              <div style={{ fontSize:"12px", color:"#166534" }}>Abertura: {fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).abertura)}</div>
-            </div>
-          )}
-
-          <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
-            <div style={{ fontSize:"12px", color:"#64748b", marginBottom:"10px" }}>Resumo das entradas recebidas hoje</div>
-            {["dinheiro","pix","debito","credito"].map(k=>(
-              <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #e2e8f0" }}>
-                <strong style={{ color:"#334155", textTransform:"capitalize" }}>{mLabel(k)}</strong>
-                <strong style={{ color:mColor(k) }}>{fmtCur(byMethod[k]||0)}</strong>
-              </div>
-            ))}
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", fontSize:"16px" }}>
-              <strong>Total de entradas</strong><strong style={{ color:"#16a34a" }}>{fmtCur(entradas)}</strong>
-            </div>
-          </div>
-
-          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginBottom:"12px" }}>
-            <div style={{ background:"#ecfdf5", border:"1.5px solid #bbf7d0", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontSize:"11px", color:"#166534", fontWeight:"800" }}>Abertura</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#16a34a" }}>{fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).abertura)}</div>
-            </div>
-            <div style={{ background:"#eff6ff", border:"1.5px solid #bfdbfe", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontSize:"11px", color:"#1d4ed8", fontWeight:"800" }}>Reforcos</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#2563eb" }}>{fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).reforco)}</div>
-            </div>
-            <div style={{ background:"#fef2f2", border:"1.5px solid #fecaca", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontSize:"11px", color:"#991b1b", fontWeight:"800" }}>Sangrias</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#dc2626" }}>{fmtCur(cashOpsTotals(dayKey(), cashOpeningOfDay()?.date).sangria)}</div>
-            </div>
-            <div style={{ background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"10px" }}>
-              <div style={{ fontSize:"11px", color:"#334155", fontWeight:"800" }}>Esperado</div>
-              <div style={{ fontSize:"17px", fontWeight:"900", color:"#1a1a2e" }}>{fmtCur(expectedCashBalance())}</div>
-            </div>
-          </div>
-
-          <div style={{ background:"#f8fafc", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
-            <div style={{ fontWeight:"900", color:"#334155", marginBottom:"8px" }}>Sangria / Reforco</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
-              <button onClick={()=>setCashOpForm({...cashOpForm,type:"sangria"})} style={{ ...btn(cashOpForm.type==="sangria"?"#dc2626":"#94a3b8"), padding:"10px", fontSize:"13px" }}>Sangria</button>
-              <button onClick={()=>setCashOpForm({...cashOpForm,type:"reforco"})} style={{ ...btn(cashOpForm.type==="reforco"?"#2563eb":"#94a3b8"), padding:"10px", fontSize:"13px" }}>Reforco</button>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
-              <input style={{ ...inp, margin:0 }} inputMode="decimal" placeholder="Valor" value={cashOpForm.amount} onChange={e=>setCashOpForm({...cashOpForm,amount:e.target.value})} />
-              <input style={{ ...inp, margin:0 }} placeholder="Observacao" value={cashOpForm.note} onChange={e=>setCashOpForm({...cashOpForm,note:e.target.value})} />
-            </div>
-            <button style={{ ...btn("#64748b"), width:"100%", padding:"10px", fontSize:"13px" }} onClick={addCashOperation}>Registrar movimentacao</button>
-          </div>
-
-          <div style={{ background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"12px", marginBottom:"12px" }}>
-            <div style={{ fontWeight:"900", color:"#334155", marginBottom:"8px" }}>Conferencia do fechamento</div>
-            <input style={{ ...inp, marginBottom:"8px" }} inputMode="decimal" placeholder={`Dinheiro contado no caixa (${fmtCur(expectedCashBalance())})`} value={cashRealValue} onChange={e=>setCashRealValue(e.target.value)} />
-            <div style={{ fontSize:"12px", color:"#64748b" }}>Deixe em branco para fechar com o saldo esperado.</div>
-          </div>
-
-          <button style={{ ...btn(cashOpeningOfDay()?"#16a34a":"#94a3b8"), width:"100%", opacity:cashOpeningOfDay()?1:0.65 }} onClick={closeCash}>
-            {cashOpeningOfDay() ? " Fechar turno atual" : " Abra um turno para fechar"}
-          </button>
-        </div>
-
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"16px", marginBottom:"12px" }}> Movimentacoes de hoje</div>
-          {[...cashOpsOfDay().filter(o=>o.type!=="abertura").map(o=>({ ...o, isCashOp:true, method:o.type==="sangria"?"sangria":"reforco", origin:o.type==="sangria"?"Sangria":"Reforco", amount:o.amount, saleId:"CAIXA", clientName:o.note||"", date:o.date })), ...ultimosPagamentos].length===0 ? (
-            <div style={{ color:"#94a3b8", fontSize:"14px", padding:"14px 0" }}>Nenhuma movimentacao hoje.</div>
-          ) : [...cashOpsOfDay().filter(o=>o.type!=="abertura").map(o=>({ ...o, isCashOp:true, method:o.type==="sangria"?"sangria":"reforco", origin:o.type==="sangria"?"Sangria":"Reforco", amount:o.amount, saleId:"CAIXA", clientName:o.note||"", date:o.date })), ...ultimosPagamentos].map((p,i)=>(
-            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"10px", padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
-              <div>
-                <div style={{ fontWeight:"800", color:"#1a1a2e" }}>{mLabel(p.method)} - {p.origin}</div>
-                <div style={{ fontSize:"12px", color:"#64748b" }}>#{p.saleId} {p.clientName ? `- ${p.clientName}` : ""} | {fmtDate(p.date)}</div>
-              </div>
-              <div style={{ fontWeight:"900", color:p.method==="sangria"?"#dc2626":p.method==="reforco"?"#2563eb":mColor(p.method), whiteSpace:"nowrap" }}>{p.method==="sangria"?"- ":""}{fmtCur(parseFloat(p.amount)||0)}</div>
-            </div>
-          ))}
-        </div>
-      </>
-    );
-
     const RelatoriosCaixa = () => (
       <>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"12px", marginBottom:"14px" }}>
@@ -2899,7 +2784,35 @@ const PDVTab = () => (
           {pill("historico","Historico")}
         </div>
 
-        {caixaView==="resumo" && ResumoCaixa()}
+        {caixaView==="resumo" && (
+          <CashSummary
+            isMobile={isMobile}
+            entries={entradas}
+            salesToday={vendasHoje}
+            creditSalesToday={fiadoHoje}
+            creditReceivedToday={recebimentosFiadoHoje}
+            paymentSummary={byMethod}
+            getPaymentLabel={mLabel}
+            getPaymentColor={mColor}
+            getCashOpening={cashOpeningOfDay}
+            getLastCashClosure={lastCashClosureOfDay}
+            getCashClosures={cashClosuresOfDay}
+            getCashOperationTotals={cashOpsTotals}
+            getCashOperations={cashOpsOfDay}
+            getExpectedCashBalance={expectedCashBalance}
+            dayKey={dayKey}
+            latestPayments={ultimosPagamentos}
+            openingValue={cashOpeningValue}
+            setOpeningValue={setCashOpeningValue}
+            onOpenCash={openCash}
+            operationForm={cashOpForm}
+            setOperationForm={setCashOpForm}
+            onAddOperation={addCashOperation}
+            realValue={cashRealValue}
+            setRealValue={setCashRealValue}
+            onCloseCash={closeCash}
+          />
+        )}
         {caixaView==="relatorios" && RelatoriosCaixa()}
         {caixaView==="financeiro" && FinanceiroCaixa()}
         {caixaView==="historico" && HistoricoCaixa()}
