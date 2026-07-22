@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "./AuthContext.jsx";
 
 export default function PasswordRecoveryScreen() {
-  const { updatePassword, signOut } = useAuth();
+  const { updatePassword, completePasswordRecovery, signOut } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [message, setMessage] = useState("");
@@ -19,6 +19,7 @@ export default function PasswordRecoveryScreen() {
       setBusy(false);
       return setMessage(error.message || "Não foi possível alterar a senha.");
     }
+    completePasswordRecovery();
     await signOut();
     window.location.replace("/");
   };
