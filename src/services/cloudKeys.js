@@ -14,6 +14,7 @@ export const CLOUD_KEYS = [
   "erpmini_receivables",
   "erpmini_salecounter",
   "erpmini_sales",
+  "erpmini_service_catalog",
   "erpmini_services",
   "erpmini_storename",
   "erpmini_technicians"

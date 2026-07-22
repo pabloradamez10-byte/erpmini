@@ -752,6 +752,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const [cart, setCart]           = useState([]);
   const [sales, setSales]         = useState(()=>loadLS("erpmini_sales", []));
   const [services, setServices] = useState(()=>loadLS("erpmini_services", []));
+  const [serviceCatalog, setServiceCatalog] = useState(()=>loadLS("erpmini_service_catalog", []));
   const [clients, setClients]     = useState(()=>loadLS("erpmini_clients", []));
   const [cashClosures, setCashClosures] = useState(()=>loadLS("erpmini_cash_closures", []));
   const [cashOps, setCashOps] = useState(()=>loadLS("erpmini_cash_ops", []));
@@ -874,6 +875,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   useEffect(()=>{ saveLS("erpmini_products", products); }, [products]);
   useEffect(()=>{ saveLS("erpmini_sales", sales); }, [sales]);
   useEffect(()=>{ saveLS("erpmini_services", services); }, [services]);
+  useEffect(()=>{ saveLS("erpmini_service_catalog", serviceCatalog); }, [serviceCatalog]);
   useEffect(()=>{ saveLS("erpmini_clients", clients); }, [clients]);
   useEffect(()=>{ saveLS("erpmini_cash_closures", cashClosures); }, [cashClosures]);
   useEffect(()=>{ saveLS("erpmini_cash_ops", cashOps); }, [cashOps]);
@@ -900,6 +902,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       products,
       sales,
       services,
+      serviceCatalog,
       clients,
       cashClosures,
       cashOps,
@@ -952,6 +955,8 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     const d = payload.data;
     setProducts(Array.isArray(d.products) ? d.products : initialProducts);
     setSales(Array.isArray(d.sales) ? d.sales : []);
+    setServices(Array.isArray(d.services) ? d.services : []);
+    setServiceCatalog(Array.isArray(d.serviceCatalog) ? d.serviceCatalog : []);
     setClients(Array.isArray(d.clients) ? d.clients : []);
     setCashClosures(Array.isArray(d.cashClosures) ? d.cashClosures : []);
     setCashOps(Array.isArray(d.cashOps) ? d.cashOps : []);
@@ -962,6 +967,8 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
     saveLS("erpmini_products", Array.isArray(d.products) ? d.products : initialProducts);
     saveLS("erpmini_sales", Array.isArray(d.sales) ? d.sales : []);
+    saveLS("erpmini_services", Array.isArray(d.services) ? d.services : []);
+    saveLS("erpmini_service_catalog", Array.isArray(d.serviceCatalog) ? d.serviceCatalog : []);
     saveLS("erpmini_clients", Array.isArray(d.clients) ? d.clients : []);
     saveLS("erpmini_cash_closures", Array.isArray(d.cashClosures) ? d.cashClosures : []);
     saveLS("erpmini_cash_ops", Array.isArray(d.cashOps) ? d.cashOps : []);
@@ -1018,8 +1025,8 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   }, []);
 
   const clearAllData = () => {
-    ["erpmini_products","erpmini_sales","erpmini_clients","erpmini_cash_closures","erpmini_cash_ops","erpmini_payables","erpmini_receivables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
-    setProducts(initialProducts); setSales([]); setClients([]); setCashClosures([]); setCashOps([]); setPayables([]); setReceivables([]); setStoreName("Minha Loja"); setCart([]);
+    ["erpmini_products","erpmini_sales","erpmini_services","erpmini_service_catalog","erpmini_clients","erpmini_cash_closures","erpmini_cash_ops","erpmini_payables","erpmini_receivables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
+    setProducts(initialProducts); setSales([]); setServices([]); setServiceCatalog([]); setClients([]); setCashClosures([]); setCashOps([]); setPayables([]); setReceivables([]); setStoreName("Minha Loja"); setCart([]);
     saleCounter.current = 1000; setShowClearConfirm(false);
     notify("Dados resetados!");
   };
@@ -2691,6 +2698,8 @@ const PDVTab = () => (
             setClients={setClients}
             services={services}
             setServices={setServices}
+            serviceCatalog={serviceCatalog}
+            setServiceCatalog={setServiceCatalog}
             sales={sales}
             setSales={setSales}
             receivables={receivables}
