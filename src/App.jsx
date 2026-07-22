@@ -2,7 +2,11 @@ import { createContext, useContext, useState, useRef, useEffect, useCallback } f
 import { createClient } from "@supabase/supabase-js";
 import MasterSaasPanel from "./admin/MasterSaasPanel.jsx";
 import ServicesModule from "./servicesModule/ServicesModule.jsx";
+import PlanUsageCard from "./components/PlanUsageCard.jsx";
 import { addDiagnosticLog } from "./utils/diagnosticLog.js";
+import { APP_VERSION, PAYMENT_METHODS, initialProducts } from "./constants/app.js";
+import { countSalesThisMonth, getBusinessTypeFromLicense, hasPlanAccess, isLimitReached, normalizePlan, planLimitMessage } from "./domain/plans.js";
+import { fmtCur, fmtDate, fmtPercent, parseMoney } from "./utils/format.js";
 
 
 const SUPABASE_URL = "https://fxahftlnanvcyzxwejhe.supabase.co";
@@ -611,118 +615,6 @@ function AuthGate() {
 
 
 
-const PLAN_LIMITS = {
-  starter: { products: 30, clients: 20, salesMonth: 50 },
-  pro: { products: Infinity, clients: Infinity, salesMonth: Infinity },
-  premium: { products: Infinity, clients: Infinity, salesMonth: Infinity },
-  mensal: { products: Infinity, clients: Infinity, salesMonth: Infinity },
-};
-
-
-const allowedTabsForPlan = (plan, isAdmin=false) => {
-  if (isAdmin) return ["inicio","pdv","servicos","estoque","cliente","caixa","config"];
-  const p = normalizePlan(plan);
-  if (p === "starter") return ["inicio","pdv","servicos","estoque","cliente","config"];
-  if (p === "pro") return ["inicio","pdv","servicos","estoque","cliente","caixa","config"];
-  if (p === "premium") return ["inicio","pdv","servicos","estoque","cliente","caixa","config"];
-  return ["inicio","pdv","servicos","estoque","cliente","config"];
-};
-
-const hasPlanAccess = (tab, plan, isAdmin=false) => allowedTabsForPlan(plan, isAdmin).includes(String(tab || "").toLowerCase());
-
-const getBusinessTypeFromLicense = (license) => {
-  const raw = String(license?.business_type || license?.businessType || license?.notes || "").toLowerCase();
-  if (raw.includes("tipo:servicos") || raw.includes("business:servicos") || raw.includes("servico") || raw.includes("serviço")) return "servicos";
-  return "comercio";
-};
-
-const normalizePlan = (plan) => {
-  const p = String(plan || "starter").toLowerCase();
-
-  if (p === "free" || p === "gratis" || p === "gratuito" || p === "teste") return "starter";
-  if (p === "mensal" || p === "pro_mensal") return "pro";
-  if (p === "anual" || p === "premium_anual") return "premium";
-
-  if (p === "starter" || p === "pro" || p === "premium") return p;
-
-  return "starter";
-};
-
-const currentMonthKey = () => new Date().toISOString().slice(0, 7);
-
-const countSalesThisMonth = (sales = []) => {
-  const key = currentMonthKey();
-  return (sales || []).filter((s) => {
-    const d = String(s.date || s.createdAt || s.created_at || s.data || "");
-    return d.slice(0, 7) === key;
-  }).length;
-};
-
-const isLimitReached = (type, plan, counts) => {
-  const p = normalizePlan(plan);
-  const limits = PLAN_LIMITS[p] || PLAN_LIMITS.starter;
-  if (type === "products") return counts.products >= limits.products;
-  if (type === "clients") return counts.clients >= limits.clients;
-  if (type === "salesMonth") return counts.salesMonth >= limits.salesMonth;
-  return false;
-};
-
-const planLimitMessage = (type, plan) => {
-  const p = normalizePlan(plan);
-  const limits = PLAN_LIMITS[p] || PLAN_LIMITS.starter;
-  if (type === "products") return `Voce atingiu o limite de ${limits.products} produtos do plano Starter.`;
-  if (type === "clients") return `Voce atingiu o limite de ${limits.clients} clientes do plano Starter.`;
-  if (type === "salesMonth") return `Voce atingiu o limite de ${limits.salesMonth} vendas mensais do plano Starter.`;
-  return "Limite do plano atingido.";
-};
-
-function PlanUsageCard({ plan, products = [], clients = [], sales = [] }) {
-  const p = normalizePlan(plan);
-  const limits = PLAN_LIMITS[p] || PLAN_LIMITS.starter;
-  const counts = {
-    products: (products || []).length,
-    clients: (clients || []).length,
-    salesMonth: countSalesThisMonth(sales || []),
-  };
-
-  if (p !== "starter") {
-    return (
-      <div style={{ background:"#f0fdf4", border:"1.5px solid #bbf7d0", borderRadius:"16px", padding:"14px", marginBottom:"12px" }}>
-        <div style={{ fontWeight:"900", color:"#166534" }}>Plano {p.toUpperCase()}</div>
-        <div style={{ color:"#166534", fontSize:"13px", fontWeight:"700" }}>Produtos, clientes e vendas liberados.</div>
-      </div>
-    );
-  }
-
-  const row = (label, used, max) => {
-    const pct = Math.min(100, Math.round((used / max) * 100));
-    const danger = pct >= 90;
-    return (
-      <div style={{ marginTop:"10px" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", fontWeight:"900", color:danger?"#991b1b":"#334155", fontSize:"13px" }}>
-          <span>{label}</span><span>{used}/{max}</span>
-        </div>
-        <div style={{ height:"9px", background:"#e2e8f0", borderRadius:"999px", overflow:"hidden", marginTop:"5px" }}>
-          <div style={{ width:`${pct}%`, height:"100%", background:danger?"#dc2626":"#16a34a" }} />
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div style={{ background:"#fff7ed", border:"1.5px solid #fed7aa", borderRadius:"16px", padding:"14px", marginBottom:"12px" }}>
-      <div style={{ fontWeight:"900", color:"#9a3412" }}>Plano Starter</div>
-      <div style={{ color:"#9a3412", fontSize:"13px", fontWeight:"700" }}>Limites do plano gratuito.</div>
-      {row("Produtos", counts.products, limits.products)}
-      {row("Clientes", counts.clients, limits.clients)}
-      {row("Vendas no mês", counts.salesMonth, limits.salesMonth)}
-    </div>
-  );
-}
-
-
-const APP_VERSION = "ERPmini-v6-piloto-comercial";
-
 // --- localStorage helpers ----------------------------------------------------
 function loadLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
@@ -767,41 +659,6 @@ function BarcodeImage({ value }) {
 }
 
 const genBarcode = () => String(Math.floor(1000000000000 + Math.random() * 9000000000000));
-
-const PAYMENT_METHODS = [
-  { key:"dinheiro", label:"Dinheiro", icon:"Dinheiro", color:"#16a34a", light:"#f0fdf4" },
-  { key:"pix",      label:"PIX", icon:"PIX", color:"#0891b2", light:"#ecfeff" },
-  { key:"debito",   label:"Cartao Debito", icon:"Cartao", color:"#7c3aed", light:"#f5f3ff" },
-  { key:"credito",  label:"Cartao Credito", icon:"Cartao", color:"#2563eb", light:"#eff6ff" },
-  { key:"crediario", label:"Crediário", icon:"Crediário", color:"#f59e0b", light:"#fffbeb" },
-];
-
-const initialProducts = [
-  { id:1, name:"Produto A", price:25.9,  stock:50,  category:"Geral", barcode:"7891234560001" },
-  { id:2, name:"Produto B", price:12.5,  stock:30,  category:"Geral", barcode:"7891234560002" },
-  { id:3, name:"Produto C", price:8.0,   stock:100, category:"Geral", barcode:"7891234560003" },
-];
-
-
-const parseMoney = (value) => {
-  if (value === null || value === undefined) return 0;
-  const raw = String(value).trim();
-  if (!raw) return 0;
-  const normalized = raw
-    .replace(/[^\d,.-]/g, "")
-    .replace(/\.(?=\d{3}(,|$))/g, "")
-    .replace(",", ".");
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const fmtPercent = (value) => {
-  const n = Number(value || 0);
-  return `${n.toFixed(1).replace(".", ",")}%`;
-};
-
-const fmtCur  = (v) => v.toLocaleString("pt-BR",{ style:"currency", currency:"BRL" });
-const fmtDate = (d) => new Date(d).toLocaleString("pt-BR",{ day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
 
 // --- CHECKOUT ----------------------------------------------------------------
 function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sale", receiveInfo=null }) {

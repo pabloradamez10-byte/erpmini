@@ -1,25 +1,20 @@
 export function fmtCur(value) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL"
-  }).format(Number(value || 0));
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export function fmtDate(value) {
-  if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString("pt-BR");
-  } catch {
-    return String(value);
-  }
+  return new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export function normalizePlan(plan) {
-  const p = String(plan || "starter").toLowerCase();
+export function parseMoney(value) {
+  if (value === null || value === undefined) return 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  const normalized = raw.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(,|$))/g, "").replace(",", ".");
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : 0;
+}
 
-  if (p === "mensal" || p === "pro" || p === "pro_mensal") return "pro";
-  if (p === "premium" || p === "anual" || p === "premium_anual") return "premium";
-  if (p === "starter" || p === "teste" || p === "free") return "starter";
-
-  return p;
+export function fmtPercent(value) {
+  return `${Number(value || 0).toFixed(1).replace(".", ",")}%`;
 }
