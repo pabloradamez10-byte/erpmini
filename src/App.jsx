@@ -10,8 +10,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_PAIUP7LETrzQfZLMWcpsfw_8v8IeXTx";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function createPendingLicenseForCurrentUser(email) {
+async function createPendingLicenseForCurrentUser(email, businessType = "comercio") {
   const cleanEmail = String(email || "").trim().toLowerCase();
+  const cleanBusinessType = businessType === "servicos" ? "servicos" : "comercio";
   addDiagnosticLog("SIGNUP", "Verificando solicitação existente", "info", cleanEmail);
   if (!cleanEmail) {
     addDiagnosticLog("SIGNUP", "E-mail inválido", "error");
@@ -42,7 +43,7 @@ async function createPendingLicenseForCurrentUser(email) {
 
     const reopenQuery = supabase
       .from("erpmini_signup_requests")
-      .update({ status: "pendente", updated_at: new Date().toISOString() });
+      .update({ status: "pendente", business_type: cleanBusinessType, updated_at: new Date().toISOString() });
     const { error: reopenError } = latestRequest.id
       ? await reopenQuery.eq("id", latestRequest.id)
       : await reopenQuery.eq("email", cleanEmail);
@@ -60,7 +61,8 @@ async function createPendingLicenseForCurrentUser(email) {
     .insert([
       {
         email: cleanEmail,
-        status: "pendente"
+        status: "pendente",
+        business_type: cleanBusinessType
       }
     ]);
 
@@ -417,7 +419,11 @@ function AuthProvider({ children }) {
   }, []);
 
   const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password });
-  const signUp = (email, password) => supabase.auth.signUp({ email, password });
+  const signUp = (email, password, businessType) => supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { business_type: businessType === "servicos" ? "servicos" : "comercio" } }
+  });
   const signOut = () => supabase.auth.signOut();
 
   return (
@@ -436,6 +442,7 @@ function AuthScreen() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [businessType, setBusinessType] = useState("comercio");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -459,7 +466,7 @@ function AuthScreen() {
     }
 
     addDiagnosticLog("SIGNUP", "Cadastro iniciado", "info", cleanEmail);
-    const result = await signUp(cleanEmail, password);
+    const result = await signUp(cleanEmail, password, businessType);
 
     if (result.error) {
       addDiagnosticLog("SIGNUP", "Cadastro falhou", "error", result.error.message);
@@ -473,7 +480,7 @@ function AuthScreen() {
     // sessão autenticada. Nesse caso o RLS impede o INSERT agora e o AuthGate
     // repetirá a solicitação automaticamente no primeiro login confirmado.
     const pending = result.data?.session
-      ? await createPendingLicenseForCurrentUser(cleanEmail)
+      ? await createPendingLicenseForCurrentUser(cleanEmail, businessType)
       : { ok: true, deferred: true };
 
     setBusy(false);
@@ -505,6 +512,15 @@ function AuthScreen() {
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
         <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        {mode === "signup" && (
+          <>
+            <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Tipo de negócio</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", margin:"6px 0 12px" }}>
+              <button type="button" onClick={()=>setBusinessType("comercio")} style={{ padding:"12px 8px", border:`2px solid ${businessType === "comercio" ? "#e94560" : "#e2e8f0"}`, borderRadius:"12px", background:businessType === "comercio" ? "#fff1f2" : "#fff", color:businessType === "comercio" ? "#be123c" : "#64748b", fontWeight:"900" }}>Comércio</button>
+              <button type="button" onClick={()=>setBusinessType("servicos")} style={{ padding:"12px 8px", border:`2px solid ${businessType === "servicos" ? "#e94560" : "#e2e8f0"}`, borderRadius:"12px", background:businessType === "servicos" ? "#fff1f2" : "#fff", color:businessType === "servicos" ? "#be123c" : "#64748b", fontWeight:"900" }}>Serviços</button>
+            </div>
+          </>
+        )}
         {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
         <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
           {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar conta e solicitar acesso"}
@@ -545,7 +561,7 @@ function AuthGate() {
       let accessInfo = license;
 
       if (!license.ok && license.title === "Licenca nao liberada") {
-        const pending = await createPendingLicenseForCurrentUser(user.email);
+        const pending = await createPendingLicenseForCurrentUser(user.email, user.user_metadata?.business_type);
         if (!pending.ok) {
           console.warn("ERPmini signup request retry error:", pending.message);
         } else {

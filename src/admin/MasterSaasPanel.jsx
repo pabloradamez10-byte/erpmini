@@ -576,14 +576,15 @@ export default function MasterSaasPanel({
     }
   };
 
-  const approveRequest = async (email) => {
-    const cleanEmail = String(email || "").trim().toLowerCase();
+  const approveRequest = async (request) => {
+    const cleanEmail = String(request?.email || "").trim().toLowerCase();
+    const requestBusinessType = request?.business_type === "servicos" ? "servicos" : "comercio";
 
     const ok = await saveLicense(cleanEmail, {
       status: "ativo",
       plan: "pro",
       expires_at: addMonths(1),
-      notes: "Aprovado pelo Painel Master."
+      notes: withBusinessNote("Aprovado pelo Painel Master.", requestBusinessType)
     });
 
     if (ok) {
@@ -690,9 +691,14 @@ export default function MasterSaasPanel({
                       {rawStatus}
                     </span>
                   </div>
+                  <div style={{ marginTop:"6px" }}>
+                    <span style={ui.pill(r.business_type === "servicos" ? "#ecfdf5" : "#eff6ff", r.business_type === "servicos" ? "#047857" : "#2563eb")}>
+                      {r.business_type === "servicos" ? "Serviços" : "Comércio"}
+                    </span>
+                  </div>
                   {pending && (
                     <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 1fr", gap:"8px", marginTop:"8px" }}>
-                      <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r.email)} disabled={loading}>Aprovar</button>
+                      <button style={{ ...btnSm("#16a34a") }} onClick={()=>approveRequest(r)} disabled={loading}>Aprovar</button>
                       <button style={{ ...btnSm("#ef4444") }} onClick={()=>rejectRequest(r.email)} disabled={loading}>Recusar</button>
                     </div>
                   )}
