@@ -3,6 +3,7 @@ import MasterSaasPanel from "./admin/MasterSaasPanel.jsx";
 import ServicesModule from "./servicesModule/ServicesModule.jsx";
 import PlanUsageCard from "./components/PlanUsageCard.jsx";
 import AuthScreen from "./auth/AuthScreen.jsx";
+import PasswordRecoveryScreen from "./auth/PasswordRecoveryScreen.jsx";
 import LicenseBlockedScreen from "./auth/LicenseBlockedScreen.jsx";
 import { AuthProvider, useAuth } from "./auth/AuthContext.jsx";
 import { checkLicenseByEmail, createPendingLicenseForCurrentUser } from "./auth/accessService.js";
@@ -18,10 +19,11 @@ import { BarcodeImage, generateBarcode } from "./inventory/barcode.jsx";
 import ClientsTab, { ClientHistoryModal } from "./clients/ClientsTab.jsx";
 import CashSummary from "./cash/CashSummary.jsx";
 import CashFinanceReports from "./cash/CashFinanceReports.jsx";
+import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
 
 
 function AuthGate() {
-  const { user, authLoading, signOut } = useAuth();
+  const { user, authLoading, authEvent, signOut } = useAuth();
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudMsg, setCloudMsg] = useState("");
   const [licenseReady, setLicenseReady] = useState(false);
@@ -103,6 +105,8 @@ function AuthGate() {
       </div>
     );
   }
+
+  if (authEvent === "PASSWORD_RECOVERY") return <PasswordRecoveryScreen />;
 
   if (!user) return <AuthScreen />;
 
@@ -889,7 +893,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     setTimeout(()=>setNotification(null), 2500);
   };
 
-  const BACKUP_ADMIN_PASSWORD = "PABLO";
   const makeBackupPayload = (mode="manual") => ({
     app:"ERPmini",
     backupVersion:1,
@@ -995,8 +998,8 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       try {
         const payload = JSON.parse(reader.result);
         if (admin) {
-          const senha = window.prompt("Senha ADM para restaurar versao anterior:");
-          if (senha !== BACKUP_ADMIN_PASSWORD) { notify("Senha ADM incorreta.", "error"); return; }
+          const confirmation = window.prompt("Para restaurar uma versão antiga, digite RESTAURAR:");
+          if (confirmation !== "RESTAURAR") { notify("Restauração cancelada.", "error"); return; }
         }
         if (!window.confirm("Restaurar este backup? Os dados atuais serao substituidos.")) return;
         saveBackupSnapshot(payload);
@@ -1009,8 +1012,8 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   };
 
   const restoreOldBackupFromHistory = (payload) => {
-    const senha = window.prompt("Senha ADM para restaurar versao anterior:");
-    if (senha !== BACKUP_ADMIN_PASSWORD) { notify("Senha ADM incorreta.", "error"); return; }
+    const confirmation = window.prompt("Para restaurar uma versão antiga, digite RESTAURAR:");
+    if (confirmation !== "RESTAURAR") { notify("Restauração cancelada.", "error"); return; }
     if (!window.confirm("Restaurar esta versao anterior? Os dados atuais serao substituidos.")) return;
     applyBackupPayload(payload);
   };
@@ -2629,7 +2632,7 @@ const PDVTab = () => (
         }}>
           {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
-        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v6-piloto-comercial</span>
+        <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v7-candidato-comercial</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
         {/* Mobile cart button */}
         {isMobile && tab==="pdv" && (
@@ -2953,8 +2956,10 @@ const PDVTab = () => (
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
