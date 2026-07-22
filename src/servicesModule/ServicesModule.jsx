@@ -39,6 +39,27 @@ function addDaysISO(days) {
   return d.toISOString().slice(0, 10);
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function itemTotal(item, legacyValue = false) {
+  if (legacyValue && item.unitPrice === undefined && item.qty === undefined) return Math.max(0, Number(item.value) || 0);
+  const qty = Math.max(0, Number(item.qty) || 0);
+  const unitPrice = Math.max(0, Number(item.unitPrice ?? item.price ?? item.value) || 0);
+  const discount = Math.max(0, Number(item.discount) || 0);
+  return Math.max(0, qty * unitPrice - discount);
+}
+
 function statusLabel(status) {
   const map = {
     orcamento: "Orçamento",
@@ -96,6 +117,10 @@ function emptyDraft() {
     clientId: "",
     newClient: { name: "", phone: "", email: "" },
     description: "",
+    quoteNumber: null,
+    quoteDate: todayISO(),
+    validityDays: "10",
+    validUntil: addDaysISO(10),
     diagnosis: "",
     equipment: "",
     identifier: "",
@@ -107,11 +132,21 @@ function emptyDraft() {
     warrantyNotes: "",
     laborName: "",
     laborValue: "",
+    laborUnit: "serviço",
+    laborQty: "1",
+    laborDiscount: "",
+    catalogItemId: "",
     laborItems: [],
     productId: "",
     productQty: 1,
     materialItems: [],
     discount: "",
+    travelCost: "",
+    otherCosts: "",
+    depositValue: "",
+    paymentTerms: "50% na aprovação e 50% na conclusão do serviço.",
+    executionTerms: "",
+    quoteNotes: "Materiais adicionais e alterações solicitadas após a aprovação poderão ser orçados separadamente.",
     paymentMethod: "pix",
     dueDate: "",
     photos: [],
@@ -235,6 +270,8 @@ export default function ServicesModule({
   setClients,
   services,
   setServices,
+  serviceCatalog = [],
+  setServiceCatalog,
   sales,
   setSales,
   receivables,
@@ -250,13 +287,14 @@ export default function ServicesModule({
   notify,
 }) {
   const [view, setView] = useState("lista");
-  const [filter, setFilter] = useState("ativos");
+  const [filter, setFilter] = useState("orcamentos");
   const [draft, setDraft] = useState(emptyDraft());
   const [selectedService, setSelectedService] = useState(null);
   const [formSection, setFormSection] = useState("abertura");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [technicians, setTechnicians] = useState(loadTechnicians);
   const [newTech, setNewTech] = useState("");
+  const [catalogDraft, setCatalogDraft] = useState({ name: "", unit: "serviço", price: "" });
   const photoInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
 
@@ -266,11 +304,11 @@ export default function ServicesModule({
   );
 
   const laborTotal = useMemo(
-    () => draft.laborItems.reduce((sum, item) => sum + (Number(item.value) || 0), 0),
+    () => draft.laborItems.reduce((sum, item) => sum + itemTotal(item, true), 0),
     [draft.laborItems]
   );
   const materialsTotal = useMemo(
-    () => draft.materialItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0),
+    () => draft.materialItems.reduce((sum, item) => sum + itemTotal(item), 0),
     [draft.materialItems]
   );
   const materialCost = useMemo(
@@ -278,13 +316,18 @@ export default function ServicesModule({
     [draft.materialItems]
   );
   const discountValue = normalizeMoney(draft.discount);
-  const total = Math.max(0, laborTotal + materialsTotal - discountValue);
+  const travelCost = normalizeMoney(draft.travelCost);
+  const otherCosts = normalizeMoney(draft.otherCosts);
+  const depositValue = normalizeMoney(draft.depositValue);
+  const subtotal = laborTotal + materialsTotal;
+  const total = Math.max(0, subtotal + travelCost + otherCosts - discountValue);
   const profit = total - materialCost;
   const commission = Math.max(0, profit * (normalizeMoney(draft.commissionPercent) / 100));
 
-  const activeServices = services.filter((s) => !["concluido", "cancelado"].includes(String(s.status || "")));
+  const quoteServices = services.filter((s) => ["aberto", "orcamento", "aguardando_aprovacao", "aprovado"].includes(String(s.status || "")));
+  const activeServices = services.filter((s) => ["andamento", "pagamento"].includes(String(s.status || "")));
   const finishedServices = services.filter((s) => ["concluido", "cancelado"].includes(String(s.status || "")));
-  const filteredServices = filter === "ativos" ? activeServices : finishedServices;
+  const filteredServices = filter === "orcamentos" ? quoteServices : filter === "ativos" ? activeServices : finishedServices;
 
   const monthKey = new Date().toISOString().slice(0, 7);
   const monthDone = services.filter((s) => s.status === "concluido" && String(s.paidAt || s.updatedAt || "").startsWith(monthKey));
@@ -313,10 +356,52 @@ export default function ServicesModule({
     notify?.("Responsável adicionado.");
   };
 
+  const nextQuoteNumber = () => {
+    const highest = services.reduce((max, service) => {
+      const value = Number(service.quoteNumber);
+      return Number.isFinite(value) ? Math.max(max, value) : max;
+    }, 1000);
+    return highest + 1;
+  };
+
+  const addCatalogItem = () => {
+    const name = catalogDraft.name.trim();
+    const price = normalizeMoney(catalogDraft.price);
+    if (!name) return notify?.("Informe o nome do serviço.", "error");
+    if (price <= 0) return notify?.("Informe um preço de venda válido.", "error");
+    if (serviceCatalog.some((item) => String(item.name || "").toLowerCase() === name.toLowerCase())) {
+      return notify?.("Este serviço já está no catálogo.", "error");
+    }
+    setServiceCatalog?.((previous) => [
+      ...previous,
+      { id: newId(), name, unit: catalogDraft.unit || "serviço", price, createdAt: new Date().toISOString() },
+    ]);
+    setCatalogDraft({ name: "", unit: "serviço", price: "" });
+    notify?.("Serviço adicionado ao catálogo.");
+  };
+
+  const removeCatalogItem = (id) => {
+    if (!window.confirm("Excluir este item do catálogo?")) return;
+    setServiceCatalog?.((previous) => previous.filter((item) => String(item.id) !== String(id)));
+  };
+
+  const addFromCatalog = () => {
+    const item = serviceCatalog.find((entry) => String(entry.id) === String(draft.catalogItemId));
+    if (!item) return notify?.("Selecione um serviço do catálogo.", "error");
+    updateDraft({
+      laborItems: [
+        ...draft.laborItems,
+        { id: newId(), name: item.name, unit: item.unit || "serviço", qty: 1, unitPrice: Number(item.price) || 0, discount: 0 },
+      ],
+      catalogItemId: "",
+    });
+  };
+
   const startNew = () => {
     setDraft({
       ...emptyDraft(),
-      history: pushHistory([], "Criação", "Nova ordem de serviço iniciada."),
+      quoteNumber: nextQuoteNumber(),
+      history: pushHistory([], "Criação", "Novo orçamento de serviço iniciado."),
     });
     setFormSection("abertura");
     setShowAdvanced(false);
@@ -343,6 +428,10 @@ export default function ServicesModule({
         email: service.clientEmail || "",
       },
       description: service.description || "",
+      quoteNumber: service.quoteNumber || null,
+      quoteDate: service.quoteDate || String(service.date || "").slice(0, 10) || todayISO(),
+      validityDays: String(service.validityDays ?? "10"),
+      validUntil: service.validUntil || "",
       diagnosis: service.diagnosis || "",
       equipment: service.equipment || "",
       identifier: service.identifier || "",
@@ -355,6 +444,12 @@ export default function ServicesModule({
       laborItems: service.laborItems || [],
       materialItems: service.materialItems || [],
       discount: String(service.discount || ""),
+      travelCost: String(service.travelCost || ""),
+      otherCosts: String(service.otherCosts || ""),
+      depositValue: String(service.depositValue || ""),
+      paymentTerms: service.paymentTerms || "50% na aprovação e 50% na conclusão do serviço.",
+      executionTerms: service.executionTerms || "",
+      quoteNotes: service.quoteNotes || "",
       paymentMethod: service.paymentMethod || "pix",
       dueDate: service.dueDate || "",
       photos: service.photos || [],
@@ -427,6 +522,10 @@ export default function ServicesModule({
       clientPhone: client.phone || "",
       clientEmail: client.email || "",
       description: draft.description.trim(),
+      quoteNumber: previous?.quoteNumber || draft.quoteNumber || nextQuoteNumber(),
+      quoteDate: draft.quoteDate || String(previous?.date || now).slice(0, 10),
+      validityDays: Math.max(1, Number(draft.validityDays) || 10),
+      validUntil: draft.validUntil || addDaysISO(Math.max(1, Number(draft.validityDays) || 10)),
       diagnosis: draft.diagnosis.trim(),
       equipment: draft.equipment.trim(),
       identifier: draft.identifier.trim(),
@@ -443,6 +542,12 @@ export default function ServicesModule({
       materialsTotal,
       materialCost,
       discount: discountValue,
+      travelCost,
+      otherCosts,
+      depositValue: Math.min(total, Math.max(0, depositValue)),
+      paymentTerms: draft.paymentTerms,
+      executionTerms: draft.executionTerms,
+      quoteNotes: draft.quoteNotes,
       total,
       profit,
       commissionPercent: normalizeMoney(draft.commissionPercent),
@@ -523,13 +628,19 @@ export default function ServicesModule({
 
   const addLabor = () => {
     const name = draft.laborName.trim();
-    const value = normalizeMoney(draft.laborValue);
+    const unitPrice = normalizeMoney(draft.laborValue);
+    const qty = Math.max(0, Number(draft.laborQty) || 0);
+    const discount = normalizeMoney(draft.laborDiscount);
     if (!name) return notify?.("Informe a descrição da mão de obra.", "error");
-    if (value <= 0) return notify?.("Informe o valor da mão de obra.", "error");
+    if (qty <= 0) return notify?.("Informe a quantidade.", "error");
+    if (unitPrice <= 0) return notify?.("Informe o valor unitário.", "error");
     updateDraft({
-      laborItems: [...draft.laborItems, { id: newId(), name, value }],
+      laborItems: [...draft.laborItems, { id: newId(), name, unit: draft.laborUnit || "serviço", qty, unitPrice, discount }],
       laborName: "",
       laborValue: "",
+      laborUnit: "serviço",
+      laborQty: "1",
+      laborDiscount: "",
     });
   };
 
@@ -619,8 +730,8 @@ export default function ServicesModule({
       date: payload.paidAt || payload.updatedAt,
       total: payload.total,
       items: [
-        ...payload.laborItems.map((item) => ({ id: `mao-${item.id}`, name: item.name, qty: 1, price: item.value, type: "mao_de_obra" })),
-        ...payload.materialItems.map((item) => ({ ...item, type: "material" })),
+        ...payload.laborItems.map((item) => ({ id: `mao-${item.id}`, name: item.name, qty: Number(item.qty) || 1, price: itemTotal(item, true) / (Number(item.qty) || 1), type: "mao_de_obra" })),
+        ...payload.materialItems.map((item) => ({ ...item, price: itemTotal(item) / (Number(item.qty) || 1), type: "material" })),
       ],
       type: "servico",
       serviceId: payload.id,
@@ -667,20 +778,41 @@ export default function ServicesModule({
   const printService = (service) => {
     const win = window.open("", "_blank", "width=720,height=900");
     if (!win) return notify?.("Permita pop-ups para imprimir.", "error");
-    const laborRows = (service.laborItems || []).map((i) => `<tr><td>${i.name}</td><td>1</td><td>${fmtCur(i.value)}</td><td>${fmtCur(i.value)}</td></tr>`).join("");
-    const materialRows = (service.materialItems || []).map((i) => `<tr><td>${i.name}</td><td>${i.qty}</td><td>${fmtCur(i.price)}</td><td>${fmtCur((Number(i.qty)||0)*(Number(i.price)||0))}</td></tr>`).join("");
-    const photoHtml = (service.photos || []).map((src) => `<img src="${src}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;margin:4px"/>`).join("");
-    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>OS ${service.id}</title><style>
-      body{font-family:Arial,sans-serif;color:#0f172a;margin:30px}h1,h2,p{margin:0}.header{display:flex;justify-content:space-between;border-bottom:3px solid #e94560;padding-bottom:15px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.box{border:1px solid #cbd5e1;border-radius:10px;padding:10px}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}.totals{margin-left:auto;width:320px;margin-top:18px}.row{display:flex;justify-content:space-between;padding:5px}.total{font-size:20px;font-weight:bold;border-top:2px solid #0f172a}.signature{max-width:300px;height:100px;object-fit:contain;border-bottom:1px solid #111}.photos{margin-top:15px}.footer{margin-top:30px;font-size:11px;color:#64748b;text-align:center}@media print{button{display:none}}</style></head><body>
-      <div class="header"><div><h1>${storeName || "ERPmini"}</h1><p class="muted">Ordem de Serviço</p></div><div><h2>#${service.id}</h2><p>${statusLabel(service.status)}</p></div></div>
-      <div class="grid"><div class="box"><b>Cliente:</b> ${service.clientName}<br><b>Telefone:</b> ${service.clientPhone || "-"}</div><div class="box"><b>Entrada:</b> ${fmtDate(service.date)}<br><b>Previsão:</b> ${service.promisedDate || "-"}<br><b>Responsável:</b> ${service.technician || "-"}</div></div>
-      <div class="box"><b>Serviço solicitado</b><p>${service.description || "-"}</p><br><b>Diagnóstico</b><p>${service.diagnosis || "-"}</p></div>
-      <table><thead><tr><th>Item</th><th>Qtd.</th><th>Unit.</th><th>Total</th></tr></thead><tbody>${laborRows}${materialRows}</tbody></table>
-      <div class="totals"><div class="row"><span>Mão de obra</span><b>${fmtCur(service.laborTotal)}</b></div><div class="row"><span>Materiais</span><b>${fmtCur(service.materialsTotal)}</b></div><div class="row"><span>Desconto</span><b>${fmtCur(service.discount)}</b></div><div class="row total"><span>Total</span><span>${fmtCur(service.total)}</span></div></div>
-      ${service.warrantyDays ? `<div class="box" style="margin-top:18px"><b>Garantia:</b> ${service.warrantyDays} dias ${service.warrantyEnd ? `(até ${service.warrantyEnd})` : ""}<br>${service.warrantyNotes || ""}</div>` : ""}
+    const isQuote = ["orcamento", "aguardando_aprovacao", "aprovado", "aberto"].includes(String(service.status || ""));
+    const documentTitle = isQuote ? "ORÇAMENTO DE SERVIÇOS" : "ORDEM DE SERVIÇO";
+    const documentNumber = service.quoteNumber || service.id;
+    const allItems = [
+      ...(service.laborItems || []).map((item) => ({
+        name: item.name,
+        unit: item.unit || "serviço",
+        qty: Number(item.qty) || 1,
+        unitPrice: Number(item.unitPrice ?? item.value) || 0,
+        discount: Number(item.discount) || 0,
+        total: itemTotal(item, true),
+      })),
+      ...(service.materialItems || []).map((item) => ({
+        name: item.name,
+        unit: item.unit || "un",
+        qty: Number(item.qty) || 0,
+        unitPrice: Number(item.unitPrice ?? item.price) || 0,
+        discount: Number(item.discount) || 0,
+        total: itemTotal(item),
+      })),
+    ];
+    const itemRows = allItems.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.unit)}</td><td>${item.qty}</td><td>${fmtCur(item.unitPrice)}</td><td>${fmtCur(item.discount)}</td><td><b>${fmtCur(item.total)}</b></td></tr>`).join("");
+    const photoHtml = !isQuote ? (service.photos || []).map((src) => `<img src="${src}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;margin:4px"/>`).join("") : "";
+    const subtotalValue = (Number(service.laborTotal) || 0) + (Number(service.materialsTotal) || 0);
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${documentTitle} ${documentNumber}</title><style>
+      *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;margin:28px;font-size:12px}h1,h2,h3,p{margin:0}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:4px solid #e94560;padding-bottom:15px}.brand{font-size:24px}.doc-title{font-size:18px;text-align:right}.muted{color:#64748b}.meta{margin-top:5px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}.box{border:1px solid #cbd5e1;border-radius:10px;padding:11px;line-height:1.55}.section{font-size:12px;letter-spacing:.5px;color:#e94560;margin-bottom:6px}table{width:100%;border-collapse:collapse;margin-top:14px}th{background:#0f172a;color:#fff;font-size:10px;text-transform:uppercase}th,td{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}th:nth-child(n+3),td:nth-child(n+3){text-align:right}.totals{margin-left:auto;width:340px;margin-top:16px;border:1px solid #cbd5e1;border-radius:10px;padding:8px}.row{display:flex;justify-content:space-between;padding:5px}.total{font-size:19px;font-weight:bold;border-top:2px solid #0f172a;margin-top:4px;padding-top:8px}.deposit{background:#ecfdf5;color:#166534;border-radius:8px}.conditions{margin-top:16px}.signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:44px}.signature-line{border-top:1px solid #111;text-align:center;padding-top:6px}.signature{max-width:260px;height:80px;object-fit:contain}.photos{margin-top:15px}.footer{margin-top:24px;font-size:10px;color:#64748b;text-align:center}@media print{body{margin:12mm}.no-print{display:none}}</style></head><body>
+      <div class="header"><div><h1 class="brand">${escapeHtml(storeName || "ERPmini")}</h1><p class="muted">Gestão inteligente de serviços</p></div><div><h2 class="doc-title">${documentTitle}</h2><p class="meta"><b>Nº ${escapeHtml(documentNumber)}</b> • ${statusLabel(service.status)}</p></div></div>
+      <div class="grid"><div class="box"><h3 class="section">DADOS DO CLIENTE</h3><b>${escapeHtml(service.clientName)}</b><br>Telefone: ${escapeHtml(service.clientPhone || "-")}<br>E-mail: ${escapeHtml(service.clientEmail || "-")}</div><div class="box"><h3 class="section">DADOS DO DOCUMENTO</h3>Data: ${escapeHtml(service.quoteDate || String(service.date || "").slice(0,10) || "-")}<br>Válido até: ${escapeHtml(service.validUntil || "-")}<br>Previsão: ${escapeHtml(service.promisedDate || "-")}</div></div>
+      <div class="box"><h3 class="section">ESCOPO DO SERVIÇO</h3><p>${escapeHtml(service.description || "-")}</p>${service.equipment ? `<br><b>Equipamento/objeto:</b> ${escapeHtml(service.equipment)}` : ""}${service.identifier ? `<br><b>Identificação:</b> ${escapeHtml(service.identifier)}` : ""}${!isQuote && service.diagnosis ? `<br><br><b>Trabalho realizado:</b><br>${escapeHtml(service.diagnosis)}` : ""}</div>
+      <table><thead><tr><th>#</th><th>Serviço / Material</th><th>Un.</th><th>Qtd.</th><th>Valor unit.</th><th>Desconto</th><th>Total</th></tr></thead><tbody>${itemRows || `<tr><td colspan="7" style="text-align:center;color:#64748b">Nenhum item informado.</td></tr>`}</tbody></table>
+      <div class="totals"><div class="row"><span>Subtotal</span><b>${fmtCur(subtotalValue)}</b></div><div class="row"><span>Deslocamento</span><b>${fmtCur(service.travelCost || 0)}</b></div><div class="row"><span>Outros custos</span><b>${fmtCur(service.otherCosts || 0)}</b></div><div class="row"><span>Desconto geral</span><b>- ${fmtCur(service.discount || 0)}</b></div><div class="row total"><span>TOTAL</span><span>${fmtCur(service.total)}</span></div>${Number(service.depositValue)>0 ? `<div class="row deposit"><span>Entrada prevista</span><b>${fmtCur(service.depositValue)}</b></div>` : ""}</div>
+      <div class="grid conditions"><div class="box"><h3 class="section">CONDIÇÕES</h3><b>Pagamento:</b> ${escapeHtml(service.paymentTerms || "A combinar.")}<br><b>Prazo:</b> ${escapeHtml(service.executionTerms || service.promisedDate || "A combinar.")}<br><b>Garantia:</b> ${escapeHtml(service.warrantyDays || 0)} dias ${service.warrantyNotes ? `— ${escapeHtml(service.warrantyNotes)}` : ""}</div><div class="box"><h3 class="section">OBSERVAÇÕES</h3>${escapeHtml(service.quoteNotes || service.notes || "Sem observações adicionais.")}</div></div>
       ${photoHtml ? `<div class="photos"><b>Fotos</b><div>${photoHtml}</div></div>` : ""}
-      ${service.signature ? `<div style="margin-top:25px"><img class="signature" src="${service.signature}"/><div>Assinatura do cliente</div></div>` : ""}
-      <div class="footer">Documento de controle interno — não fiscal • ERPmini</div></body></html>`);
+      <div class="signature-grid"><div class="signature-line">${escapeHtml(storeName || "Prestador")}</div><div class="signature-line">${service.signature ? `<img class="signature" src="${service.signature}"/><br>` : ""}${escapeHtml(service.clientName || "Cliente")}</div></div>
+      <div class="footer">Documento comercial não fiscal • Gerado pelo ERPmini</div></body></html>`);
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 300);
@@ -688,12 +820,15 @@ export default function ServicesModule({
 
   const shareWhatsApp = (service) => {
     const phone = onlyDigits(service.clientPhone);
+    const isQuote = ["aberto", "orcamento", "aguardando_aprovacao", "aprovado"].includes(String(service.status || ""));
     const text = [
       `Olá, ${service.clientName}!`,
-      `Atualização do serviço #${service.id}: ${statusLabel(service.status)}.`,
+      `${isQuote ? "Orçamento" : "Serviço"} #${service.quoteNumber || service.id}: ${statusLabel(service.status)}.`,
       `Serviço: ${service.description}`,
       `Total: ${fmtCur(service.total || 0)}`,
-      service.promisedDate ? `Previsão: ${service.promisedDate}` : "",
+      isQuote && service.validUntil ? `Proposta válida até: ${service.validUntil}` : "",
+      service.paymentTerms ? `Condições: ${service.paymentTerms}` : "",
+      !isQuote && service.promisedDate ? `Previsão: ${service.promisedDate}` : "",
       `Atenciosamente, ${storeName || "ERPmini"}.`,
     ].filter(Boolean).join("\n");
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
@@ -731,12 +866,12 @@ export default function ServicesModule({
   const currentSavedService = () => services.find((s) => String(s.id) === String(draft.id));
 
   const saveAndPrint = () => {
-    const payload = saveStep(draft.status || "orcamento", "Documento atualizado", "OS preparada para PDF.");
+    const payload = saveStep(draft.status || "orcamento", "Documento atualizado", "Orçamento preparado para PDF.");
     if (payload) printService(payload);
   };
 
   const saveAndWhatsApp = () => {
-    const payload = saveStep(draft.status || "orcamento", "Compartilhamento", "OS preparada para envio ao cliente.");
+    const payload = saveStep(draft.status || "orcamento", "Compartilhamento", "Orçamento preparado para envio ao cliente.");
     if (payload) shareWhatsApp(payload);
   };
 
@@ -775,11 +910,12 @@ export default function ServicesModule({
   const ServiceCard = ({ service }) => {
     const st = statusStyle(service.status);
     const final = ["concluido", "cancelado"].includes(service.status);
+    const isQuote = ["aberto", "orcamento", "aguardando_aprovacao", "aprovado"].includes(service.status);
     const late = service.promisedDate && !final && service.promisedDate < new Date().toISOString().slice(0, 10);
     return (
       <div style={{ border: "1px solid #e2e8f0", borderRadius: "18px", padding: "14px", marginBottom: "12px", background: "#fff", boxShadow: "0 8px 22px rgba(15,23,42,.05)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
-          <div><div style={{ fontWeight: 900, color: "#0f172a", fontSize: "18px" }}>{service.clientName}</div><div style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>#{service.id} • {fmtDate(service.date)}</div></div>
+          <div><div style={{ fontWeight: 900, color: "#0f172a", fontSize: "18px" }}>{service.clientName}</div><div style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>{isQuote ? "Orçamento" : "Serviço"} #{service.quoteNumber || service.id} • {fmtDate(service.date)}</div></div>
           <div style={{ textAlign: "right" }}><div style={{ fontWeight: 900, color: "#16a34a", fontSize: "18px" }}>{fmtCur(service.total || 0)}</div><span style={{ background: st.bg, color: st.color, borderRadius: "999px", padding: "4px 9px", fontSize: "11px", fontWeight: 900 }}>{statusLabel(service.status)}</span></div>
         </div>
         <div style={{ color: "#334155", fontSize: "13px", fontWeight: 700, marginTop: "8px" }}>{service.description}</div>
@@ -813,19 +949,43 @@ export default function ServicesModule({
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px", background: "#fff", padding: "8px", borderRadius: "18px", boxShadow: "0 4px 16px rgba(15,23,42,.08)" }}>
-        <button onClick={startNew} style={{ border: "none", borderRadius: "14px", padding: "12px", fontWeight: 900, background: view === "form" ? "#e94560" : "#f1f5f9", color: view === "form" ? "#fff" : "#64748b" }}>+ Novo Serviço</button>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "12px", background: "#fff", padding: "8px", borderRadius: "18px", boxShadow: "0 4px 16px rgba(15,23,42,.08)" }}>
+        <button onClick={startNew} style={{ border: "none", borderRadius: "14px", padding: "12px 6px", fontWeight: 900, background: view === "form" ? "#e94560" : "#f1f5f9", color: view === "form" ? "#fff" : "#64748b" }}>+ Orçamento</button>
         <button onClick={() => setView("lista")} style={{ border: "none", borderRadius: "14px", padding: "12px", fontWeight: 900, background: view === "lista" ? "#e94560" : "#f1f5f9", color: view === "lista" ? "#fff" : "#64748b" }}>Acompanhar</button>
+        <button onClick={() => setView("catalogo")} style={{ border: "none", borderRadius: "14px", padding: "12px", fontWeight: 900, background: view === "catalogo" ? "#e94560" : "#f1f5f9", color: view === "catalogo" ? "#fff" : "#64748b" }}>Catálogo</button>
       </div>
 
-      {view === "lista" ? (
+      {view === "catalogo" ? (
         <div style={card}>
-          <div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>Gestão de Serviços</div>
-          <div style={{ color: "#64748b", fontWeight: 700, fontSize: "13px", marginBottom: "12px" }}>Ordens, orçamento, execução, pagamento e pós-venda.</div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "8px", marginBottom: "12px" }}>
-            {[["Em aberto", activeServices.length, "#2563eb"],["Aprovação", awaitingApproval, "#f97316"],["Receita mês", fmtCur(monthRevenue), "#16a34a"],["Lucro mês", fmtCur(monthProfit), "#7c3aed"]].map(([label,value,color]) => <div key={label} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "10px" }}><div style={{ fontSize: "11px", color: "#64748b", fontWeight: 900 }}>{label}</div><div style={{ fontSize: String(value).length > 10 ? "16px" : "22px", color, fontWeight: 900 }}>{value}</div></div>)}
+          <div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>Catálogo de serviços</div>
+          <div style={{ color: "#64748b", fontWeight: 700, fontSize: "13px", marginBottom: "14px" }}>Cadastre os serviços mais usados para preencher preço e unidade automaticamente no orçamento.</div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 160px 160px auto", gap: "8px" }}>
+            <input style={inp} value={catalogDraft.name} onChange={(event) => setCatalogDraft({ ...catalogDraft, name: event.target.value })} placeholder="Nome do serviço" />
+            <select style={inp} value={catalogDraft.unit} onChange={(event) => setCatalogDraft({ ...catalogDraft, unit: event.target.value })}>
+              {["serviço", "hora", "diária", "un", "m²", "m", "km"].map((unit) => <option key={unit}>{unit}</option>)}
+            </select>
+            <input style={inp} inputMode="decimal" value={catalogDraft.price} onChange={(event) => setCatalogDraft({ ...catalogDraft, price: event.target.value })} placeholder="Preço de venda" />
+            <button style={btnSm("#16a34a")} onClick={addCatalogItem}>Adicionar</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ marginTop: "16px" }}>
+            {serviceCatalog.length === 0 ? <div style={{ color: "#94a3b8", textAlign: "center", padding: "22px" }}>Nenhum serviço cadastrado.</div> : serviceCatalog.map((item) => (
+              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "10px", alignItems: "center", padding: "11px 0", borderBottom: "1px solid #e2e8f0" }}>
+                <div><b>{item.name}</b><div style={{ color: "#64748b", fontSize: "12px" }}>{item.unit || "serviço"}</div></div>
+                <b style={{ color: "#16a34a" }}>{fmtCur(item.price || 0)}</b>
+                <button style={btnSm("#ef4444")} onClick={() => removeCatalogItem(item.id)}>Excluir</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : view === "lista" ? (
+        <div style={card}>
+          <div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>Orçamentos e Serviços</div>
+          <div style={{ color: "#64748b", fontWeight: 700, fontSize: "13px", marginBottom: "12px" }}>Proposta comercial, aprovação, execução, pagamento e pós-venda.</div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "8px", marginBottom: "12px" }}>
+            {[["Orçamentos", quoteServices.length, "#2563eb"],["Aprovação", awaitingApproval, "#f97316"],["Receita mês", fmtCur(monthRevenue), "#16a34a"],["Lucro mês", fmtCur(monthProfit), "#7c3aed"]].map(([label,value,color]) => <div key={label} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "10px" }}><div style={{ fontSize: "11px", color: "#64748b", fontWeight: 900 }}>{label}</div><div style={{ fontSize: String(value).length > 10 ? "16px" : "22px", color, fontWeight: 900 }}>{value}</div></div>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "12px" }}>
+            <button style={{ ...btn(filter === "orcamentos" ? "#e94560" : "#f1f5f9"), color: filter === "orcamentos" ? "#fff" : "#64748b", padding: "10px 5px" }} onClick={() => setFilter("orcamentos")}>Orçamentos ({quoteServices.length})</button>
             <button style={{ ...btn(filter === "ativos" ? "#e94560" : "#f1f5f9"), color: filter === "ativos" ? "#fff" : "#64748b" }} onClick={() => setFilter("ativos")}>Em aberto ({activeServices.length})</button>
             <button style={{ ...btn(filter === "finalizados" ? "#e94560" : "#f1f5f9"), color: filter === "finalizados" ? "#fff" : "#64748b" }} onClick={() => setFilter("finalizados")}>Finalizados ({finishedServices.length})</button>
           </div>
@@ -836,7 +996,7 @@ export default function ServicesModule({
           <div style={{ ...card, borderRadius: "22px", padding: "16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>{draft.id ? `Serviço #${draft.id}` : "Nova Ordem de Serviço"}</div>
+                <div style={{ fontWeight: 900, fontSize: "22px", color: "#0f172a" }}>{draft.id ? `Orçamento #${draft.quoteNumber || draft.id}` : `Novo orçamento #${draft.quoteNumber || ""}`}</div>
                 <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>Siga uma etapa por vez. Os dados permanecem salvos.</div>
               </div>
               <span style={{ background: statusStyle(draft.status).bg, color: statusStyle(draft.status).color, borderRadius: "999px", padding: "6px 10px", fontWeight: 900, fontSize: "12px" }}>{statusLabel(draft.status)}</span>
@@ -847,8 +1007,8 @@ export default function ServicesModule({
           </div>
 
           {formSection === "abertura" && <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
-            <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>1. Cliente e serviço</div>
-            <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Registre apenas as informações necessárias para abrir a OS.</div>
+            <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>1. Cliente e escopo</div>
+            <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Descreva a necessidade do cliente. Dados técnicos são opcionais e servem para qualquer tipo de serviço.</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
               <button style={{ ...btn(draft.clientMode === "existente" ? "#e94560" : "#e2e8f0"), color: draft.clientMode === "existente" ? "#fff" : "#334155" }} onClick={() => updateDraft({ clientMode: "existente" })}>Cliente existente</button>
               <button style={{ ...btn(draft.clientMode === "novo" ? "#e94560" : "#e2e8f0"), color: draft.clientMode === "novo" ? "#fff" : "#334155" }} onClick={() => updateDraft({ clientMode: "novo" })}>Novo cliente</button>
@@ -856,8 +1016,8 @@ export default function ServicesModule({
             {draft.clientMode === "existente" ? <select style={{ ...inp, marginTop: "8px" }} value={draft.clientId} onChange={(e) => updateDraft({ clientId: e.target.value })}><option value="">Selecione o cliente</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.newClient.name} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, name: e.target.value } })} placeholder="Nome do cliente"/><input style={inp} value={draft.newClient.phone} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, phone: e.target.value } })} placeholder="Telefone / WhatsApp"/><input style={inp} value={draft.newClient.email} onChange={(e) => updateDraft({ newClient: { ...draft.newClient, email: e.target.value } })} placeholder="E-mail (opcional)"/></div>}
             <textarea style={{ ...inp, minHeight: "90px", marginTop: "8px" }} value={draft.description} onChange={(e) => updateDraft({ description: e.target.value })} placeholder="O que o cliente solicitou?" />
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}>
-              <input style={inp} value={draft.equipment} onChange={(e) => updateDraft({ equipment: e.target.value })} placeholder="Equipamento / objeto (opcional)"/>
-              <input style={inp} value={draft.identifier} onChange={(e) => updateDraft({ identifier: e.target.value })} placeholder="Placa / série / identificação"/>
+              <input style={inp} value={draft.equipment} onChange={(e) => updateDraft({ equipment: e.target.value })} placeholder="Local, equipamento ou objeto (opcional)"/>
+              <input style={inp} value={draft.identifier} onChange={(e) => updateDraft({ identifier: e.target.value })} placeholder="Referência, série ou identificação (opcional)"/>
               <select style={inp} value={draft.technician} onChange={(e) => updateDraft({ technician: e.target.value })}><option value="">Responsável pelo serviço</option>{technicians.map((t) => <option key={t}>{t}</option>)}</select>
               <input style={inp} type="date" value={draft.promisedDate} onChange={(e) => updateDraft({ promisedDate: e.target.value })}/>
             </div>
@@ -869,15 +1029,26 @@ export default function ServicesModule({
           {formSection === "orcamento" && <div>
             <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
               <div style={{ fontWeight: 900, fontSize: "20px", color: "#0f172a" }}>2. Montar orçamento</div>
-              <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Adicione mão de obra e materiais. O total é calculado automaticamente.</div>
+              <div style={{ color: "#64748b", fontSize: "13px", fontWeight: 700, marginBottom: "12px" }}>Adicione serviços e materiais. O documento e os totais são calculados automaticamente.</div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "8px", marginBottom: "14px" }}>
+                <div><label style={{ fontSize: "11px", color: "#64748b", fontWeight: 900 }}>Nº DO ORÇAMENTO</label><input style={inp} value={draft.quoteNumber || ""} readOnly /></div>
+                <div><label style={{ fontSize: "11px", color: "#64748b", fontWeight: 900 }}>DATA</label><input style={inp} type="date" value={draft.quoteDate} onChange={(event) => updateDraft({ quoteDate: event.target.value })} /></div>
+                <div><label style={{ fontSize: "11px", color: "#64748b", fontWeight: 900 }}>VALIDADE (DIAS)</label><input style={inp} type="number" min="1" value={draft.validityDays} onChange={(event) => { const validityDays = event.target.value; updateDraft({ validityDays, validUntil: addDaysISO(validityDays) }); }} /></div>
+                <div><label style={{ fontSize: "11px", color: "#64748b", fontWeight: 900 }}>VÁLIDO ATÉ</label><input style={inp} type="date" value={draft.validUntil} onChange={(event) => updateDraft({ validUntil: event.target.value })} /></div>
+              </div>
               <div style={{ fontWeight: 900, fontSize: "17px" }}>Mão de obra</div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 140px auto", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.laborName} onChange={(e) => updateDraft({ laborName: e.target.value })} placeholder="Descrição do serviço"/><input style={inp} value={draft.laborValue} onChange={(e) => updateDraft({ laborValue: e.target.value })} placeholder="Valor"/><button style={btnSm("#16a34a")} onClick={addLabor}>Adicionar</button></div>
-              {draft.laborItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.name}</span><span><b>{fmtCur(i.value)}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ laborItems: draft.laborItems.filter((x) => x.id !== i.id) })}>×</button></span></div>)}
+              {serviceCatalog.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", marginTop: "8px", background: "#f8fafc", padding: "10px", borderRadius: "14px" }}><select style={inp} value={draft.catalogItemId} onChange={(event) => updateDraft({ catalogItemId: event.target.value })}><option value="">Selecionar do catálogo</option>{serviceCatalog.map((item) => <option key={item.id} value={item.id}>{item.name} — {fmtCur(item.price)} / {item.unit}</option>)}</select><button style={btnSm("#2563eb")} onClick={addFromCatalog}>Adicionar</button></div>}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 110px 90px 130px 120px auto", gap: "8px", marginTop: "8px" }}><input style={inp} value={draft.laborName} onChange={(e) => updateDraft({ laborName: e.target.value })} placeholder="Descrição do serviço"/><select style={inp} value={draft.laborUnit} onChange={(e) => updateDraft({ laborUnit: e.target.value })}>{["serviço","hora","diária","un","m²","m","km"].map((unit)=><option key={unit}>{unit}</option>)}</select><input style={inp} type="number" min="0.01" step="0.01" value={draft.laborQty} onChange={(e) => updateDraft({ laborQty: e.target.value })} placeholder="Qtd."/><input style={inp} value={draft.laborValue} onChange={(e) => updateDraft({ laborValue: e.target.value })} placeholder="Valor unit."/><input style={inp} value={draft.laborDiscount} onChange={(e) => updateDraft({ laborDiscount: e.target.value })} placeholder="Desconto"/><button style={btnSm("#16a34a")} onClick={addLabor}>Adicionar</button></div>
+              {draft.laborItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}><span><b>{i.name}</b><small style={{ display: "block", color: "#64748b" }}>{Number(i.qty)||1} {i.unit||"serviço"} × {fmtCur(i.unitPrice ?? i.value)}{Number(i.discount)>0 ? ` • Desc. ${fmtCur(i.discount)}` : ""}</small></span><span style={{ whiteSpace: "nowrap" }}><b>{fmtCur(itemTotal(i, true))}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ laborItems: draft.laborItems.filter((x) => x.id !== i.id) })}>×</button></span></div>)}
               <div style={{ fontWeight: 900, fontSize: "17px", marginTop: "18px" }}>Peças e materiais</div>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 100px auto", gap: "8px", marginTop: "8px" }}><select style={inp} value={draft.productId} onChange={(e) => updateDraft({ productId: e.target.value })}><option value="">Selecionar do estoque</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name} — {p.stock || 0} un.</option>)}</select><input style={inp} type="number" min="1" value={draft.productQty} onChange={(e) => updateDraft({ productQty: e.target.value })}/><button style={btnSm("#16a34a")} onClick={addMaterial}>Reservar</button></div>
-              {draft.materialItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.qty}x {i.name} <small style={{ color: "#f97316" }}>reservado</small></span><span><b>{fmtCur(i.qty*i.price)}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ materialItems: draft.materialItems.filter((x) => String(x.id) !== String(i.id)) })}>×</button></span></div>)}
-              <input style={{ ...inp, marginTop: "12px" }} value={draft.discount} onChange={(e) => updateDraft({ discount: e.target.value })} placeholder="Desconto (opcional)"/>
-              <div style={{ background: "#0f172a", color: "#fff", borderRadius: "18px", padding: "16px", marginTop: "12px" }}><div style={{ display: "flex", justifyContent: "space-between" }}><span>Mão de obra</span><b>{fmtCur(laborTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Materiais</span><b>{fmtCur(materialsTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Desconto</span><b>{fmtCur(discountValue)}</b></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: "22px", fontWeight: 900, borderTop: "1px solid #334155", marginTop: "8px", paddingTop: "8px" }}><span>Total</span><span>{fmtCur(total)}</span></div></div>
+              {draft.materialItems.map((i) => <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}><span>{i.qty}x {i.name} <small style={{ color: "#f97316" }}>reservado</small></span><span><b>{fmtCur(itemTotal(i))}</b> <button style={btnSm("#ef4444")} onClick={() => updateDraft({ materialItems: draft.materialItems.filter((x) => String(x.id) !== String(i.id)) })}>×</button></span></div>)}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "8px", marginTop: "12px" }}><input style={inp} value={draft.travelCost} onChange={(e) => updateDraft({ travelCost: e.target.value })} placeholder="Deslocamento"/><input style={inp} value={draft.otherCosts} onChange={(e) => updateDraft({ otherCosts: e.target.value })} placeholder="Outros custos"/><input style={inp} value={draft.discount} onChange={(e) => updateDraft({ discount: e.target.value })} placeholder="Desconto geral"/><input style={inp} value={draft.depositValue} onChange={(e) => updateDraft({ depositValue: e.target.value })} placeholder="Entrada prevista"/></div>
+              <div style={{ background: "#0f172a", color: "#fff", borderRadius: "18px", padding: "16px", marginTop: "12px" }}><div style={{ display: "flex", justifyContent: "space-between" }}><span>Serviços</span><b>{fmtCur(laborTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Materiais</span><b>{fmtCur(materialsTotal)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Deslocamento e outros</span><b>{fmtCur(travelCost + otherCosts)}</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Desconto geral</span><b>- {fmtCur(discountValue)}</b></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: "22px", fontWeight: 900, borderTop: "1px solid #334155", marginTop: "8px", paddingTop: "8px" }}><span>Total</span><span>{fmtCur(total)}</span></div>{depositValue>0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#86efac", marginTop: "6px" }}><span>Entrada prevista</span><b>{fmtCur(Math.min(total, depositValue))}</b></div>}</div>
+              <div style={{ fontWeight: 900, fontSize: "17px", marginTop: "18px" }}>Condições comerciais</div>
+              <textarea style={{ ...inp, minHeight: "68px", marginTop: "8px" }} value={draft.paymentTerms} onChange={(event) => updateDraft({ paymentTerms: event.target.value })} placeholder="Forma e condições de pagamento" />
+              <input style={{ ...inp, marginTop: "8px" }} value={draft.executionTerms} onChange={(event) => updateDraft({ executionTerms: event.target.value })} placeholder="Prazo e condições de execução" />
+              <textarea style={{ ...inp, minHeight: "74px", marginTop: "8px" }} value={draft.quoteNotes} onChange={(event) => updateDraft({ quoteNotes: event.target.value })} placeholder="Observações do orçamento" />
             </div>
             <div style={{ ...card, borderRadius: "22px", padding: "18px" }}>
               <div style={{ fontWeight: 900, fontSize: "17px" }}>Ações do orçamento</div>
