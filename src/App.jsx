@@ -13,6 +13,8 @@ import { fmtCur, fmtDate, fmtPercent, parseMoney } from "./utils/format.js";
 import { supabase } from "./services/supabaseClient.js";
 import { CLOUD_KEYS, CLOUD_TABLE } from "./services/cloudKeys.js";
 import { clearCloudUser, downloadCloudSnapshot, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
+import InventoryTab from "./inventory/InventoryTab.jsx";
+import { BarcodeImage, generateBarcode } from "./inventory/barcode.jsx";
 
 
 function AuthGate() {
@@ -151,27 +153,6 @@ function useIsMobile() {
 }
 
 
-
-function BarcodeImage({ value }) {
-  const ref = useRef();
-  useEffect(() => {
-    if (!value || !ref.current) return;
-    const render = () => {
-      if (window.JsBarcode) {
-        try { window.JsBarcode(ref.current, value, { format:"CODE128", width:1.5, height:40, displayValue:true, fontSize:11, margin:4 }); } catch(_){}
-      }
-    };
-    if (!window.JsBarcode) {
-      const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js";
-      s.onload = render; document.head.appendChild(s);
-    } else render();
-  }, [value]);
-  if (!value) return null;
-  return <svg ref={ref} style={{ maxWidth:"100%" }} />;
-}
-
-const genBarcode = () => String(Math.floor(1000000000000 + Math.random() * 9000000000000));
 
 // --- CHECKOUT ----------------------------------------------------------------
 function CheckoutScreen({ cart, total, onCancel, onConfirm, clients=[], mode="sale", receiveInfo=null }) {
@@ -1515,7 +1496,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
               lastCost: it.cost,
               stock: it.qty,
               category: newPayable.category.trim() || "Geral",
-              barcode: genBarcode()
+              barcode: generateBarcode()
             });
           }
         });
@@ -1630,7 +1611,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const saveProduct = () => {
     if (!newProduct.name||!newProduct.price||!newProduct.stock) return notify("Preencha todos os campos!","error");
     if (!editingId && isLimitReached("products", currentPlan, planCounts)) return notify(planLimitMessage("products", currentPlan), "error");
-    const barcode = newProduct.barcode || genBarcode();
+    const barcode = newProduct.barcode || generateBarcode();
     if (!editingId && products.find(p=>p.barcode===barcode)) return notify("Codigo de barras ja cadastrado!","error");
     if (editingId) {
       setProducts(prev=>prev.map(p=>p.id===editingId?{...p,...newProduct,barcode,price:parseMoney(newProduct.price),cost:parseMoney(newProduct.cost),stock:parseInt(newProduct.stock)||0}:p));
@@ -2263,140 +2244,6 @@ const PDVTab = () => (
     </div>
   );
 
-
-  // --- Estoque tab ------------------------------------------------------------
-  const EstoqueTab = () => (
-    <div>
-      <div style={{ ...card, borderRadius:"20px", padding:"18px" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"14px" }}>
-          <div style={{ width:"42px", height:"42px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px", fontWeight:"900" }}>EST</div>
-          <div>
-            <div style={{ fontWeight:"900", fontSize:"21px", color:"#0f172a" }}>{editingId ? "Editar Produto" : "Novo Produto"}</div>
-            <div style={{ color:"#64748b", fontWeight:"700", fontSize:"13px" }}>Preencha os dados para cadastrar ou atualizar o produto.</div>
-          </div>
-        </div>
-
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"12px" }}>
-          <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Nome do Produto</label>
-            <input style={inp} type="text" value={newProduct.name} placeholder="Ex: Rosa vermelha" onChange={e=>setNewProduct({...newProduct,name:e.target.value})} />
-          </div>
-
-          <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Categoria</label>
-            <input style={inp} type="text" value={newProduct.category} placeholder="Geral" onChange={e=>setNewProduct({...newProduct,category:e.target.value})} />
-          </div>
-
-          <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Custo (R$)</label>
-            <input style={inp} inputMode="decimal" value={newProduct.cost} placeholder="0,00" onChange={e=>setNewProduct({...newProduct,cost:e.target.value})} />
-          </div>
-
-          <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Venda (R$)</label>
-            <input style={inp} inputMode="decimal" value={newProduct.price} placeholder="0,00" onChange={e=>setNewProduct({...newProduct,price:e.target.value})} />
-          </div>
-
-          <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Estoque</label>
-            <input style={inp} inputMode="numeric" value={newProduct.stock} placeholder="0" onChange={e=>setNewProduct({...newProduct,stock:e.target.value.replace(/[^0-9]/g,"")})} />
-          </div>
-
-          <div>
-            <label style={{ fontSize:"13px", fontWeight:"800", color:"#64748b", marginBottom:"5px", display:"block" }}>Código de Barras</label>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:"8px" }}>
-              <input style={{ ...inp, fontFamily:"monospace" }} value={newProduct.barcode} placeholder="Automático se vazio" onChange={e=>setNewProduct({...newProduct,barcode:e.target.value})} />
-              <button style={{ ...btnSm("#6366f1"), minWidth:"82px", fontSize:"13px" }} onClick={()=>setNewProduct({...newProduct,barcode:genBarcode()})}>Gerar</button>
-            </div>
-          </div>
-        </div>
-
-        {newProduct.barcode&&(
-          <div style={{ marginTop:"12px", background:"#f8fafc", borderRadius:"14px", padding:"12px", textAlign:"center", overflowX:"auto" }}>
-            <BarcodeImage value={newProduct.barcode} />
-          </div>
-        )}
-
-        <div style={{ display:"flex", gap:"8px", marginTop:"14px" }}>
-          <button style={{ ...btn("#e94560"), flex:1, borderRadius:"14px", padding:"14px", fontSize:"16px" }} onClick={saveProduct}>
-            {editingId ? " Salvar Alterações" : " Cadastrar Produto"}
-          </button>
-          {editingId&&<button style={{ ...btn("#64748b"), borderRadius:"14px" }} onClick={()=>{setEditingId(null);setNewProduct({name:"",cost:"",price:"",stock:"",category:"Geral",barcode:""});}}>Cancelar</button>}
-        </div>
-      </div>
-
-      <div style={{ ...card, borderRadius:"20px", padding:"18px" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px", marginBottom:"14px" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-            <div style={{ width:"38px", height:"38px", borderRadius:"50%", background:"#ffe4e6", color:"#e94560", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"20px" }}>EST</div>
-            <div style={{ fontWeight:"900", fontSize:"20px", color:"#0f172a" }}>Estoque de Produtos ({products.length})</div>
-          </div>
-          <input
-            style={{ ...inp, maxWidth:isMobile?"170px":"260px", padding:"9px 11px" }}
-            placeholder="Pesquisar..."
-            value={searchProd}
-            onChange={e=>setSearchProd(e.target.value)}
-          />
-        </div>
-
-        {filteredProducts.length===0 ? (
-          <div style={{ color:"#94a3b8", fontWeight:"800", padding:"12px" }}>Nenhum produto encontrado.</div>
-        ) : filteredProducts.map(p=>{
-          const cost = parseMoney(p.cost || p.lastCost || 0);
-          const price = parseMoney(p.price || 0);
-          const profit = price - cost;
-          const margin = price > 0 ? (profit / price) * 100 : 0;
-
-          return (
-          <div key={p.id} style={{ padding:"14px", border:"1px solid #e2e8f0", borderRadius:"18px", marginBottom:"12px", background:"#fff" }}>
-            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1.4fr 1fr", gap:"12px", alignItems:"center" }}>
-              <div style={{ minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                  <div style={{ width:"44px", height:"44px", borderRadius:"50%", background:"#ffe4e6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"22px" }}>EST</div>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontWeight:"900", fontSize:"18px", color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
-                    {p.barcode&&<div style={{ fontSize:"12px", color:"#64748b", fontFamily:"monospace", marginTop:"2px" }}>Código: {p.barcode}</div>}
-                  </div>
-                </div>
-
-                <div style={{ display:"flex", gap:"8px", alignItems:"center", flexWrap:"wrap", marginTop:"10px" }}>
-                  <span style={tag("#6366f1")}>{p.category || "Geral"}</span>
-                  <span style={tag(p.stock>5?"#22c55e":p.stock>0?"#f59e0b":"#ef4444")}>{p.stock} un. em estoque</span>
-                </div>
-              </div>
-
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", borderLeft:isMobile?"none":"1px solid #e2e8f0", paddingLeft:isMobile?"0":"14px" }}>
-                <div>
-                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Custo</div>
-                  <div style={{ fontWeight:"900", color:"#0f172a" }}>{fmtCur(cost)}</div>
-                </div>
-                <div>
-                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Margem</div>
-                  <div style={{ fontWeight:"900", color:margin>=0?"#16a34a":"#dc2626" }}>{fmtPercent(margin)}</div>
-                </div>
-                <div>
-                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Venda</div>
-                  <div style={{ fontWeight:"900", color:"#16a34a" }}>{fmtCur(price)}</div>
-                </div>
-                <div>
-                  <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"900" }}>Lucro</div>
-                  <div style={{ fontWeight:"900", color:profit>=0?"#16a34a":"#dc2626" }}>{fmtCur(profit)}</div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:"8px", marginTop:"14px" }}>
-              <button title="Ver código" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>setShowBarcodeModal(p)}>Código  Código</button>
-              <button title="Imprimir etiqueta" style={{ ...btnSm("#f0fdf4"), color:"#16a34a", border:"1px solid #bbf7d0", padding:"10px", fontSize:"13px" }} onClick={()=>printProductLabels(p)}>Etiqueta  Etiqueta</button>
-              <button title="Editar" style={{ ...btnSm("#eff6ff"), color:"#2563eb", border:"1px solid #bfdbfe", padding:"10px", fontSize:"13px" }} onClick={()=>editProduct(p)}>Editar  Editar</button>
-              <button title="Excluir" style={{ ...btnSm("#fff1f2"), color:"#e11d48", border:"1px solid #fecdd3", padding:"10px", fontSize:"13px" }} onClick={()=>deleteProduct(p.id)}>Excluir  Excluir</button>
-            </div>
-          </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 
 
   // --- Histórico de vendas tab ----------------------------------------------
@@ -3496,7 +3343,23 @@ const PDVTab = () => (
             notify={notify}
           />
         )}
-        {tab==="estoque" && hasPlanAccess("estoque", currentPlan, isPlatformAdmin) && EstoqueTab()}
+        {tab==="estoque" && hasPlanAccess("estoque", currentPlan, isPlatformAdmin) && (
+          <InventoryTab
+            isMobile={isMobile}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            newProduct={newProduct}
+            setNewProduct={setNewProduct}
+            products={products}
+            searchProduct={searchProd}
+            setSearchProduct={setSearchProd}
+            onSave={saveProduct}
+            onEdit={editProduct}
+            onDelete={deleteProduct}
+            onPrintLabels={printProductLabels}
+            onShowBarcode={setShowBarcodeModal}
+          />
+        )}
         {tab==="vendas" && HistoricoTab()}
         {tab==="caixa"   && hasPlanAccess("caixa", currentPlan, isPlatformAdmin) && CaixaTab()}
         {tab==="fiado"   && hasPlanAccess("cliente", currentPlan, isPlatformAdmin) && FiadoTab()}
