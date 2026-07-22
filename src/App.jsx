@@ -348,27 +348,6 @@ async function checkLicenseByEmail(email) {
 }
 
 function SupabaseLicenseBlockedScreen({ info, onLogout }) {
-  if (showSplash) {
-    return (
-      <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0f172a,#111827)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", color:"#fff" }}>
-        <div style={{ textAlign:"center" }}>
-          <div style={{ width:"92px", height:"92px", borderRadius:"28px", background:"linear-gradient(135deg,#0f172a,#e94560)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 18px", boxShadow:"0 18px 45px rgba(0,0,0,.35)" }}>
-            <div style={{ fontSize:"40px" }}>ERP</div>
-          </div>
-          <div style={{ fontSize:"42px", fontWeight:"900", letterSpacing:"-.04em" }}>
-            ERP<span style={{ color:"#e94560" }}>mini</span>
-          </div>
-          <div style={{ marginTop:"8px", color:"#cbd5e1", fontWeight:"800", fontSize:"16px" }}>
-            Controle seu negócio na palma da mão
-          </div>
-          <div style={{ margin:"28px auto 0", width:"130px", height:"6px", borderRadius:"999px", background:"rgba(255,255,255,.15)", overflow:"hidden" }}>
-            <div style={{ width:"70%", height:"100%", background:"#e94560", borderRadius:"999px" }} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
       <div style={{ width:"100%", maxWidth:"420px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)", textAlign:"center" }}>
@@ -538,17 +517,27 @@ function AuthGate() {
       const license = await checkLicenseByEmail(user.email);
       if (!alive) return;
 
+      let accessInfo = license;
+
       if (!license.ok && license.title === "Licenca nao liberada") {
         const pending = await createPendingLicenseForCurrentUser(user.email);
         if (!pending.ok) {
           console.warn("ERPmini signup request retry error:", pending.message);
+        } else {
+          accessInfo = {
+            ...license,
+            title: "Solicitação de acesso enviada",
+            message: pending.existing
+              ? "Sua solicitação já está aguardando análise do administrador."
+              : "Sua solicitação foi enviada ao administrador. Aguarde a liberação do acesso."
+          };
         }
       }
 
-      setLicenseInfo(license);
+      setLicenseInfo(accessInfo);
       setLicenseReady(true);
 
-      if (!license.ok) {
+      if (!accessInfo.ok) {
         setCloudMsg("");
         setCloudReady(false);
         return;
