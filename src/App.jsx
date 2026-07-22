@@ -35,10 +35,24 @@ async function createPendingLicenseForCurrentUser(email) {
   if (latestRequest) {
     addDiagnosticLog(
       "SIGNUP",
-      "Solicitação anterior encerrada; criando uma nova",
+      "Solicitação anterior encerrada; tentando reabrir",
       "info",
       `${cleanEmail} • ${latestRequest.status || "sem status"}`
     );
+
+    const reopenQuery = supabase
+      .from("erpmini_signup_requests")
+      .update({ status: "pendente", updated_at: new Date().toISOString() });
+    const { error: reopenError } = latestRequest.id
+      ? await reopenQuery.eq("id", latestRequest.id)
+      : await reopenQuery.eq("email", cleanEmail);
+
+    if (!reopenError) {
+      addDiagnosticLog("SIGNUP", "Solicitação reaberta", "success", cleanEmail);
+      return { ok: true, reopened: true, message: "Solicitacao reaberta." };
+    }
+
+    addDiagnosticLog("SIGNUP", "Não foi possível reabrir; tentando novo INSERT", "warning", reopenError.message);
   }
 
   const { error } = await supabase
