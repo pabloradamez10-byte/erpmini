@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { addDiagnosticLog, clearDiagnosticLogs, getDiagnosticLogs, subscribeDiagnosticLogs } from "../utils/diagnosticLog.js";
 
 const LS_ROWS = "erpmini_saas_master_rows";
 const LS_LICENSES = "erpmini_saas_master_licenses";
@@ -96,6 +97,10 @@ export default function MasterSaasPanel({
   const [manualEmails, setManualEmails] = useState(() => loadSafe(LS_MANUAL_EMAILS, {}));
   const [showNewLicense, setShowNewLicense] = useState(() => loadSafe(LS_SHOW_NEW, false));
   const [confirmAction, setConfirmAction] = useState(null);
+  const [diagnosticLogs, setDiagnosticLogs] = useState(() => getDiagnosticLogs());
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  useEffect(() => subscribeDiagnosticLogs(() => setDiagnosticLogs(getDiagnosticLogs())), []);
 
   const [newClient, setNewClient] = useState({
     companyName: "",
@@ -326,6 +331,7 @@ export default function MasterSaasPanel({
   const loadMaster = async () => {
     setLoading(true);
     keepMsg("Buscando clientes, lojas e licenças...");
+    addDiagnosticLog("ADMIN", "Atualização iniciada", "info");
 
     try {
       const [cloudResp, licResp, reqResp] = await Promise.all([
@@ -335,12 +341,14 @@ export default function MasterSaasPanel({
       ]);
 
       if (cloudResp.error) {
+        addDiagnosticLog("ADMIN", "Falha ao carregar empresas", "error", cloudResp.error.message);
         keepMsg("Erro ao carregar lojas: " + cloudResp.error.message);
         setLoading(false);
         return;
       }
 
       if (licResp.error) {
+        addDiagnosticLog("ADMIN", "Falha ao carregar licenças", "error", licResp.error.message);
         keepMsg("Erro ao carregar licenças: " + licResp.error.message);
         setLoading(false);
         return;
@@ -349,8 +357,16 @@ export default function MasterSaasPanel({
       keepRows(cloudResp.data || []);
       keepLicenses(licResp.data || []);
       keepRequests(reqResp.error ? [] : reqResp.data || []);
+      addDiagnosticLog("ADMIN", "Empresas carregadas", "success", `${(cloudResp.data || []).length} registro(s)`);
+      addDiagnosticLog("ADMIN", "Licenças carregadas", "success", `${(licResp.data || []).length} registro(s)`);
+      if (reqResp.error) {
+        addDiagnosticLog("ADMIN", "Falha ao carregar solicitações", "error", reqResp.error.message);
+      } else {
+        addDiagnosticLog("ADMIN", "Solicitações carregadas", "success", `${(reqResp.data || []).length} registro(s)`);
+      }
       keepMsg(`Carregado: ${(cloudResp.data || []).length} loja(s), ${(licResp.data || []).length} licença(s).`);
     } catch (err) {
+      addDiagnosticLog("ADMIN", "Atualização interrompida", "error", err?.message || String(err));
       keepMsg("Erro inesperado: " + (err?.message || String(err)));
     } finally {
       setLoading(false);
@@ -584,6 +600,11 @@ export default function MasterSaasPanel({
 
   const pendingRequests = requests.filter((r) => String(r.status || "").toLowerCase() === "pendente");
 
+  const clearLogs = () => {
+    clearDiagnosticLogs();
+    setDiagnosticLogs([]);
+  };
+
   const confirmTitle = confirmAction?.type === "store" ? "Excluir loja sincronizada" : "Excluir acesso";
   const confirmDescription = confirmAction?.type === "store"
     ? "Isso apaga produtos, clientes, vendas, caixa e dados sincronizados desta loja. Esta ação não pode ser desfeita."
@@ -608,6 +629,43 @@ export default function MasterSaasPanel({
           {msg}
         </div>
       )}
+
+      <div style={{ background:"#0f172a", borderRadius:"16px", padding:"12px", marginBottom:"12px", color:"#fff" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"8px" }}>
+          <div>
+            <div style={{ fontWeight:"900" }}>Diagnóstico do sistema</div>
+            <div style={{ color:"#94a3b8", fontSize:"11px", fontWeight:"700" }}>{diagnosticLogs.length} evento(s) neste aparelho</div>
+          </div>
+          <button style={{ ...btnSm("#334155"), padding:"8px 10px" }} onClick={()=>setShowDiagnostics(!showDiagnostics)}>
+            {showDiagnostics ? "Ocultar" : "Ver logs"}
+          </button>
+        </div>
+
+        {showDiagnostics && (
+          <div style={{ marginTop:"10px" }}>
+            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"8px" }}>
+              <button style={{ ...btnSm("#991b1b"), padding:"7px 10px" }} onClick={clearLogs} disabled={!diagnosticLogs.length}>Limpar logs</button>
+            </div>
+            <div style={{ display:"grid", gap:"6px", maxHeight:"320px", overflowY:"auto" }}>
+              {diagnosticLogs.length === 0 ? (
+                <div style={{ color:"#94a3b8", fontSize:"12px", textAlign:"center", padding:"12px" }}>Nenhum evento registrado.</div>
+              ) : diagnosticLogs.map((log) => {
+                const color = log.status === "success" ? "#4ade80" : log.status === "error" ? "#f87171" : log.status === "warning" ? "#fbbf24" : "#60a5fa";
+                const icon = log.status === "success" ? "✔" : log.status === "error" ? "✖" : log.status === "warning" ? "!" : "•";
+                return (
+                  <div key={log.id} style={{ background:"#1e293b", borderRadius:"10px", padding:"8px 9px", fontSize:"11px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:"8px" }}>
+                      <strong style={{ color }}>{icon} {log.scope} — {log.step}</strong>
+                      <span style={{ color:"#94a3b8", whiteSpace:"nowrap" }}>{new Date(log.at).toLocaleTimeString("pt-BR")}</span>
+                    </div>
+                    {log.detail && <div style={{ color:"#cbd5e1", marginTop:"3px", wordBreak:"break-word" }}>{log.detail}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr 1fr" : "repeat(5,1fr)", gap:"8px", marginBottom:"12px" }}>
         {[

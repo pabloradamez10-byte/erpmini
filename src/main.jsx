@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import { installStorageIsolation } from "./utils/installStorageIsolation.js";
+import { shouldUseCloudBootCache } from "./services/cloudBoot.js";
 
 installStorageIsolation();
 
@@ -63,8 +64,7 @@ function syncCloudSnapshotInBackground(input, init, previousCache) {
 window.fetch = async (input, init = {}) => {
   const requestUrl = typeof input === "string" ? input : String(input?.url || "");
   const requestMethod = String(init?.method || input?.method || "GET").toUpperCase();
-  const isCloudSnapshotRead =
-    requestMethod === "GET" && requestUrl.includes("/rest/v1/erpmini_cloud_data");
+  const isCloudSnapshotRead = shouldUseCloudBootCache(requestUrl, requestMethod);
 
   if (isCloudSnapshotRead) {
     const cachedRow = readCloudBootCache();
