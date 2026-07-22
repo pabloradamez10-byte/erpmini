@@ -1,0 +1,105 @@
+name: Mobile sync hotfix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/mobile-sync-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aplicar correção no App.jsx
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/App.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          old_sync = '''      setCloudMsg("Sincronizando nuvem...");
+      const result = await downloadCloudSnapshot(user.id);
+
+      if (!alive) return;
+
+      setCloudMsg(result.ok ? result.message : "Sem conexao com a nuvem. Usando backup local.");
+      setCloudReady(true);'''
+
+          new_sync = '''      setCloudMsg("Sincronizando nuvem...");
+
+      let result;
+      try {
+        result = await Promise.race([
+          downloadCloudSnapshot(user.id),
+          new Promise((resolve) => setTimeout(() => resolve({
+            ok: false,
+            timeout: true,
+            message: "A nuvem demorou para responder. Abrindo com os dados deste aparelho."
+          }), 10000))
+        ]);
+      } catch (error) {
+        console.warn("ERPmini cloud boot error:", error);
+        result = {
+          ok: false,
+          message: "Nao foi possivel acessar a nuvem. Abrindo com os dados deste aparelho."
+        };
+      }
+
+      if (!alive) return;
+
+      setCloudMsg(result?.ok ? result.message : (result?.message || "Sem conexao com a nuvem. Usando backup local."));
+      setCloudReady(true);'''
+
+          old_logout = '''  const handleSignOut = async () => {
+    await uploadCloudSnapshotNow();
+    cloudUserId = null;
+    await signOut();
+  };'''
+
+          new_logout = '''  const handleSignOut = async () => {
+    clearTimeout(cloudSaveTimer);
+
+    try {
+      await Promise.race([
+        uploadCloudSnapshotNow(),
+        new Promise((resolve) => setTimeout(resolve, 1500))
+      ]);
+    } catch (error) {
+      console.warn("ERPmini final sync before logout failed:", error);
+    } finally {
+      cloudUserId = null;
+      cloudApplyingRemote = false;
+
+      try {
+        await Promise.race([
+          signOut(),
+          new Promise((resolve) => setTimeout(resolve, 2500))
+        ]);
+      } finally {
+        window.location.replace(window.location.origin + window.location.pathname + "?logout=" + Date.now());
+      }
+    }
+  };'''
+
+          if old_sync not in text:
+            raise SystemExit('Trecho de sincronizacao nao encontrado; patch nao aplicado.')
+          text = text.replace(old_sync, new_sync, 1)
+
+          if old_logout not in text:
+            raise SystemExit('Trecho de logout nao encontrado; patch nao aplicado.')
+          text = text.replace(old_logout, new_logout, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Publicar correção
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          git commit -m "Impede sincronização infinita no celular"
+          git push
