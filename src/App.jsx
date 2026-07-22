@@ -734,38 +734,6 @@ function saveLS(key, value) {
   } catch {}
 }
 
-function loadSessionSafe(key, fallback) {
-  try {
-    const raw = sessionStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveSessionSafe(key, value) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
-
-function loadPersistentSafe(key, fallback) {
-  try {
-    const sessionRaw = sessionStorage.getItem(key);
-    if (sessionRaw) return JSON.parse(sessionRaw);
-  } catch {}
-  try {
-    const localRaw = localStorage.getItem(key);
-    if (localRaw) return JSON.parse(localRaw);
-  } catch {}
-  return fallback;
-}
-
-function savePersistentSafe(key, value) {
-  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-}
-
 // --- Responsive hook ---------------------------------------------------------
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768);
@@ -777,185 +745,6 @@ function useIsMobile() {
   return mobile;
 }
 
-
-
-// --- Controle de licenca por chave de ativacao ------------------------------
-// Planilha de licencas: use as colunas:
-// chave,empresa,status,vencimento,mensagem
-//
-// Exemplo:
-// Floricultura 001 | Floricultura Modelo | ativo | 2026-07-13 | Licenca ativa
-const LICENSE_CONFIG = {
-  SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/1h97Y_PCsx5CyERekbrknj_Fcx6ddubxfUL1DvfMIFw0/export?format=csv&gid=0",
-  WHATSAPP_RENOVACAO: "5551989004629",
-};
-
-function parseCsvLine(line) {
-  const out = [];
-  let cur = "";
-  let inside = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-    else if (ch === '"') inside = !inside;
-    else if (ch === "," && !inside) { out.push(cur.trim()); cur = ""; }
-    else cur += ch;
-  }
-  out.push(cur.trim());
-  return out;
-}
-
-function parseLicenseCsv(csvText) {
-  const lines = csvText.trim().split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().trim());
-  return lines.slice(1).map(line => {
-    const values = parseCsvLine(line);
-    return headers.reduce((obj, h, i) => ({ ...obj, [h]: values[i] || "" }), {});
-  });
-}
-
-async function checkMonthlyLicense(activationKey) {
-  const { SHEET_CSV_URL } = LICENSE_CONFIG;
-  const chaveAtivacao = String(activationKey || "").trim();
-
-  if (!chaveAtivacao) {
-    return {
-      active: false,
-      loading: false,
-      configured: true,
-      needsActivation: true,
-      message: "Digite sua chave de ativacao.",
-    };
-  }
-
-  if (!SHEET_CSV_URL) {
-    return {
-      active: true,
-      loading: false,
-      configured: false,
-      clientId: chaveAtivacao,
-      empresa: chaveAtivacao,
-      message: "Controle de licenca ainda nao configurado.",
-    };
-  }
-
-  try {
-    const res = await fetch(`${SHEET_CSV_URL}${SHEET_CSV_URL.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error("Falha ao consultar licenca");
-
-    const rows = parseLicenseCsv(await res.text());
-    const license = rows.find(r => {
-      const chave = String(r.chave || r.cliente || "").toLowerCase().trim();
-      return chave === chaveAtivacao.toLowerCase();
-    });
-
-    if (!license) {
-      return {
-        active: false,
-        loading: false,
-        configured: true,
-        clientId: chaveAtivacao,
-        empresa: chaveAtivacao,
-        message: "Chave de ativacao nao encontrada.",
-      };
-    }
-
-    const status = String(license.status || "").toLowerCase().trim();
-    const vencimento = String(license.vencimento || "").trim();
-    const empresa = String(license.empresa || license.cliente || chaveAtivacao).trim();
-
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    const dataVenc = new Date(`${vencimento}T23:59:59`);
-    const dataValida = vencimento && !Number.isNaN(dataVenc.getTime());
-
-    const ativo = status === "ativo" && dataValida && dataVenc >= hoje;
-
-    const mensagemBloqueio =
-      status !== "ativo"
-        ? `Sua licenca esta ${status || "desativada"}. Entre em contato para renovar.`
-        : !dataValida
-          ? "Data de vencimento invalida. Entre em contato com o suporte."
-          : dataVenc < hoje
-            ? `Licenca vencida em ${vencimento}. Entre em contato para renovar.`
-            : (license.mensagem || "Licenca bloqueada. Entre em contato para renovar.");
-
-    return {
-      active: ativo,
-      loading: false,
-      configured: true,
-      needsActivation: false,
-      clientId: chaveAtivacao,
-      empresa,
-      status,
-      vencimento,
-      message: ativo ? `Licenca ativa ate ${vencimento}` : mensagemBloqueio,
-    };
-  } catch (err) {
-    return {
-      active: false,
-      loading: false,
-      configured: true,
-      clientId: chaveAtivacao,
-      empresa: chaveAtivacao,
-      message: "Nao foi possivel validar a licenca. Verifique a internet ou fale com o suporte.",
-    };
-  }
-}
-
-function LicenseBlockedScreen({ license }) {
-  const whats = LICENSE_CONFIG.WHATSAPP_RENOVACAO;
-  const msg = encodeURIComponent(`Ola, Pablo. Preciso renovar minha licenca do ERP Mini. Chave: ${license.clientId || "nao informada"}`);
-  return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a1a2e,#16213e)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"'Segoe UI',sans-serif" }}>
-      <div style={{ background:"#fff", borderRadius:"20px", padding:"28px", maxWidth:"420px", width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
-        <div style={{ fontSize:"54px", marginBottom:"10px" }}>Bloqueado</div>
-        <h2 style={{ margin:"0 0 8px", color:"#1a1a2e" }}>Sistema bloqueado</h2>
-        <p style={{ color:"#64748b", fontSize:"15px", lineHeight:1.5, margin:"0 0 18px" }}>{license?.message || "Sua licenca esta vencida."}</p>
-        <a href={`https://wa.me/${whats}?text=${msg}`} style={{ display:"block", background:"#16a34a", color:"#fff", textDecoration:"none", borderRadius:"12px", padding:"14px", fontWeight:"800", marginBottom:"10px" }}>
-          Renovar pelo WhatsApp
-        </a>
-        <button onClick={()=>window.location.reload()} style={{ width:"100%", background:"#f1f5f9", border:"none", borderRadius:"12px", padding:"12px", fontWeight:"700", color:"#475569" }}>Tentar novamente</button>
-      </div>
-    </div>
-  );
-}
-
-// --- Barcode renderer --------------------------------------------------------
-
-function ActivationScreen({ value, onChange, onActivate, checking, error }) {
-  return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a1a2e,#16213e)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"'Segoe UI',sans-serif" }}>
-      <div style={{ background:"#fff", borderRadius:"20px", padding:"28px", maxWidth:"420px", width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ fontSize:"54px", marginBottom:"10px" }}>Chave</div>
-        <h2 style={{ margin:"0 0 8px", color:"#1a1a2e", fontSize:"24px" }}>Ativacao do ERP Mini</h2>
-        <p style={{ color:"#64748b", margin:"0 0 18px", lineHeight:1.5 }}>
-          Digite a chave de ativacao da empresa para liberar o sistema.
-        </p>
-        <input
-          value={value}
-          onChange={e=>onChange(e.target.value)}
-          placeholder="Ex: Floricultura 001"
-          autoFocus
-          style={{ width:"100%", boxSizing:"border-box", border:"2px solid #e2e8f0", borderRadius:"12px", padding:"14px", fontSize:"18px", fontWeight:"800", textAlign:"center", marginBottom:"12px" }}
-        />
-        {error && <div style={{ background:"#fef2f2", color:"#dc2626", borderRadius:"10px", padding:"10px", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>{error}</div>}
-        <button
-          onClick={onActivate}
-          disabled={checking}
-          style={{ width:"100%", background:checking?"#94a3b8":"#16a34a", color:"#fff", border:"none", borderRadius:"12px", padding:"14px", cursor:"pointer", fontWeight:"800", fontSize:"16px" }}
-        >
-          {checking ? "Verificando..." : "Ativar licenca"}
-        </button>
-        <p style={{ color:"#94a3b8", fontSize:"12px", marginTop:"14px" }}>
-          A chave sera salva neste aparelho. Para trocar depois, acesse Configuracoes.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 
 function BarcodeImage({ value }) {
@@ -1649,34 +1438,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const backupAutoRan = useRef(false);
   const barcodeRef  = useRef();
   const saleCounter = useRef(loadLS("erpmini_salecounter", 1000));
-  // v6: a licença válida já foi verificada no AuthGate pelo Supabase.
-  // O antigo segundo bloqueio via Google Sheets foi desativado para evitar dupla ativação.
-  const [activationKey] = useState(currentUserEmail || "supabase");
-  const [activationInput, setActivationInput] = useState(currentUserEmail || "");
-  const [activationError, setActivationError] = useState("");
-  const [license, setLicense] = useState({
-    loading:false,
-    active:true,
-    needsActivation:false,
-    clientId:currentUserEmail,
-    empresa:storeName,
-    message:"Licença validada pelo Supabase."
-  });
-
-  const refreshLicense = useCallback(async () => {
-    const result = {
-      loading:false,
-      active:true,
-      needsActivation:false,
-      clientId:currentUserEmail,
-      empresa:storeName,
-      message:"Licença validada pelo Supabase."
-    };
-    setLicense(result);
-    notify("Licença atualizada pelo Supabase.");
-    return result;
-  }, [currentUserEmail, storeName]);
-
   useEffect(()=>{
     let bannerTimer = null;
     let syncLock = false;
@@ -1909,17 +1670,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     notify("Dados resetados!");
   };
 
-  const activateLicense = async () => {
-    setActivationError("");
-    await refreshLicense();
-  };
-
-  const changeActivationKey = () => {
-    setActivationInput(currentUserEmail || "");
-    setActivationError("");
-    notify("A licença agora é vinculada ao e-mail da conta no Supabase.");
-  };
-
   useEffect(()=>{
     const normalizedTab = tab === "" ? "inicio" : tab;
     const accessKey = normalizedTab === "fiado" ? "cliente" : normalizedTab;
@@ -2021,7 +1771,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       .filter(o=>o.type==="abertura" && (!lastClose || new Date(o.date) > new Date(lastClose.date)))
       .sort((a,b)=>new Date(b.date)-new Date(a.date))[0] || null;
   };
-  const isCashOpenNow = () => !!cashOpeningOfDay(dayKey());
   const paymentsOfPeriod = (startIso, endIso=new Date().toISOString()) => {
     const start = new Date(startIso);
     const end = new Date(endIso);
@@ -2141,10 +1890,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const salesTodayTotal = salesOfToday.reduce((sum,s)=>sum+s.total,0);
   const salesMonthTotal = salesOfMonth.reduce((sum,s)=>sum+s.total,0);
   const saleCostTotal = (sale) => (sale.items || []).reduce((sum,it)=>sum+((parseFloat(it.cost || it.lastCost || 0)||0)*(parseFloat(it.qty)||0)),0);
-  const profitTodayTotal = salesOfToday.reduce((sum,s)=>sum+(s.total - saleCostTotal(s)),0);
   const profitMonthTotal = salesOfMonth.reduce((sum,s)=>sum+(s.total - saleCostTotal(s)),0);
-  const marginMonthPercent = salesMonthTotal ? (profitMonthTotal / salesMonthTotal) * 100 : 0;
-  const ticketToday = salesOfToday.length ? salesTodayTotal/salesOfToday.length : 0;
   const overdueFiado = fiadoSales.filter(s=>s.fiado?.dueDate && s.fiado.dueDate < dayKey());
   const lowStockProducts = products.filter(p=>(parseFloat(p.stock)||0) <= 5);
   const topClients = clients.map(c=>({
@@ -2187,13 +1933,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   const paidReceivables = receivables.filter(r=>r.paid);
   const receivablesDueToday = openReceivables.filter(r=>r.dueDate === dayKey());
   const receivablesOverdue = openReceivables.filter(r=>r.dueDate && r.dueDate < dayKey());
-  const receivablesNext7 = openReceivables.filter(r=>{
-    if (!r.dueDate) return false;
-    const d = new Date(r.dueDate + "T00:00:00");
-    const start = new Date(dayKey() + "T00:00:00");
-    const end = new Date(start); end.setDate(start.getDate()+7);
-    return d >= start && d <= end;
-  });
   const receivablesNext30 = openReceivables.filter(r=>{
     if (!r.dueDate) return false;
     const d = new Date(r.dueDate + "T00:00:00");
@@ -2423,7 +2162,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     setPayables(prev=>prev.map(p=>p.id===id ? {...p, paid:true, paidDate:new Date().toISOString()} : p));
     notify("Conta marcada como paga!");
   };
-  const reopenPayable = (id) => setPayables(prev=>prev.map(p=>p.id===id ? {...p, paid:false, paidDate:null} : p));
   const deletePayable = (id) => {
     if (window.confirm("Excluir esta conta a pagar?")) setPayables(prev=>prev.filter(p=>p.id!==id));
   };
@@ -2758,7 +2496,6 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     });
 
     const productsA = abcProducts.filter(p=>p.curve==="A");
-    const productsC = abcProducts.filter(p=>p.curve==="C");
     const championProducts = productsA.slice(0,3);
 
     const now = new Date();
@@ -3364,50 +3101,6 @@ const PDVTab = () => (
   };
 
 
-  // --- Vendas tab ------------------------------------------------------------
-const VendasTab = () => (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
-        {[
-          ["Total de Vendas", fmtCur(totalSales), "linear-gradient(135deg,#e94560,#c0392b)"],
-          ["Transacoes", sales.length, "linear-gradient(135deg,#6366f1,#4338ca)"],
-          ["Ticket Medio", sales.length?fmtCur(totalSales/sales.length):"R$ 0,00","linear-gradient(135deg,#22c55e,#16a34a)"],
-        ].map(([l,v,c],i)=>(
-          <div key={i} style={{ background:c, borderRadius:"12px", padding:"16px", color:"#fff", gridColumn:i===2&&isMobile?"1 / -1":undefined }}>
-            <div style={{ fontSize:"11px", opacity:0.8, marginBottom:"4px" }}>{l}</div>
-            <div style={{ fontSize:"20px", fontWeight:"800" }}>{v}</div>
-          </div>
-        ))}
-      </div>
-      <div style={card}>
-        <div style={{ fontWeight:"700", fontSize:"16px", marginBottom:"12px" }}> Historico</div>
-        {sales.length===0
-          ? <p style={{ textAlign:"center", color:"#94a3b8", padding:"24px 0" }}>Nenhuma venda ainda</p>
-          : sales.map(sale=>(
-            <div key={sale.id} style={{ display:"flex", alignItems:"center", padding:"10px 0", borderBottom:"1px solid #f1f5f9", gap:"10px" }}>
-              <div style={{ background:"#f1f5f9", borderRadius:"8px", padding:"6px 10px", fontSize:"12px", fontWeight:"700", color:"#64748b", whiteSpace:"nowrap" }}>#{sale.id}</div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:"12px", color:"#64748b" }}>{fmtDate(sale.date)}</div>
-                <div style={{ display:"flex", gap:"4px", marginTop:"2px", flexWrap:"wrap" }}>
-                  {sale.payments.map((p,i)=>(
-                    <span key={i} style={{ background:mColor(p.method)+"22", color:mColor(p.method), borderRadius:"10px", padding:"1px 7px", fontSize:"11px", fontWeight:"700" }}>
-                      {mIcon(p.method)} {mLabel(p.method)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div style={{ fontWeight:"800", fontSize:"14px", whiteSpace:"nowrap" }}><div style={{fontSize:"14px",fontWeight:"800",opacity:.85,marginBottom:"6px"}}>Saidas do dia</div>{fmtCur(sale.total)}</div>
-              <button style={btnSm("#6366f1")} onClick={()=>{setSelectedSale(sale);setShowReceipt(true);}}> Recibo</button>
-            </div>
-          ))
-        }
-      </div>
-    </div>
-  );
-
-
-
-
   // --- Caixa tab --------------------------------------------------------------
   const CaixaTab = () => {
     const key = dayKey();
@@ -3427,7 +3120,6 @@ const VendasTab = () => (
     const topClientesCaixa = topClients;
     const topProdutosCaixa = productRanking;
     const contasAbertasOrdenadas = [...openPayables].sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
-    const contasPagasRecentes = [...paidPayables].sort((a,b)=>new Date(b.paidDate||b.dueDate)-new Date(a.paidDate||a.dueDate));
 
     const pill = (key,label) => (
       <button
@@ -4196,60 +3888,6 @@ const VendasTab = () => (
 
 
 
-  // --- Fiscal tab -------------------------------------------------------------
-  const FiscalTab = () => {
-    const fiscalDocs = sales.map(s=>({
-      id:s.id,
-      numero:`NFC-e ${String(s.id).padStart(6,"0")}`,
-      destinatario:s.fiado?.clientName || "Consumidor Final",
-      tipo:s.fiado?.clientName ? "NF-e" : "NFC-e",
-      valor:s.total,
-      status:s.statusFiscal || "Preparar"
-    })).slice(0,20);
-    const nfceCount = fiscalDocs.filter(d=>d.tipo==="NFC-e").length;
-    const nfeCount = fiscalDocs.filter(d=>d.tipo==="NF-e").length;
-    const canceladas = fiscalDocs.filter(d=>String(d.status).toLowerCase()==="cancelada").length;
-    return (
-      <div>
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:"12px", marginBottom:"14px" }}>
-          {[
-            ["NFC-e preparadas", nfceCount, "#16a34a"],
-            ["NF-e preparadas", nfeCount, "#2563eb"],
-            ["Canceladas", canceladas, "#ef4444"],
-          ].map(([l,v,c],i)=>(
-            <div key={i} style={{ background:"#fff", borderRadius:"14px", padding:"14px", boxShadow:"0 1px 6px rgba(0,0,0,0.07)", gridColumn:i===2&&isMobile?"1 / -1":undefined }}>
-              <div style={{ fontSize:"12px", color:"#64748b", fontWeight:"800" }}>{l}</div>
-              <div style={{ fontSize:"24px", fontWeight:"900", color:c }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        <div style={card}>
-          <div style={{ fontWeight:"900", fontSize:"18px", marginBottom:"6px" }}>Fiscal NFC-e / NF-e</div>
-          <div style={{ color:"#64748b", fontSize:"13px", fontWeight:"700", marginBottom:"12px" }}>
-            Tela inicial para controle fiscal. Ainda nao transmite para SEFAZ.
-          </div>
-          <div style={{ background:"#fffbeb", border:"1.5px solid #fde68a", color:"#92400e", borderRadius:"12px", padding:"10px", fontSize:"12px", fontWeight:"800", marginBottom:"12px" }}>
-            Para emitir de verdade vamos precisar integrar API fiscal e certificado A1 do cliente.
-          </div>
-          {fiscalDocs.length===0 ? (
-            <p style={{ textAlign:"center", color:"#94a3b8", padding:"20px 0" }}>Nenhuma venda para preparar documento fiscal.</p>
-          ) : fiscalDocs.map(d=>(
-            <div key={d.id} style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:"10px", borderBottom:"1px solid #f1f5f9", padding:"10px 0" }}>
-              <div>
-                <div style={{ fontWeight:"900" }}>{d.numero} - {d.tipo}</div>
-                <div style={{ color:"#64748b", fontSize:"12px", fontWeight:"700" }}>{d.destinatario}</div>
-              </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontWeight:"900" }}>{fmtCur(d.valor)}</div>
-                <span style={{ background:"#fef3c7", color:"#92400e", borderRadius:"999px", padding:"2px 8px", fontSize:"11px", fontWeight:"900" }}>{d.status}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   // --- Config tab -------------------------------------------------------------
   const ConfigTab = () => (
     <div>
@@ -4286,18 +3924,6 @@ const VendasTab = () => (
             <div style={{ fontWeight:"700", fontSize:"13px", color:"#166534" }}>Salvamento automatico ativo</div>
             <div style={{ fontSize:"12px", color:"#4ade80" }}>Dados salvos no navegador deste dispositivo</div>
           </div>
-        </div>
-        <div style={{ background:license.configured?"#eff6ff":"#fff7ed", border:`1.5px solid ${license.configured?"#3b82f6":"#f59e0b"}`, borderRadius:"10px", padding:"12px 14px", display:"flex", alignItems:"center", gap:"10px", marginBottom:"10px" }}>
-          <span style={{ fontSize:"20px" }}>{license.configured?"Licenca":"!"}</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:"700", fontSize:"13px", color:license.configured?"#1d4ed8":"#92400e" }}>Licenca mensal</div>
-            <div style={{ fontSize:"12px", color:license.configured?"#3b82f6":"#b45309" }}>{license.message}</div>
-            <div style={{ fontSize:"11px", color:"#64748b", marginTop:"3px" }}>Chave: {activationKey || "nao ativada"}</div>
-          </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:"8px" }}>
-          <button style={{ ...btn("#2563eb"), padding:"11px", fontSize:"13px" }} onClick={()=>refreshLicense()}>Atualizar Verificar licenca</button>
-          <button style={{ ...btn("#64748b"), padding:"11px", fontSize:"13px" }} onClick={changeActivationKey}>Chave Trocar chave</button>
         </div>
       </div>
 
