@@ -5,7 +5,6 @@ import { installStorageIsolation } from "./utils/installStorageIsolation.js";
 
 installStorageIsolation();
 
-const NETWORK_TIMEOUT_MS = 10000;
 const CLOUD_BOOT_CACHE_KEY = "erpmini_cloud_boot_cache";
 const CLOUD_BOOT_RELOAD_KEY = "erpmini_cloud_boot_reloaded";
 const nativeFetch = window.fetch.bind(window);
@@ -53,7 +52,7 @@ function syncCloudSnapshotInBackground(input, init, previousCache) {
 
       if (cloudChanged && !alreadyReloaded) {
         sessionStorage.setItem(CLOUD_BOOT_RELOAD_KEY, "1");
-        window.location.reload();
+        window.setTimeout(() => window.location.reload(), 700);
       }
     })
     .catch((error) => {
@@ -70,7 +69,7 @@ window.fetch = async (input, init = {}) => {
   if (isCloudSnapshotRead) {
     const cachedRow = readCloudBootCache();
 
-    // Não bloqueia a entrada no ERP: busca a nuvem em paralelo.
+    // Abre o ERP imediatamente e deixa a nuvem trabalhar em segundo plano.
     syncCloudSnapshotInBackground(input, init, cachedRow);
 
     return new Response(JSON.stringify([cachedRow]), {
@@ -83,22 +82,10 @@ window.fetch = async (input, init = {}) => {
     });
   }
 
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
-  const externalSignal = init?.signal;
-
-  const abortFromExternalSignal = () => controller.abort();
-  if (externalSignal) {
-    if (externalSignal.aborted) controller.abort();
-    else externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
-  }
-
-  try {
-    return await nativeFetch(input, { ...init, signal: controller.signal });
-  } finally {
-    window.clearTimeout(timer);
-    externalSignal?.removeEventListener?.("abort", abortFromExternalSignal);
-  }
+  // Todas as outras requisições seguem sem timeout global.
+  // Isso evita cancelar licenças, listagem do ADM e solicitações de cadastro
+  // em conexões móveis mais lentas.
+  return nativeFetch(input, init);
 };
 
 async function removeLegacyPwaCache() {
