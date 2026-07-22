@@ -11,160 +11,8 @@ import { APP_VERSION, PAYMENT_METHODS, initialProducts } from "./constants/app.j
 import { countSalesThisMonth, getBusinessTypeFromLicense, hasPlanAccess, isLimitReached, normalizePlan, planLimitMessage } from "./domain/plans.js";
 import { fmtCur, fmtDate, fmtPercent, parseMoney } from "./utils/format.js";
 import { supabase } from "./services/supabaseClient.js";
-
-
-const CLOUD_TABLE = "erpmini_cloud_data";
-const CLOUD_KEYS = [
-  "erpmini_activation_key",
-  "erpmini_backup_history",
-  "erpmini_backup_last_date",
-  "erpmini_backup_latest",
-  "erpmini_cash_closures",
-  "erpmini_cash_ops",
-  "erpmini_owner_email",
-  "erpmini_clients",
-  "erpmini_payables",
-  "erpmini_products",
-  "erpmini_receivables",
-  "erpmini_salecounter",
-  "erpmini_sales",
-  "erpmini_services",
-  "erpmini_storename",
-  "erpmini_technicians"
-];
-
-let cloudUserId = null;
-let cloudSaveTimer = null;
-let cloudApplyingRemote = false;
-
-const OFFLINE_PENDING_KEY = "erpmini_offline_pending";
-const OFFLINE_LAST_SYNC_KEY = "erpmini_offline_last_sync";
-
-function setOfflinePending(value) {
-  try {
-    localStorage.setItem(OFFLINE_PENDING_KEY, JSON.stringify(!!value));
-    window.dispatchEvent(new CustomEvent("erpmini-sync-state", { detail: { pending: !!value } }));
-  } catch {}
-}
-
-function getOfflinePending() {
-  try {
-    return JSON.parse(localStorage.getItem(OFFLINE_PENDING_KEY) || "false");
-  } catch {
-    return false;
-  }
-}
-
-function setOfflineLastSync() {
-  try {
-    localStorage.setItem(OFFLINE_LAST_SYNC_KEY, new Date().toISOString());
-    window.dispatchEvent(new CustomEvent("erpmini-sync-state", { detail: { pending: false } }));
-  } catch {}
-}
-
-
-function readLocalJsonSafe(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function collectCloudPayload() {
-  const payload = {};
-  CLOUD_KEYS.forEach((key) => {
-    payload[key] = readLocalJsonSafe(key);
-  });
-  payload.__saved_at = new Date().toISOString();
-  payload.__app_version = APP_VERSION;
-  return payload;
-}
-
-async function uploadCloudSnapshotNow() {
-  if (!cloudUserId || cloudApplyingRemote) return { ok: false, skipped: true };
-
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    setOfflinePending(true);
-    return { ok: false, offline: true };
-  }
-
-  try {
-    const payload = collectCloudPayload();
-    const { error } = await supabase
-      .from(CLOUD_TABLE)
-      .upsert(
-        { user_id: cloudUserId, data: payload, updated_at: new Date().toISOString() },
-        { onConflict: "user_id" }
-      );
-
-    if (error) throw error;
-
-    addDiagnosticLog("CLOUD", "Snapshot enviado", "success");
-    setOfflinePending(false);
-    setOfflineLastSync();
-    return { ok: true };
-  } catch (err) {
-    addDiagnosticLog("CLOUD", "Falha ao enviar snapshot", "error", err?.message || String(err));
-    setOfflinePending(true);
-    console.warn("ERPmini cloud save error:", err);
-    return { ok: false, error: err };
-  }
-}
-
-function scheduleCloudSave() {
-  if (!cloudUserId || cloudApplyingRemote) return;
-  setOfflinePending(true);
-  clearTimeout(cloudSaveTimer);
-
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-
-  cloudSaveTimer = setTimeout(uploadCloudSnapshotNow, 2500);
-}
-
-async function downloadCloudSnapshot(userId) {
-  if (!userId) return { ok: false, message: "Usuario nao identificado." };
-
-  cloudUserId = userId;
-
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    setOfflinePending(getOfflinePending());
-    return { ok: true, offline: true, message: "Modo offline. Usando dados salvos neste aparelho." };
-  }
-
-  const { data, error } = await supabase
-    .from(CLOUD_TABLE)
-    .select("data, updated_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    addDiagnosticLog("CLOUD", "Falha ao baixar snapshot", "error", error.message);
-    console.warn("ERPmini cloud load error:", error);
-    return { ok: false, message: error.message };
-  }
-
-  if (!data?.data) {
-    addDiagnosticLog("CLOUD", "Primeiro snapshot necessário", "warning");
-    await uploadCloudSnapshotNow();
-    return { ok: true, message: "Primeiro backup enviado para nuvem." };
-  }
-
-  cloudApplyingRemote = true;
-  try {
-    CLOUD_KEYS.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(data.data, key) && data.data[key] !== null) {
-        localStorage.setItem(key, JSON.stringify(data.data[key]));
-      }
-    });
-  } finally {
-    cloudApplyingRemote = false;
-  }
-
-  addDiagnosticLog("CLOUD", "Snapshot carregado", "success");
-  return { ok: true, message: "Dados carregados da nuvem." };
-}
+import { CLOUD_KEYS, CLOUD_TABLE } from "./services/cloudKeys.js";
+import { clearCloudUser, downloadCloudSnapshot, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
 
 
 function AuthGate() {
@@ -179,7 +27,7 @@ function AuthGate() {
 
     async function bootAccess() {
       if (!user) {
-        cloudUserId = null;
+        clearCloudUser();
         setCloudReady(false);
         setCloudMsg("");
         setLicenseReady(false);
@@ -239,7 +87,7 @@ function AuthGate() {
 
   const handleSignOut = async () => {
     await uploadCloudSnapshotNow();
-    cloudUserId = null;
+    clearCloudUser();
     await signOut();
   };
 
