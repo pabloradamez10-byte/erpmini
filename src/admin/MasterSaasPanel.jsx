@@ -364,7 +364,7 @@ export default function MasterSaasPanel({
       } else {
         addDiagnosticLog("ADMIN", "Solicitações carregadas", "success", `${(reqResp.data || []).length} registro(s)`);
       }
-      keepMsg(`Carregado: ${(cloudResp.data || []).length} loja(s), ${(licResp.data || []).length} licença(s).`);
+      keepMsg(`Carregado: ${(cloudResp.data || []).length} loja(s), ${(licResp.data || []).length} licença(s), ${(reqResp.data || []).length} solicitação(ões).`);
     } catch (err) {
       addDiagnosticLog("ADMIN", "Atualização interrompida", "error", err?.message || String(err));
       keepMsg("Erro inesperado: " + (err?.message || String(err)));

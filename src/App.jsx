@@ -25,9 +25,20 @@ async function createPendingLicenseForCurrentUser(email) {
     .order("created_at", { ascending: false })
     .limit(1);
 
-  if (!readError && existing?.length) {
+  const latestRequest = !readError ? existing?.[0] : null;
+
+  if (String(latestRequest?.status || "").toLowerCase() === "pendente") {
     addDiagnosticLog("SIGNUP", "Solicitação já existente", "success", cleanEmail);
     return { ok: true, existing: true, message: "Solicitacao ja existente." };
+  }
+
+  if (latestRequest) {
+    addDiagnosticLog(
+      "SIGNUP",
+      "Solicitação anterior encerrada; criando uma nova",
+      "info",
+      `${cleanEmail} • ${latestRequest.status || "sem status"}`
+    );
   }
 
   const { error } = await supabase
