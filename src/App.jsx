@@ -13,7 +13,7 @@ import { countSalesThisMonth, getBusinessTypeFromLicense, hasPlanAccess, isLimit
 import { fmtCur, fmtDate, fmtPercent, parseMoney } from "./utils/format.js";
 import { supabase } from "./services/supabaseClient.js";
 import { CLOUD_KEYS, CLOUD_TABLE } from "./services/cloudKeys.js";
-import { clearCloudUser, downloadCloudSnapshot, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
+import { authorizeDestructiveCloudReset, clearCloudUser, downloadCloudSnapshot, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
 import InventoryTab from "./inventory/InventoryTab.jsx";
 import { BarcodeImage, generateBarcode } from "./inventory/barcode.jsx";
 import ClientsTab, { ClientHistoryModal } from "./clients/ClientsTab.jsx";
@@ -132,7 +132,7 @@ function AuthGate() {
     );
   }
 
-  return <ERPInner onLogout={handleSignOut} cloudStatus="Nuvem sincronizada" licenseInfo={licenseInfo} user={user} />;
+  return <ERPInner onLogout={handleSignOut} cloudStatus={cloudMsg || "Nuvem sincronizada"} licenseInfo={licenseInfo} user={user} />;
 }
 
 
@@ -1028,6 +1028,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   }, []);
 
   const clearAllData = () => {
+    authorizeDestructiveCloudReset();
     ["erpmini_products","erpmini_sales","erpmini_services","erpmini_service_catalog","erpmini_clients","erpmini_cash_closures","erpmini_cash_ops","erpmini_payables","erpmini_receivables","erpmini_storename","erpmini_salecounter","erpmini_backup_latest","erpmini_backup_history","erpmini_backup_last_date"].forEach(k=>localStorage.removeItem(k));
     setProducts(initialProducts); setSales([]); setServices([]); setServiceCatalog([]); setClients([]); setCashClosures([]); setCashOps([]); setPayables([]); setReceivables([]); setStoreName("Minha Loja"); setCart([]);
     saleCounter.current = 1000; setShowClearConfirm(false);
