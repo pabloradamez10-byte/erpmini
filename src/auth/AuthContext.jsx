@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../services/supabaseClient.js";
+import { clearPasswordRecoveryFlow, isPasswordRecoveryFlow, markPasswordRecoveryFlow, supabase } from "../services/supabaseClient.js";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(() => isPasswordRecoveryFlow());
 
   useEffect(() => {
     let mounted = true;
@@ -15,7 +16,11 @@ export function AuthProvider({ children }) {
       setAuthLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        markPasswordRecoveryFlow();
+        setPasswordRecovery(true);
+      }
       setUser(session?.user || null);
       setAuthLoading(false);
     });
@@ -33,8 +38,16 @@ export function AuthProvider({ children }) {
     options: { data: { business_type: businessType === "servicos" ? "servicos" : "comercio" } }
   });
   const signOut = () => supabase.auth.signOut();
+  const requestPasswordReset = (email) => supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/`
+  });
+  const updatePassword = (password) => supabase.auth.updateUser({ password });
+  const completePasswordRecovery = () => {
+    clearPasswordRecoveryFlow();
+    setPasswordRecovery(false);
+  };
 
-  return <AuthContext.Provider value={{ user, authLoading, signIn, signUp, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, authLoading, passwordRecovery, signIn, signUp, signOut, requestPasswordReset, updatePassword, completePasswordRecovery }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

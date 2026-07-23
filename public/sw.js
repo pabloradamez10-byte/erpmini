@@ -1,4 +1,4 @@
-const CACHE_NAME = "erpmini-cache-v7";
+const CACHE_NAME = "erpmini-cache-v8-commercial";
 
 const APP_SHELL = [
   "/",

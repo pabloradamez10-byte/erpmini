@@ -1,4 +1,4 @@
-export const APP_VERSION = "ERPmini-v6-piloto-comercial";
+export const APP_VERSION = "ERPmini-v7-candidato-comercial";
 
 export const PAYMENT_METHODS = [
   { key: "dinheiro", label: "Dinheiro", icon: "Dinheiro", color: "#16a34a", light: "#f0fdf4" },

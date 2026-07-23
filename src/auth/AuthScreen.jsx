@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext.jsx";
 import { addDiagnosticLog } from "../utils/diagnosticLog.js";
 
 export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, requestPasswordReset } = useAuth();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,6 +56,17 @@ export default function AuthScreen() {
     setPassword("");
   };
 
+  const forgotPassword = async () => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return setMsg("Informe seu e-mail para recuperar a senha.");
+    setBusy(true);
+    const { error } = await requestPasswordReset(cleanEmail);
+    setBusy(false);
+    setMsg(error
+      ? (error.message || "Não foi possível enviar o e-mail de recuperação.")
+      : "Enviamos um link para seu e-mail. Abra-o para criar uma nova senha.");
+  };
+
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1a1a2e)", padding:"20px" }}>
       <form onSubmit={submit} style={{ width:"100%", maxWidth:"380px", background:"#fff", borderRadius:"22px", padding:"26px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)" }}>
@@ -71,6 +82,7 @@ export default function AuthScreen() {
         <input type="email" value={email} onChange={event=>setEmail(event.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
         <input type="password" value={password} onChange={event=>setPassword(event.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        {mode === "login" && <button type="button" onClick={forgotPassword} disabled={busy} style={{ display:"block", margin:"-4px 0 14px auto", border:"none", background:"transparent", color:"#2563eb", fontWeight:"800", cursor:"pointer" }}>Esqueci minha senha</button>}
         {mode === "signup" && (
           <>
             <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Tipo de negócio</label>
