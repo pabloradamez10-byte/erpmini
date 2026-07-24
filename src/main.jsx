@@ -1,10 +1,15 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
+import SalesLandingPage from "./landing/SalesLandingPage.jsx";
 import { installStorageIsolation } from "./utils/installStorageIsolation.js";
 import { shouldUseCloudBootCache } from "./services/cloudBoot.js";
 
-installStorageIsolation();
+const isSalesPage = window.location.pathname === "/";
+
+if (!isSalesPage) {
+  installStorageIsolation();
+}
 
 const CLOUD_BOOT_CACHE_KEY = "erpmini_cloud_boot_cache";
 const CLOUD_BOOT_RELOAD_KEY = "erpmini_cloud_boot_reloaded";
@@ -61,32 +66,34 @@ function syncCloudSnapshotInBackground(input, init, previousCache) {
     });
 }
 
-window.fetch = async (input, init = {}) => {
-  const requestUrl = typeof input === "string" ? input : String(input?.url || "");
-  const requestMethod = String(init?.method || input?.method || "GET").toUpperCase();
-  const isCloudSnapshotRead = shouldUseCloudBootCache(requestUrl, requestMethod);
+if (!isSalesPage) {
+  window.fetch = async (input, init = {}) => {
+    const requestUrl = typeof input === "string" ? input : String(input?.url || "");
+    const requestMethod = String(init?.method || input?.method || "GET").toUpperCase();
+    const isCloudSnapshotRead = shouldUseCloudBootCache(requestUrl, requestMethod);
 
-  if (isCloudSnapshotRead) {
-    const cachedRow = readCloudBootCache();
+    if (isCloudSnapshotRead) {
+      const cachedRow = readCloudBootCache();
 
-    // Abre o ERP imediatamente e deixa a nuvem trabalhar em segundo plano.
-    syncCloudSnapshotInBackground(input, init, cachedRow);
+      // Abre o ERP imediatamente e deixa a nuvem trabalhar em segundo plano.
+      syncCloudSnapshotInBackground(input, init, cachedRow);
 
-    return new Response(JSON.stringify([cachedRow]), {
-      status: 200,
-      statusText: "OK",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Range": "0-0/1"
-      }
-    });
-  }
+      return new Response(JSON.stringify([cachedRow]), {
+        status: 200,
+        statusText: "OK",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Range": "0-0/1"
+        }
+      });
+    }
 
-  // Todas as outras requisições seguem sem timeout global.
-  // Isso evita cancelar licenças, listagem do ADM e solicitações de cadastro
-  // em conexões móveis mais lentas.
-  return nativeFetch(input, init);
-};
+    // Todas as outras requisições seguem sem timeout global.
+    // Isso evita cancelar licenças, listagem do ADM e solicitações de cadastro
+    // em conexões móveis mais lentas.
+    return nativeFetch(input, init);
+  };
+}
 
 async function removeLegacyPwaCache() {
   try {
@@ -104,10 +111,12 @@ async function removeLegacyPwaCache() {
   }
 }
 
-removeLegacyPwaCache();
+if (!isSalesPage) {
+  removeLegacyPwaCache();
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    {isSalesPage ? <SalesLandingPage /> : <App />}
   </React.StrictMode>
 );
