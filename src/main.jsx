@@ -5,6 +5,7 @@ import SalesLandingPage from "./landing/SalesLandingPage.jsx";
 import FirstAccessTutorial from "./onboarding/FirstAccessTutorial.jsx";
 import { installStorageIsolation } from "./utils/installStorageIsolation.js";
 import { shouldUseCloudBootCache } from "./services/cloudBoot.js";
+import { installPushNotificationButton } from "./pushNotifications.js";
 
 const isSalesPage = window.location.pathname === "/";
 
@@ -75,8 +76,6 @@ if (!isSalesPage) {
 
     if (isCloudSnapshotRead) {
       const cachedRow = readCloudBootCache();
-
-      // Abre o ERP imediatamente e deixa a nuvem trabalhar em segundo plano.
       syncCloudSnapshotInBackground(input, init, cachedRow);
 
       return new Response(JSON.stringify([cachedRow]), {
@@ -89,31 +88,23 @@ if (!isSalesPage) {
       });
     }
 
-    // Todas as outras requisições seguem sem timeout global.
-    // Isso evita cancelar licenças, listagem do ADM e solicitações de cadastro
-    // em conexões móveis mais lentas.
     return nativeFetch(input, init);
   };
 }
 
-async function removeLegacyPwaCache() {
+async function registerPwaWorker() {
   try {
     if ("serviceWorker" in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map((registration) => registration.unregister()));
-    }
-
-    if ("caches" in window) {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     }
   } catch (error) {
-    console.warn("ERPmini: não foi possível limpar o cache antigo do PWA.", error);
+    console.warn("ERPmini: não foi possível registrar o service worker.", error);
   }
 }
 
 if (!isSalesPage) {
-  removeLegacyPwaCache();
+  registerPwaWorker();
+  window.addEventListener("DOMContentLoaded", () => installPushNotificationButton(), { once: true });
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
