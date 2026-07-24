@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import SalesLandingPage from "./landing/SalesLandingPage.jsx";
+import FirstAccessTutorial from "./onboarding/FirstAccessTutorial.jsx";
 import { installStorageIsolation } from "./utils/installStorageIsolation.js";
 import { shouldUseCloudBootCache } from "./services/cloudBoot.js";
 
@@ -117,6 +118,13 @@ if (!isSalesPage) {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {isSalesPage ? <SalesLandingPage /> : <App />}
+    {isSalesPage ? (
+      <SalesLandingPage />
+    ) : (
+      <>
+        <App />
+        <FirstAccessTutorial />
+      </>
+    )}
   </React.StrictMode>
 );
