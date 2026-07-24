@@ -1,5 +1,5 @@
 (() => {
-  const PANEL_MARKER = "erpmini-requests-collapsible";
+  const MARKER = "erpminiRequestsCollapsible";
 
   function setupRequestsPanel() {
     const title = Array.from(document.querySelectorAll("div")).find(
@@ -11,10 +11,9 @@
     const header = title.parentElement?.parentElement;
     const panel = header?.parentElement;
 
-    if (!header || !panel || panel.dataset[PANEL_MARKER] === "1") return;
+    if (!header || !panel || panel.dataset[MARKER] === "1") return;
 
-    panel.dataset[PANEL_MARKER] = "1";
-    header.style.marginBottom = "0";
+    panel.dataset[MARKER] = "1";
 
     const bodyElements = Array.from(panel.children).filter((child) => child !== header);
     let open = false;
@@ -32,7 +31,8 @@
       "font-size:11px",
       "font-weight:900",
       "cursor:pointer",
-      "white-space:nowrap"
+      "white-space:nowrap",
+      "margin-left:auto"
     ].join(";");
 
     const applyState = () => {
