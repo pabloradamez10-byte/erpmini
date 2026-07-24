@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <rect x="78" y="98" width="356" height="316" rx="54" fill="#ffffff"/>
+  <rect x="108" y="128" width="296" height="70" rx="24" fill="#e94560"/>
+  <path d="M132 246h104v104H132z" fill="#e2e8f0"/>
+  <path d="M276 246h104v28H276zM276 292h104v28H276zM276 338h70v28h-70z" fill="#334155"/>
+  <path d="M158 322l24-26 20 18 32-42" fill="none" stroke="#0f172a" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="178" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="900" fill="#ffffff">ERPmini</text>
+</svg>
