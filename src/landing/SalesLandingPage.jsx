@@ -2,7 +2,7 @@ import { useState } from "react";
 
 const WHATSAPP_NUMBER = "5551989004629";
 const WHATSAPP_QUESTION = encodeURIComponent("Olá, vi o ERPmini e gostaria de entender como funciona.");
-const WHATSAPP_BUY = encodeURIComponent("Olá, quero assinar o ERPmini por R$ 39,90 por mês. Como faço para começar?");
+const CHECKOUT_URL = "https://pay.hotmart.com/S106864758O";
 
 const features = [
   ["Vendas e PDV", "Registre vendas, formas de pagamento e acompanhe o movimento do negócio."],
@@ -16,14 +16,18 @@ const features = [
 const faq = [
   ["Preciso instalar algum programa?", "Não. O ERPmini funciona online pelo navegador."],
   ["Funciona no celular?", "Sim. O sistema foi desenvolvido para funcionar no celular, notebook e computador."],
-  ["O pagamento será seguro?", "Sim. A assinatura será processada pela Hotmart."],
-  ["Posso cancelar?", "Sim. A assinatura poderá ser cancelada seguindo as condições da Hotmart."],
+  ["O pagamento será seguro?", "Sim. A assinatura é processada com segurança pela Hotmart."],
+  ["Posso cancelar?", "Sim. A assinatura pode ser cancelada seguindo as condições da Hotmart."],
   ["O suporte está incluso?", "Sim. Você poderá tirar dúvidas diretamente pelo WhatsApp."],
   ["Para quais negócios ele serve?", "O ERPmini atende pequenos comércios e prestadores de serviços que precisam organizar vendas, estoque e financeiro."],
 ];
 
 function goWhatsApp(message) {
   window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${message}`, "_blank", "noopener,noreferrer");
+}
+
+function goCheckout() {
+  window.open(CHECKOUT_URL, "_blank", "noopener,noreferrer");
 }
 
 export default function SalesLandingPage() {
@@ -46,7 +50,7 @@ export default function SalesLandingPage() {
           </a>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <a href="/app" style={{ ...styles.button, padding: "11px 15px", color: "#334155", background: "#f1f5f9", fontSize: 14 }}>Entrar</a>
-            <button onClick={() => document.getElementById("plano")?.scrollIntoView({ behavior: "smooth" })} style={{ ...styles.button, padding: "11px 15px", color: "#fff", background: "#e94560", fontSize: 14 }}>Assinar</button>
+            <button onClick={goCheckout} style={{ ...styles.button, padding: "11px 15px", color: "#fff", background: "#e94560", fontSize: 14 }}>Assinar</button>
           </div>
         </div>
       </header>
@@ -66,7 +70,7 @@ export default function SalesLandingPage() {
                 <button onClick={() => document.getElementById("plano")?.scrollIntoView({ behavior: "smooth" })} style={{ ...styles.button, background: "#e94560", color: "#fff", boxShadow: "0 12px 28px rgba(233,69,96,.28)" }}>Quero organizar meu negócio</button>
                 <button onClick={() => goWhatsApp(WHATSAPP_QUESTION)} style={{ ...styles.button, background: "#fff", color: "#166534", border: "1px solid #bbf7d0" }}>Falar no WhatsApp</button>
               </div>
-              <p style={{ marginTop: 18, color: "#64748b", fontSize: 13, fontWeight: 700 }}>Acesso online • Suporte direto • Pagamento pela Hotmart</p>
+              <p style={{ marginTop: 18, color: "#64748b", fontSize: 13, fontWeight: 700 }}>Acesso online • Suporte direto • Pagamento seguro pela Hotmart</p>
             </div>
 
             <div style={{ ...styles.card, padding: 18, background: "#0f172a", color: "#fff", transform: "rotate(1deg)" }}>
@@ -144,8 +148,8 @@ export default function SalesLandingPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12, marginBottom: 30 }}>
                 {["Vendas e PDV", "Controle de estoque", "Clientes e fornecedores", "Financeiro e fluxo de caixa", "Relatórios", "Acesso online", "Uso no celular e computador", "Suporte pelo WhatsApp"].map(item => <div key={item} style={{ color: "#334155", fontWeight: 750 }}>✓ {item}</div>)}
               </div>
-              <button onClick={() => goWhatsApp(WHATSAPP_BUY)} style={{ ...styles.button, width: "100%", background: "#e94560", color: "#fff", fontSize: 18, boxShadow: "0 12px 28px rgba(233,69,96,.25)" }}>Quero assinar o ERPmini</button>
-              <p style={{ textAlign: "center", color: "#64748b", fontSize: 13, lineHeight: 1.5, margin: "16px 0 0" }}>O checkout da Hotmart será conectado em breve. Enquanto isso, fale conosco para iniciar.</p>
+              <button onClick={goCheckout} style={{ ...styles.button, width: "100%", background: "#e94560", color: "#fff", fontSize: 18, boxShadow: "0 12px 28px rgba(233,69,96,.25)" }}>Quero assinar o ERPmini</button>
+              <p style={{ textAlign: "center", color: "#64748b", fontSize: 13, lineHeight: 1.5, margin: "16px 0 0" }}>Você será direcionado ao checkout seguro da Hotmart. Assinatura mensal com 7 dias de teste grátis.</p>
             </div>
           </div>
         </section>
@@ -168,7 +172,7 @@ export default function SalesLandingPage() {
           <div style={{ ...styles.container, maxWidth: 800 }}>
             <h2 style={{ fontSize: "clamp(32px,5vw,52px)", lineHeight: 1.05, letterSpacing: "-0.05em", margin: "0 0 16px" }}>Seu negócio merece mais controle.</h2>
             <p style={{ color: "#ffe4e6", fontSize: 18, lineHeight: 1.6, margin: "0 0 26px" }}>Centralize vendas, estoque, caixa e clientes por R$ 39,90 mensais.</p>
-            <button onClick={() => document.getElementById("plano")?.scrollIntoView({ behavior: "smooth" })} style={{ ...styles.button, background: "#fff", color: "#be123c" }}>Conhecer o plano</button>
+            <button onClick={goCheckout} style={{ ...styles.button, background: "#fff", color: "#be123c" }}>Assinar agora</button>
           </div>
         </section>
       </main>
