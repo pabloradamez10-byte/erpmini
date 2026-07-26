@@ -13,7 +13,7 @@ import { countSalesThisMonth, getBusinessTypeFromLicense, hasPlanAccess, isLimit
 import { fmtCur, fmtDate, fmtPercent, parseMoney } from "./utils/format.js";
 import { supabase } from "./services/supabaseClient.js";
 import { CLOUD_KEYS, CLOUD_TABLE } from "./services/cloudKeys.js";
-import { clearCloudUser, downloadCloudSnapshot, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
+import { clearCloudUser, downloadCloudSnapshot, getCloudConflict, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
 import InventoryTab from "./inventory/InventoryTab.jsx";
 import { BarcodeImage, generateBarcode } from "./inventory/barcode.jsx";
 import ClientsTab, { ClientHistoryModal } from "./clients/ClientsTab.jsx";
@@ -755,6 +755,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
     return "saved";
   });
   const [showSyncBanner, setShowSyncBanner] = useState(false);
+  const [syncConflict, setSyncConflict] = useState(() => getCloudConflict());
   const currentPlan = normalizePlan(licenseInfo?.license?.plan || licenseInfo?.plan || "starter");
   const [adminWorkspace, setAdminWorkspace] = useState(()=>loadLS("erpmini_admin_workspace", "master"));
   const businessType = isPlatformAdmin
@@ -823,7 +824,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
       setIsOnline(online);
       setSyncPending(pending);
-      setStableSyncStatus(online ? "saved" : "offline");
+      setStableSyncStatus(syncConflict ? "conflict" : online ? "saved" : "offline");
 
       if (!online) openBanner();
     };
@@ -842,7 +843,7 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
 
         setSyncingNow(false);
         setSyncPending(getOfflinePending());
-        setStableSyncStatus(navigator.onLine ? "saved" : "offline");
+        setStableSyncStatus(result?.conflict ? "conflict" : navigator.onLine ? "saved" : "offline");
         syncLock = false;
 
         if (result?.ok) {
@@ -850,6 +851,10 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
           clearTimeout(bannerTimer);
           bannerTimer = setTimeout(() => setShowSyncBanner(false), 3500);
           notify("Dados offline sincronizados com a nuvem.");
+        } else if (result?.conflict) {
+          setSyncConflict(result.details || {});
+          setShowSyncBanner(true);
+          notify("Conflito de sincronização bloqueado. Seus dados locais foram preservados.", "error");
         }
       }
     };
@@ -861,9 +866,16 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
       openBanner();
     };
 
-    const handleSyncState = () => {
+    const handleSyncState = (event) => {
       const pending = getOfflinePending();
       setSyncPending(pending);
+      if (event?.detail?.conflict) {
+        setSyncConflict(event.detail.conflict);
+        setStableSyncStatus("conflict");
+        setShowSyncBanner(true);
+        return;
+      }
+      if (event?.detail?.saved) setSyncConflict(null);
       if (navigator.onLine) {
         setStableSyncStatus("saved");
       }
@@ -2604,20 +2616,22 @@ const PDVTab = () => (
       )}
 
       {/* Offline / Sync status */}
-      {showSyncBanner && !isOnline && (
+      {showSyncBanner && (!isOnline || syncConflict) && (
         <div style={{
           position:"sticky",
           top:0,
           zIndex:70,
-          background:!isOnline ? "#fff7ed" : syncingNow ? "#eff6ff" : "#fefce8",
-          color:!isOnline ? "#9a3412" : syncingNow ? "#1d4ed8" : "#854d0e",
-          borderBottom:"1px solid #fed7aa",
+          background:syncConflict ? "#fef2f2" : !isOnline ? "#fff7ed" : syncingNow ? "#eff6ff" : "#fefce8",
+          color:syncConflict ? "#991b1b" : !isOnline ? "#9a3412" : syncingNow ? "#1d4ed8" : "#854d0e",
+          borderBottom:syncConflict ? "1px solid #fecaca" : "1px solid #fed7aa",
           padding:"8px 12px",
           textAlign:"center",
           fontSize:"12px",
           fontWeight:"900"
         }}>
-          {!isOnline
+          {syncConflict
+            ? "Conflito bloqueado: outra sessão salvou uma versão mais recente. Seus dados locais foram preservados; não recarregue a página antes de gerar um backup."
+            : !isOnline
             ? "Modo offline: seus dados ficam salvos neste aparelho."
             : "Sincronizando dados com a nuvem..."}
         </div>
@@ -2630,18 +2644,22 @@ const PDVTab = () => (
           fontSize:"11px",
           background: stableSyncStatus==="offline"
             ? "rgba(249,115,22,0.22)"
+            : stableSyncStatus==="conflict"
+              ? "rgba(239,68,68,0.24)"
             : stableSyncStatus==="syncing"
               ? "rgba(59,130,246,0.22)"
               : "rgba(34,197,94,0.2)",
           color: stableSyncStatus==="offline"
             ? "#fdba74"
+            : stableSyncStatus==="conflict"
+              ? "#fecaca"
             : stableSyncStatus==="syncing"
               ? "#bfdbfe"
               : "#86efac",
           borderRadius:"20px",
           padding:"2px 8px"
         }}>
-          {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
+          {stableSyncStatus==="offline" ? "Offline" : stableSyncStatus==="conflict" ? "Conflito" : stableSyncStatus==="syncing" ? "Sincronizando" : "Salvo"}
         </span>
         <span style={{ fontSize:"10px", background:"rgba(255,255,255,0.12)", color:"#cbd5e1", borderRadius:"20px", padding:"2px 6px" }}>v6-piloto-comercial</span>
         <div style={{ marginLeft:"auto", fontWeight:"600", fontSize:"14px", color:"rgba(255,255,255,0.8)" }}>{storeName}</div>
