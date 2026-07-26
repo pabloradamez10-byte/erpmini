@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext.jsx";
 import { addDiagnosticLog } from "../utils/diagnosticLog.js";
 
 export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, requestPasswordReset } = useAuth();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +17,18 @@ export default function AuthScreen() {
     setMsg("");
     setBusy(true);
     const cleanEmail = email.trim().toLowerCase();
+
+    if (mode === "reset") {
+      const result = await requestPasswordReset(cleanEmail);
+      setBusy(false);
+      if (result.error) {
+        addDiagnosticLog("PASSWORD", "Solicitação de recuperação falhou", "error", result.error.message);
+        return setMsg("Não foi possível enviar o link. Confira o e-mail e tente novamente.");
+      }
+      addDiagnosticLog("PASSWORD", "Link de recuperação solicitado", "success", cleanEmail);
+      setMsg("Se este e-mail estiver cadastrado, você receberá um link para definir uma nova senha.");
+      return;
+    }
 
     if (mode === "login") {
       addDiagnosticLog("LOGIN", "Login iniciado", "info", cleanEmail);
@@ -69,8 +81,12 @@ export default function AuthScreen() {
         </div>
         <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>E-mail</label>
         <input type="email" value={email} onChange={event=>setEmail(event.target.value)} required placeholder="seuemail@exemplo.com" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
-        <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
-        <input type="password" value={password} onChange={event=>setPassword(event.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+        {mode !== "reset" && (
+          <>
+            <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Senha</label>
+            <input type="password" value={password} onChange={event=>setPassword(event.target.value)} required placeholder="Digite sua senha" style={{ width:"100%", padding:"14px", border:"2px solid #e2e8f0", borderRadius:"12px", margin:"6px 0 12px", boxSizing:"border-box", fontSize:"15px" }} />
+          </>
+        )}
         {mode === "signup" && (
           <>
             <label style={{ fontSize:"12px", fontWeight:"800", color:"#64748b" }}>Tipo de negócio</label>
@@ -82,7 +98,10 @@ export default function AuthScreen() {
         )}
         {msg && <div style={{ background:"#fff7ed", border:"1.5px solid #fdba74", borderRadius:"12px", padding:"10px", color:"#9a3412", fontWeight:"800", fontSize:"13px", marginBottom:"12px" }}>{msg}</div>}
         <button disabled={busy} style={{ width:"100%", padding:"14px", border:"none", borderRadius:"14px", background:"#e94560", color:"#fff", fontWeight:"900", fontSize:"15px", opacity:busy?0.65:1 }}>
-          {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : "Criar conta e solicitar acesso"}
+          {busy ? "Aguarde..." : mode==="login" ? "Entrar no ERPmini" : mode==="reset" ? "Enviar link de recuperação" : "Criar conta e solicitar acesso"}
+        </button>
+        <button type="button" onClick={()=>{setMode(mode === "reset" ? "login" : "reset");setMsg("");}} style={{ width:"100%", marginTop:"10px", padding:"10px", border:"none", background:"transparent", color:"#475569", fontWeight:"800", cursor:"pointer" }}>
+          {mode === "reset" ? "Voltar para o login" : "Esqueci minha senha"}
         </button>
       </form>
     </div>
