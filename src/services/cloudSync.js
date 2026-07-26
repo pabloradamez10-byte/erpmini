@@ -2,9 +2,11 @@ import { APP_VERSION } from "../constants/app.js";
 import { addDiagnosticLog } from "../utils/diagnosticLog.js";
 import { CLOUD_KEYS, CLOUD_TABLE } from "./cloudKeys.js";
 import { supabase } from "./supabaseClient.js";
+import { applyCloudPayload, hasCloudPayloadData } from "./cloudPayload.js";
 
 const OFFLINE_PENDING_KEY = "erpmini_offline_pending";
 const OFFLINE_LAST_SYNC_KEY = "erpmini_offline_last_sync";
+const CLOUD_OWNER_KEY = "erpmini_cloud_owner";
 
 let cloudUserId = null;
 let cloudSaveTimer = null;
@@ -41,6 +43,28 @@ function readLocalJsonSafe(key) {
   }
 }
 
+function getLocalOwner() {
+  try {
+    return localStorage.getItem(CLOUD_OWNER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setLocalOwner(userId) {
+  try {
+    localStorage.setItem(CLOUD_OWNER_KEY, String(userId || ""));
+  } catch {}
+}
+
+function hasLocalCloudData() {
+  try {
+    return hasCloudPayloadData(localStorage);
+  } catch {
+    return false;
+  }
+}
+
 function collectCloudPayload() {
   const payload = {};
   CLOUD_KEYS.forEach((key) => {
@@ -53,6 +77,13 @@ function collectCloudPayload() {
 
 export async function uploadCloudSnapshotNow() {
   if (!cloudUserId || cloudApplyingRemote) return { ok: false, skipped: true };
+
+  const localOwner = getLocalOwner();
+  if (localOwner && localOwner !== cloudUserId) {
+    addDiagnosticLog("CLOUD", "Upload bloqueado por divergência de usuário", "error");
+    return { ok: false, unsafeLocal: true };
+  }
+  if (!localOwner) setLocalOwner(cloudUserId);
 
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     setOfflinePending(true);
@@ -96,10 +127,35 @@ export async function downloadCloudSnapshot(userId) {
   if (!userId) return { ok: false, message: "Usuario nao identificado." };
 
   cloudUserId = userId;
+  const localOwner = getLocalOwner();
+
+  if (localOwner && localOwner !== userId) {
+    addDiagnosticLog("CLOUD", "Dados locais pertencem a outro usuário", "error");
+    return {
+      ok: false,
+      unsafeLocal: true,
+      message: "Os dados locais não pertencem a esta conta."
+    };
+  }
+
+  if (!localOwner) setLocalOwner(userId);
 
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     setOfflinePending(getOfflinePending());
-    return { ok: true, offline: true, message: "Modo offline. Usando dados salvos neste aparelho." };
+    if (!hasLocalCloudData()) {
+      return {
+        ok: false,
+        offline: true,
+        safeLocal: false,
+        message: "Sem internet e sem dados locais confirmados para esta conta."
+      };
+    }
+    return {
+      ok: true,
+      offline: true,
+      safeLocal: true,
+      message: "Modo offline. Usando dados desta conta salvos neste aparelho."
+    };
   }
 
   const { data, error } = await supabase
@@ -111,7 +167,14 @@ export async function downloadCloudSnapshot(userId) {
   if (error) {
     addDiagnosticLog("CLOUD", "Falha ao baixar snapshot", "error", error.message);
     console.warn("ERPmini cloud load error:", error);
-    return { ok: false, message: error.message };
+    const safeLocal = hasLocalCloudData() && getLocalOwner() === userId;
+    return {
+      ok: false,
+      safeLocal,
+      message: safeLocal
+        ? "Nuvem indisponível. Usando os dados locais confirmados desta conta."
+        : "Não foi possível confirmar os dados desta conta na nuvem."
+    };
   }
 
   if (!data?.data) {
@@ -122,11 +185,8 @@ export async function downloadCloudSnapshot(userId) {
 
   cloudApplyingRemote = true;
   try {
-    CLOUD_KEYS.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(data.data, key) && data.data[key] !== null) {
-        localStorage.setItem(key, JSON.stringify(data.data[key]));
-      }
-    });
+    applyCloudPayload(localStorage, data.data);
+    setLocalOwner(userId);
   } finally {
     cloudApplyingRemote = false;
   }

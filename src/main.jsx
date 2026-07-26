@@ -5,6 +5,7 @@ import SalesLandingPage from "./landing/SalesLandingPage.jsx";
 import FirstAccessTutorial from "./onboarding/FirstAccessTutorial.jsx";
 import { installStorageIsolation } from "./utils/installStorageIsolation.js";
 import { shouldUseCloudBootCache } from "./services/cloudBoot.js";
+import { applyCloudPayload } from "./services/cloudPayload.js";
 import { installPushNotificationButton } from "./pushNotifications.js";
 
 const isSalesPage = window.location.pathname === "/";
@@ -30,11 +31,7 @@ function applyCloudDataInBackground(row) {
   if (!row?.data || typeof row.data !== "object") return;
 
   try {
-    Object.entries(row.data).forEach(([key, value]) => {
-      if (key.startsWith("erpmini_") && value !== null && value !== undefined) {
-        localStorage.setItem(key, JSON.stringify(value));
-      }
-    });
+    applyCloudPayload(localStorage, row.data);
   } catch (error) {
     console.warn("ERPmini: não foi possível aplicar os dados recebidos em segundo plano.", error);
   }
