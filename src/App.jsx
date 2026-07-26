@@ -14,6 +14,7 @@ import { fmtCur, fmtDate, fmtPercent, parseMoney } from "./utils/format.js";
 import { supabase } from "./services/supabaseClient.js";
 import { CLOUD_KEYS, CLOUD_TABLE } from "./services/cloudKeys.js";
 import { clearCloudUser, downloadCloudSnapshot, getCloudConflict, getOfflinePending, scheduleCloudSave, uploadCloudSnapshotNow } from "./services/cloudSync.js";
+import { scheduleCatalogSync } from "./services/catalogSync.js";
 import InventoryTab from "./inventory/InventoryTab.jsx";
 import { BarcodeImage, generateBarcode } from "./inventory/barcode.jsx";
 import ClientsTab, { ClientHistoryModal } from "./clients/ClientsTab.jsx";
@@ -909,6 +910,14 @@ function ERPInner({ onLogout, cloudStatus, licenseInfo, user } = {}) {
   useEffect(()=>{ saveLS("erpmini_receivables", receivables); }, [receivables]);
   useEffect(()=>{ saveLS("erpmini_storename", storeName); }, [storeName]);
   useEffect(()=>{ saveLS("erpmini_salecounter", saleCounter.current); });
+  useEffect(()=>{
+    scheduleCatalogSync({
+      userId:user?.id,
+      storeName,
+      products,
+      clients
+    });
+  }, [user?.id, storeName, products, clients]);
 
   const notify = (msg, type="success") => {
     setNotification({ msg, type });
