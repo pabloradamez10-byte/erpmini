@@ -3,6 +3,7 @@ import MasterSaasPanel from "./admin/MasterSaasPanel.jsx";
 import ServicesModule from "./servicesModule/ServicesModule.jsx";
 import PlanUsageCard from "./components/PlanUsageCard.jsx";
 import AuthScreen from "./auth/AuthScreen.jsx";
+import PasswordRecoveryScreen from "./auth/PasswordRecoveryScreen.jsx";
 import LicenseBlockedScreen from "./auth/LicenseBlockedScreen.jsx";
 import { AuthProvider, useAuth } from "./auth/AuthContext.jsx";
 import { checkLicenseByEmail, createPendingLicenseForCurrentUser } from "./auth/accessService.js";
@@ -21,7 +22,7 @@ import CashFinanceReports from "./cash/CashFinanceReports.jsx";
 
 
 function AuthGate() {
-  const { user, authLoading, signOut } = useAuth();
+  const { user, authLoading, passwordRecovery, signOut } = useAuth();
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudMsg, setCloudMsg] = useState("");
   const [licenseReady, setLicenseReady] = useState(false);
@@ -79,8 +80,14 @@ function AuthGate() {
 
       if (!alive) return;
 
-      setCloudMsg(result.ok ? result.message : "Sem conexao com a nuvem. Usando backup local.");
-      setCloudReady(true);
+      if (result.ok || result.safeLocal) {
+        setCloudMsg(result.message);
+        setCloudReady(true);
+        return;
+      }
+
+      setCloudMsg(result.message || "Não foi possível confirmar os dados desta conta.");
+      setCloudReady(false);
     }
 
     bootAccess();
@@ -104,6 +111,8 @@ function AuthGate() {
     );
   }
 
+  if (passwordRecovery) return <PasswordRecoveryScreen />;
+
   if (!user) return <AuthScreen />;
 
   if (!licenseReady) {
@@ -124,6 +133,11 @@ function AuthGate() {
       <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"12px", background:"#0f172a", color:"#fff", fontWeight:"900" }}>
         <div>ERPmini</div>
         <div style={{ fontSize:"13px", color:"#cbd5e1" }}>{cloudMsg || "Carregando dados..."}</div>
+        {cloudMsg && cloudMsg !== "Sincronizando nuvem..." && (
+          <button onClick={()=>window.location.reload()} style={{ border:"none", borderRadius:"12px", padding:"11px 16px", background:"#e94560", color:"#fff", fontWeight:"900", cursor:"pointer" }}>
+            Tentar novamente
+          </button>
+        )}
       </div>
     );
   }
